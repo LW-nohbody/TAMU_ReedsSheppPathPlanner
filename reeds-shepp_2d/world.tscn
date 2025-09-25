@@ -4,23 +4,170 @@
 [ext_resource type="Script" uid="uid://dx3n0702fp2sd" path="res://Scripts/Grid2D.cs" id="2_aqk2v"]
 [ext_resource type="Script" uid="uid://op0bsa712miu" path="res://Scripts/Gizmo2D.cs" id="2_tlwt5"]
 
-[node name="World" type="Node2D" node_paths=PackedStringArray("StartGizmo", "GoalGizmo", "BestPath")]
+[node name="World" type="Node2D"]
+
+[node name="UILayer" type="CanvasLayer" parent="."]
+
+[node name="UIRoot" type="Control" parent="UILayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SidePanel" type="PanelContainer" parent="UILayer/UIRoot"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="UILayer/UIRoot/SidePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="InputContainer" type="VBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="TurnRadiusVBox" type="VBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer"]
+layout_mode = 2
+
+[node name="TurnRadiusLabel" type="Label" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/TurnRadiusVBox"]
+layout_mode = 2
+text = "Turn Radius"
+
+[node name="TurnRadiusInput" type="SpinBox" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/TurnRadiusVBox"]
+layout_mode = 2
+max_value = 1000.0
+
+[node name="StartCarVBox" type="VBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer"]
+layout_mode = 2
+
+[node name="StartCarLabel" type="Label" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox"]
+layout_mode = 2
+text = "Start Car"
+
+[node name="StartCarHBox" type="HBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="XHBox" type="HBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox"]
+layout_mode = 2
+
+[node name="StartCarXLabel" type="Label" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox/XHBox"]
+layout_mode = 2
+text = "X"
+
+[node name="StartXInput" type="SpinBox" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox/XHBox"]
+layout_mode = 2
+update_on_text_changed = true
+
+[node name="YHBox" type="HBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox"]
+layout_mode = 2
+
+[node name="StartCarYLabel" type="Label" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox/YHBox"]
+layout_mode = 2
+text = "Y"
+
+[node name="StartYInput" type="SpinBox" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox/YHBox"]
+layout_mode = 2
+
+[node name="AngleHBox" type="HBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox"]
+layout_mode = 2
+
+[node name="StartCarAngleLabel" type="Label" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox/AngleHBox"]
+layout_mode = 2
+text = "θ°"
+
+[node name="StartAngleInput" type="SpinBox" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox/AngleHBox"]
+layout_mode = 2
+max_value = 360.0
+
+[node name="GoalCarVBox" type="VBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer"]
+layout_mode = 2
+
+[node name="GoalCarLabel" type="Label" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox"]
+layout_mode = 2
+text = "Goal Car"
+
+[node name="GoalCarHBox" type="HBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="XHBox" type="HBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox"]
+layout_mode = 2
+
+[node name="GoalCarXLabel" type="Label" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox/XHBox"]
+layout_mode = 2
+text = "X"
+
+[node name="GoalXInput" type="SpinBox" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox/XHBox"]
+layout_mode = 2
+
+[node name="YHBox" type="HBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox"]
+layout_mode = 2
+
+[node name="GoalCarYLabel" type="Label" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox/YHBox"]
+layout_mode = 2
+text = "Y"
+
+[node name="GoalYInput" type="SpinBox" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox/YHBox"]
+layout_mode = 2
+
+[node name="AngleHBox" type="HBoxContainer" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox"]
+layout_mode = 2
+
+[node name="GoalCarAngleLabel" type="Label" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox/AngleHBox"]
+layout_mode = 2
+text = "θ°"
+
+[node name="GoalAngleInput" type="SpinBox" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox/AngleHBox"]
+layout_mode = 2
+max_value = 360.0
+
+[node name="ResetButton" type="Button" parent="UILayer/UIRoot/SidePanel/MarginContainer/InputContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Reset"
+
+[node name="WorldRoot" type="Node2D" parent="." node_paths=PackedStringArray("StartGizmo", "GoalGizmo", "BestPath")]
 script = ExtResource("1_fj7yv")
 StartGizmo = NodePath("StartGizmo")
 GoalGizmo = NodePath("GoalGizmo")
 BestPath = NodePath("BestPath")
+DefaultTurnRadiusGrid = 1.5
+DefaultStartX = 3.0
+DefaultGoalX = 10.0
+DefaultGoalY = 8.0
+DefaultGoalThetaDeg = 90.0
+SidePanelPath = NodePath("../UILayer/UIRoot/SidePanel")
+TurnRadiusInputPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/TurnRadiusVBox/TurnRadiusInput")
+StartXPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox/XHBox/StartXInput")
+StartYPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox/YHBox/StartYInput")
+StartThetaPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/StartCarVBox/StartCarHBox/AngleHBox/StartAngleInput")
+GoalXPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox/XHBox/GoalXInput")
+GoalYPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox/YHBox/GoalYInput")
+GoalThetaPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox/AngleHBox/GoalAngleInput")
+ResetButtonPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/ResetButton")
 
-[node name="Grid2D" type="Node2D" parent="."]
+[node name="Grid2D" type="Node2D" parent="WorldRoot"]
 script = ExtResource("2_aqk2v")
 
-[node name="BestPath" type="Line2D" parent="."]
+[node name="BestPath" type="Line2D" parent="WorldRoot"]
+position = Vector2(-377, 0)
+points = PackedVector2Array(-1, 7)
 
-[node name="StartGizmo" type="Node2D" parent="."]
-position = Vector2(500, 341)
+[node name="StartGizmo" type="Node2D" parent="WorldRoot"]
+position = Vector2(150, 150)
 rotation = 3.14159
 script = ExtResource("2_tlwt5")
 
-[node name="GoalGizmo" type="Node2D" parent="."]
-position = Vector2(944, 255)
+[node name="GoalGizmo" type="Node2D" parent="WorldRoot"]
+position = Vector2(800, 600)
+rotation = 3.14159
 script = ExtResource("2_tlwt5")
 Color = Color(0.23602, 0.31962, 1, 1)
