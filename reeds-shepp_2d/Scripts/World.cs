@@ -58,7 +58,22 @@ public partial class World : Node2D
     {
         if (sb == null) return;
         sb.ValueChanged += _ => handler();  // live update
-        sb.FocusExited  += handler;         // safety net
+        sb.FocusExited += handler;         // safety net
+        
+        // Auto-highlight the text when focusing the field
+        var le = sb.GetLineEdit();
+        if (le != null)
+        {
+        // Defer to ensure it runs after Godot’s own focus/caret handling
+        le.FocusEntered += () => le.CallDeferred("select_all");
+
+        // Auto-select on first mouse click when not focused yet
+        le.GuiInput += (InputEvent ev) =>
+            {
+                if (ev is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left && !le.HasFocus())
+                    le.CallDeferred("select_all");
+            };
+        }
     }
 
     // Global/screen-space origin (right edge of panel + offset)
