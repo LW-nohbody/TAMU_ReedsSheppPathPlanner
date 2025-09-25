@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://bxgobrhhbsmgh"]
+[gd_scene load_steps=4 format=3 uid="uid://bxgobrhhbsmgh"]
 
 [ext_resource type="Script" uid="uid://cckqutpawpk0t" path="res://Scripts/World.cs" id="1_fj7yv"]
+[ext_resource type="Script" uid="uid://dx3n0702fp2sd" path="res://Scripts/Grid2D.cs" id="2_aqk2v"]
 [ext_resource type="Script" uid="uid://op0bsa712miu" path="res://Scripts/Gizmo2D.cs" id="2_tlwt5"]
 
 [node name="World" type="Node2D" node_paths=PackedStringArray("StartGizmo", "GoalGizmo", "BestPath")]
@@ -9,14 +10,17 @@ StartGizmo = NodePath("StartGizmo")
 GoalGizmo = NodePath("GoalGizmo")
 BestPath = NodePath("BestPath")
 
+[node name="Grid2D" type="Node2D" parent="."]
+script = ExtResource("2_aqk2v")
+
+[node name="BestPath" type="Line2D" parent="."]
+
 [node name="StartGizmo" type="Node2D" parent="."]
-position = Vector2(150, 360)
+position = Vector2(500, 341)
+rotation = 3.14159
 script = ExtResource("2_tlwt5")
 
 [node name="GoalGizmo" type="Node2D" parent="."]
-position = Vector2(229, 83)
-rotation = 1.5708
+position = Vector2(944, 255)
 script = ExtResource("2_tlwt5")
 Color = Color(0.23602, 0.31962, 1, 1)
-
-[node name="BestPath" type="Line2D" parent="."]
