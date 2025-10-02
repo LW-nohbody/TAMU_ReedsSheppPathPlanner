@@ -1,12 +1,13 @@
 [gd_scene load_steps=4 format=3 uid="uid://bxgobrhhbsmgh"]
 
-[ext_resource type="Script" uid="uid://cckqutpawpk0t" path="res://Scripts/World.cs" id="1_fj7yv"]
-[ext_resource type="Script" uid="uid://dx3n0702fp2sd" path="res://Scripts/Grid2D.cs" id="2_aqk2v"]
-[ext_resource type="Script" uid="uid://op0bsa712miu" path="res://Scripts/Gizmo2D.cs" id="2_tlwt5"]
+[ext_resource type="Script" uid="uid://cckqutpawpk0t" path="res://scripts/UI/World.cs" id="1_fj7yv"]
+[ext_resource type="Script" uid="uid://dx3n0702fp2sd" path="res://scripts/UI/Grid2D.cs" id="2_aqk2v"]
+[ext_resource type="Script" uid="uid://op0bsa712miu" path="res://scripts/UI/Gizmo2D.cs" id="2_tlwt5"]
 
 [node name="World" type="Node2D"]
 
 [node name="UILayer" type="CanvasLayer" parent="."]
+follow_viewport_enabled = true
 
 [node name="UIRoot" type="Control" parent="UILayer"]
 layout_mode = 3
@@ -15,6 +16,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 
 [node name="SidePanel" type="PanelContainer" parent="UILayer/UIRoot"]
 layout_mode = 1
