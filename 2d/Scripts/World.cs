@@ -82,19 +82,35 @@ public partial class World : Node2D
         float panel = _sidePanel != null ? _sidePanel.Size.X : 0f;
         return new Vector2(panel + WorldOriginOffset.X, WorldOriginOffset.Y);
     }
+    
+    // Exact terminal pose (local normalized frame) using PoseStepper
+    private static (double x, double y, double th) ExactTerminalLocal(List<PathElement> best)
+    {
+        // Start at local (0,0,0) with R=1 (normalized)
+        return PoseStepper.ApplyPath((0.0, 0.0, 0.0), best);
+    }
+
+    // Wrap to [-π, π)
+    private static double WrapPi(double a)
+    {
+        a = Math.IEEERemainder(a, 2.0 * Math.PI);
+        if (a < -Math.PI) a += 2.0 * Math.PI;
+        if (a >= Math.PI) a -= Math.PI * 2.0;
+        return a;
+    }
 
     public override void _Ready()
     {
         // 1) Resolve UI nodes
-        _sidePanel       = GetNodeOrNull<Control>(SidePanelPath);
+        _sidePanel = GetNodeOrNull<Control>(SidePanelPath);
         _turnRadiusInput = GetNodeOrNull<SpinBox>(TurnRadiusInputPath);
-        _startX          = GetNodeOrNull<SpinBox>(StartXPath);
-        _startY          = GetNodeOrNull<SpinBox>(StartYPath);
-        _startTheta      = GetNodeOrNull<SpinBox>(StartThetaPath);
-        _goalX           = GetNodeOrNull<SpinBox>(GoalXPath);
-        _goalY           = GetNodeOrNull<SpinBox>(GoalYPath);
-        _goalTheta       = GetNodeOrNull<SpinBox>(GoalThetaPath);
-        _resetBtn        = GetNodeOrNull<Button>(ResetButtonPath);
+        _startX = GetNodeOrNull<SpinBox>(StartXPath);
+        _startY = GetNodeOrNull<SpinBox>(StartYPath);
+        _startTheta = GetNodeOrNull<SpinBox>(StartThetaPath);
+        _goalX = GetNodeOrNull<SpinBox>(GoalXPath);
+        _goalY = GetNodeOrNull<SpinBox>(GoalYPath);
+        _goalTheta = GetNodeOrNull<SpinBox>(GoalThetaPath);
+        _resetBtn = GetNodeOrNull<Button>(ResetButtonPath);
 
         // Robust fallback: try to find a node literally named "SidePanel" anywhere
         if (_sidePanel == null)
@@ -119,26 +135,26 @@ public partial class World : Node2D
 
         // 3) Configure input ranges (in grid units, relative to our origin)
         var view = GetViewportRect();
-        float panelW  = _sidePanel != null ? _sidePanel.Size.X : 0f;
+        float panelW = _sidePanel != null ? _sidePanel.Size.X : 0f;
         float usableW = Math.Max(0, view.Size.X - (panelW + WorldOriginOffset.X));
         float usableH = Math.Max(0, view.Size.Y - WorldOriginOffset.Y);
 
         if (_startX != null) { _startX.MinValue = 0; _startX.MaxValue = usableW / GRID; _startX.Step = 0.01; }
-        if (_goalX  != null) { _goalX.MinValue  = 0; _goalX.MaxValue  = usableW / GRID; _goalX.Step  = 0.01; }
+        if (_goalX != null) { _goalX.MinValue = 0; _goalX.MaxValue = usableW / GRID; _goalX.Step = 0.01; }
         if (_startY != null) { _startY.MinValue = 0; _startY.MaxValue = usableH / GRID; _startY.Step = 0.01; }
-        if (_goalY  != null) { _goalY.MinValue  = 0; _goalY.MaxValue  = usableH / GRID; _goalY.Step  = 0.01; }
+        if (_goalY != null) { _goalY.MinValue = 0; _goalY.MaxValue = usableH / GRID; _goalY.Step = 0.01; }
         if (_startTheta != null) { _startTheta.MinValue = 0; _startTheta.MaxValue = 360; _startTheta.Step = 1; }
-        if (_goalTheta  != null) { _goalTheta.MinValue  = 0; _goalTheta.MaxValue  = 360; _goalTheta.Step  = 1; }
+        if (_goalTheta != null) { _goalTheta.MinValue = 0; _goalTheta.MaxValue = 360; _goalTheta.Step = 1; }
         if (_turnRadiusInput != null) _turnRadiusInput.Step = 0.01;
 
         // 4) Hook commit handlers
         HookSpinBox(_turnRadiusInput, OnTurnRadiusCommitted);
-        HookSpinBox(_startX,          OnStartPoseCommitted);
-        HookSpinBox(_startY,          OnStartPoseCommitted);
-        HookSpinBox(_startTheta,      OnStartPoseCommitted);
-        HookSpinBox(_goalX,           OnGoalPoseCommitted);
-        HookSpinBox(_goalY,           OnGoalPoseCommitted);
-        HookSpinBox(_goalTheta,       OnGoalPoseCommitted);
+        HookSpinBox(_startX, OnStartPoseCommitted);
+        HookSpinBox(_startY, OnStartPoseCommitted);
+        HookSpinBox(_startTheta, OnStartPoseCommitted);
+        HookSpinBox(_goalX, OnGoalPoseCommitted);
+        HookSpinBox(_goalY, OnGoalPoseCommitted);
+        HookSpinBox(_goalTheta, OnGoalPoseCommitted);
         if (_resetBtn != null) _resetBtn.Pressed += OnResetPressed;
 
         // 5) Start from exported defaults (also used by Reset)
@@ -300,28 +316,53 @@ public partial class World : Node2D
         for (int i = 0; i < ptsWorldMath.Count; i++)
             ptsGodot[i] = ToGodot2D((ptsWorldMath[i].X, ptsWorldMath[i].Y));
 
+        // Ensure polyline starts at the actual start pose (robust against reversed sampling)
+        var startGodot = ToGodot2D((startM.x, startM.y));
+        if (ptsGodot.Length >= 2)
+        {
+            float dFirst = ptsGodot[0].DistanceTo(startGodot);
+            float dLast = ptsGodot[^1].DistanceTo(startGodot);
+            if (dLast < dFirst)
+            {
+                Array.Reverse(ptsGodot);    // fix direction for drawing
+                ptsWorldMath.Reverse();     // keep world-math list consistent with drawing (if you use it later)
+            }
+        }
+
         BestPath.Points = ptsGodot;
         BestPath.Width = 3;
         BestPath.DefaultColor = new Color(0.2f, 1f, 0.2f, 1f);
 
-        // 7) Local-normalized ending pose and error (same as your original output)
-        var reachedLocal = ptsLocalNorm[^1];
-        double thEndLocal = 0.0;
-        foreach (var e in best)
-        {
-            if (e.Steering == Steering.STRAIGHT) continue;
-            int steer = e.Steering == Steering.LEFT ? +1 : -1;
-            int gear  = e.Gear     == Gear.FORWARD ? +1 : -1;
-            thEndLocal += e.Param * steer * gear; // radians
-        }
-        thEndLocal = Utils.M(thEndLocal);
+        // --- Terminal pose / diagnostics using exact stepper ---
 
+        // 7) Exact local terminal pose (normalized) – robust orientation
+        var exactLocal = ExactTerminalLocal(best); // (xe, ye, the_local)
+
+        // 8) What the goal looks like in the start-local frame (normalized)
         var goalLocal = Utils.ChangeOfBasis(startNorm, goalNorm);
-        GD.Print($"Reached (local norm): x={reachedLocal.X:F4}, y={reachedLocal.Y:F4}, th={thEndLocal:F4}");
-        GD.Print($"Goal    (local norm): x={goalLocal.x:F4}, y={goalLocal.y:F4}, th={goalLocal.theta:F4}");
-        GD.Print($"Error   (local norm): dx={(reachedLocal.X - goalLocal.x):F4}, dy={(reachedLocal.Y - goalLocal.y):F4}, dth={(Utils.M(thEndLocal - goalLocal.theta)):F4}");
 
+        // 9) Report local-frame errors (normalized units for x,y; radians for theta)
+        double dxLoc = exactLocal.x - goalLocal.x;
+        double dyLoc = exactLocal.y - goalLocal.y;
+        double dthLoc = WrapPi(exactLocal.th - goalLocal.theta);
+
+        // Keep your original prints, but now using exact orientation
+        GD.Print($"Reached (local norm): x={exactLocal.x:F4}, y={exactLocal.y:F4}, th={exactLocal.th:F4}");
+        GD.Print($"Goal    (local norm): x={goalLocal.x:F4}, y={goalLocal.y:F4}, th={goalLocal.theta:F4}");
+        GD.Print($"Error   (local norm): dx={dxLoc:F4}, dy={dyLoc:F4}, dth={dthLoc:F4}");
+
+        // 10) Optional: warn loudly if we see the “flip pattern” (e.g., near 180° or 120°)
+        if (Math.Abs(dthLoc) > 2.5 /*~143°*/)
+        {
+            GD.PushWarning(
+                $"[RS WARNING] Large heading error detected (|dth|={Math.Abs(dthLoc):F3} rad). " +
+                "This indicates a sign/wrap mismatch. Check this test case in the sweeper."
+            );
+        }
+
+        // 11) World-pixel end error (as before, using sampled polyline for position)
         var lastWorld = ptsWorldMath[^1];
+        goalM = ToMath(((double)GoalGizmo.GlobalPosition.X, (double)GoalGizmo.GlobalPosition.Y, (double)GoalGizmo.GlobalRotation));
         GD.Print($"End error (world pixels): dx={(lastWorld.X - goalM.x):F2}, dy={(lastWorld.Y - goalM.y):F2}");
     }
 }
