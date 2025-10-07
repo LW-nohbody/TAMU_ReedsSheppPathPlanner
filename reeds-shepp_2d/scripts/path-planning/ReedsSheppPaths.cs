@@ -295,15 +295,9 @@ public static class ReedsSheppPaths
     // ----- symmetries (time-flip reverses order + gear) -----
     public static List<PathElement> Timeflip(List<PathElement> path)
     {
-        var flipped = new List<PathElement>(path.Count);
-        for (int i = path.Count - 1; i >= 0; --i)
-        {
-            var e = path[i];
-            var newGear = (e.Gear == Gear.FORWARD) ? Gear.BACKWARD : Gear.FORWARD;
-            flipped.Add(new PathElement(e.Param, e.Steering, newGear));
-        }
-        return flipped;
+        return path.Select(e => e.ReverseGear()).ToList(); // matches reference
     }
+
 
     public static List<PathElement> Reflect(List<PathElement> path)
         => path.Select(e => new PathElement(e.Param, (Steering)(-(int)e.Steering), e.Gear)).ToList();
