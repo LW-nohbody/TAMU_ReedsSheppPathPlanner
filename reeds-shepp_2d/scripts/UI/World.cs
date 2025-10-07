@@ -44,8 +44,8 @@ public partial class World : Node2D
     private Control _sidePanel;
     private SpinBox _turnRadiusInput;
     private SpinBox _startX, _startY, _startTheta;
-    private SpinBox _goalX, _goalY, _goalTheta;
-    private Button _resetBtn;
+    private SpinBox _goalX,  _goalY,  _goalTheta;
+    private Button  _resetBtn;
 
     // === UI/units helpers ===
     // Set to 50f if you want UI unit = 50 px; set to 100f if you want UI unit = 100 px.
@@ -58,7 +58,7 @@ public partial class World : Node2D
     {
         if (sb == null) return;
         sb.ValueChanged += _ => handler();  // live update
-        sb.FocusExited += handler;         // safety net
+        sb.FocusExited  += handler;         // safety net
     }
 
     // Global/screen-space origin (right edge of panel + offset)
@@ -71,15 +71,15 @@ public partial class World : Node2D
     public override void _Ready()
     {
         // 1) Resolve UI nodes
-        _sidePanel = GetNodeOrNull<Control>(SidePanelPath);
+        _sidePanel       = GetNodeOrNull<Control>(SidePanelPath);
         _turnRadiusInput = GetNodeOrNull<SpinBox>(TurnRadiusInputPath);
-        _startX = GetNodeOrNull<SpinBox>(StartXPath);
-        _startY = GetNodeOrNull<SpinBox>(StartYPath);
-        _startTheta = GetNodeOrNull<SpinBox>(StartThetaPath);
-        _goalX = GetNodeOrNull<SpinBox>(GoalXPath);
-        _goalY = GetNodeOrNull<SpinBox>(GoalYPath);
-        _goalTheta = GetNodeOrNull<SpinBox>(GoalThetaPath);
-        _resetBtn = GetNodeOrNull<Button>(ResetButtonPath);
+        _startX          = GetNodeOrNull<SpinBox>(StartXPath);
+        _startY          = GetNodeOrNull<SpinBox>(StartYPath);
+        _startTheta      = GetNodeOrNull<SpinBox>(StartThetaPath);
+        _goalX           = GetNodeOrNull<SpinBox>(GoalXPath);
+        _goalY           = GetNodeOrNull<SpinBox>(GoalYPath);
+        _goalTheta       = GetNodeOrNull<SpinBox>(GoalThetaPath);
+        _resetBtn        = GetNodeOrNull<Button>(ResetButtonPath);
 
         // Robust fallback: try to find a node literally named "SidePanel" anywhere
         if (_sidePanel == null)
@@ -104,26 +104,26 @@ public partial class World : Node2D
 
         // 3) Configure input ranges (in grid units, relative to our origin)
         var view = GetViewportRect();
-        float panelW = _sidePanel != null ? _sidePanel.Size.X : 0f;
+        float panelW  = _sidePanel != null ? _sidePanel.Size.X : 0f;
         float usableW = Math.Max(0, view.Size.X - (panelW + WorldOriginOffset.X));
         float usableH = Math.Max(0, view.Size.Y - WorldOriginOffset.Y);
 
         if (_startX != null) { _startX.MinValue = 0; _startX.MaxValue = usableW / GRID; _startX.Step = 0.01; }
-        if (_goalX != null) { _goalX.MinValue = 0; _goalX.MaxValue = usableW / GRID; _goalX.Step = 0.01; }
+        if (_goalX  != null) { _goalX.MinValue  = 0; _goalX.MaxValue  = usableW / GRID; _goalX.Step  = 0.01; }
         if (_startY != null) { _startY.MinValue = 0; _startY.MaxValue = usableH / GRID; _startY.Step = 0.01; }
-        if (_goalY != null) { _goalY.MinValue = 0; _goalY.MaxValue = usableH / GRID; _goalY.Step = 0.01; }
+        if (_goalY  != null) { _goalY.MinValue  = 0; _goalY.MaxValue  = usableH / GRID; _goalY.Step  = 0.01; }
         if (_startTheta != null) { _startTheta.MinValue = 0; _startTheta.MaxValue = 360; _startTheta.Step = 1; }
-        if (_goalTheta != null) { _goalTheta.MinValue = 0; _goalTheta.MaxValue = 360; _goalTheta.Step = 1; }
+        if (_goalTheta  != null) { _goalTheta.MinValue  = 0; _goalTheta.MaxValue  = 360; _goalTheta.Step  = 1; }
         if (_turnRadiusInput != null) _turnRadiusInput.Step = 0.01;
 
         // 4) Hook commit handlers
         HookSpinBox(_turnRadiusInput, OnTurnRadiusCommitted);
-        HookSpinBox(_startX, OnStartPoseCommitted);
-        HookSpinBox(_startY, OnStartPoseCommitted);
-        HookSpinBox(_startTheta, OnStartPoseCommitted);
-        HookSpinBox(_goalX, OnGoalPoseCommitted);
-        HookSpinBox(_goalY, OnGoalPoseCommitted);
-        HookSpinBox(_goalTheta, OnGoalPoseCommitted);
+        HookSpinBox(_startX,          OnStartPoseCommitted);
+        HookSpinBox(_startY,          OnStartPoseCommitted);
+        HookSpinBox(_startTheta,      OnStartPoseCommitted);
+        HookSpinBox(_goalX,           OnGoalPoseCommitted);
+        HookSpinBox(_goalY,           OnGoalPoseCommitted);
+        HookSpinBox(_goalTheta,       OnGoalPoseCommitted);
         if (_resetBtn != null) _resetBtn.Pressed += OnResetPressed;
 
         // 5) Start from exported defaults (also used by Reset)
@@ -155,25 +155,25 @@ public partial class World : Node2D
         var origin = OriginScreen();
 
         var sRel = StartGizmo.GlobalPosition - origin;
-        if (_startX != null) _startX.Value = sRel.X / GRID;
-        if (_startY != null) _startY.Value = sRel.Y / GRID;
+        if (_startX != null)     _startX.Value     = sRel.X / GRID;
+        if (_startY != null)     _startY.Value     = sRel.Y / GRID;
         if (_startTheta != null) _startTheta.Value = Rad2Deg(StartGizmo.GlobalRotation);
 
         var gRel = GoalGizmo.GlobalPosition - origin;
-        if (_goalX != null) _goalX.Value = gRel.X / GRID;
-        if (_goalY != null) _goalY.Value = gRel.Y / GRID;
-        if (_goalTheta != null) _goalTheta.Value = Rad2Deg(GoalGizmo.GlobalRotation);
+        if (_goalX != null)      _goalX.Value      = gRel.X / GRID;
+        if (_goalY != null)      _goalY.Value      = gRel.Y / GRID;
+        if (_goalTheta != null)  _goalTheta.Value  = Rad2Deg(GoalGizmo.GlobalRotation);
     }
 
     private void ApplyDefaultsToUIAndWorld()
     {
         if (_turnRadiusInput != null) _turnRadiusInput.Value = DefaultTurnRadiusGrid;
-        if (_startX != null) _startX.Value = DefaultStartX;
-        if (_startY != null) _startY.Value = DefaultStartY;
-        if (_startTheta != null) _startTheta.Value = DefaultStartThetaDeg;
-        if (_goalX != null) _goalX.Value = DefaultGoalX;
-        if (_goalY != null) _goalY.Value = DefaultGoalY;
-        if (_goalTheta != null) _goalTheta.Value = DefaultGoalThetaDeg;
+        if (_startX != null)          _startX.Value          = DefaultStartX;
+        if (_startY != null)          _startY.Value          = DefaultStartY;
+        if (_startTheta != null)      _startTheta.Value      = DefaultStartThetaDeg;
+        if (_goalX != null)           _goalX.Value           = DefaultGoalX;
+        if (_goalY != null)           _goalY.Value           = DefaultGoalY;
+        if (_goalTheta != null)       _goalTheta.Value       = DefaultGoalThetaDeg;
 
         OnTurnRadiusCommitted();
         OnStartPoseCommitted();
@@ -191,9 +191,9 @@ public partial class World : Node2D
     {
         var origin = OriginScreen();
 
-        float xPx = (_startX != null ? (float)_startX.Value * GRID : (StartGizmo.GlobalPosition - origin).X);
-        float yPx = (_startY != null ? (float)_startY.Value * GRID : (StartGizmo.GlobalPosition - origin).Y);
-        float thRad = (_startTheta != null ? Deg2Rad((float)_startTheta.Value) : StartGizmo.GlobalRotation);
+        float xPx   = (_startX != null   ? (float)_startX.Value   * GRID : (StartGizmo.GlobalPosition - origin).X);
+        float yPx   = (_startY != null   ? (float)_startY.Value   * GRID : (StartGizmo.GlobalPosition - origin).Y);
+        float thRad = (_startTheta != null? Deg2Rad((float)_startTheta.Value) : StartGizmo.GlobalRotation);
 
         StartGizmo.GlobalPosition = origin + new Vector2(xPx, yPx);
         StartGizmo.GlobalRotation = thRad;
@@ -205,9 +205,9 @@ public partial class World : Node2D
     {
         var origin = OriginScreen();
 
-        float xPx = (_goalX != null ? (float)_goalX.Value * GRID : (GoalGizmo.GlobalPosition - origin).X);
-        float yPx = (_goalY != null ? (float)_goalY.Value * GRID : (GoalGizmo.GlobalPosition - origin).Y);
-        float thRad = (_goalTheta != null ? Deg2Rad((float)_goalTheta.Value) : GoalGizmo.GlobalRotation);
+        float xPx   = (_goalX != null   ? (float)_goalX.Value   * GRID : (GoalGizmo.GlobalPosition - origin).X);
+        float yPx   = (_goalY != null   ? (float)_goalY.Value   * GRID : (GoalGizmo.GlobalPosition - origin).Y);
+        float thRad = (_goalTheta != null? Deg2Rad((float)_goalTheta.Value) : GoalGizmo.GlobalRotation);
 
         GoalGizmo.GlobalPosition = origin + new Vector2(xPx, yPx);
         GoalGizmo.GlobalRotation = thRad;
@@ -232,17 +232,17 @@ public partial class World : Node2D
         var startG = ((double)StartGizmo.GlobalPosition.X,
                       (double)StartGizmo.GlobalPosition.Y,
                       (double)StartGizmo.GlobalRotation);
-        var goalG = ((double)GoalGizmo.GlobalPosition.X,
+        var goalG  = ((double)GoalGizmo.GlobalPosition.X,
                       (double)GoalGizmo.GlobalPosition.Y,
                       (double)GoalGizmo.GlobalRotation);
 
         var startM = ToMath(startG);
-        var goalM = ToMath(goalG);
+        var goalM  = ToMath(goalG);
 
         // 2) Normalize XY by R for planning (headings stay radians)
         double R = TurnRadius;
         var startNorm = (startM.x / R, startM.y / R, startM.th);
-        var goalNorm = (goalM.x / R, goalM.y / R, goalM.th);
+        var goalNorm  = (goalM.x  / R, goalM.y  / R, goalM.th);
 
         // 3) Get best RS path (in normalized units)
         var best = ReedsSheppPaths.GetOptimalPath(startNorm, goalNorm);
@@ -296,7 +296,7 @@ public partial class World : Node2D
         {
             if (e.Steering == Steering.STRAIGHT) continue;
             int steer = e.Steering == Steering.LEFT ? +1 : -1;
-            int gear = e.Gear == Gear.FORWARD ? +1 : -1;
+            int gear  = e.Gear     == Gear.FORWARD ? +1 : -1;
             thEndLocal += e.Param * steer * gear; // radians
         }
         thEndLocal = Utils.M(thEndLocal);
