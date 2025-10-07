@@ -44,8 +44,8 @@ public partial class World : Node2D
     private Control _sidePanel;
     private SpinBox _turnRadiusInput;
     private SpinBox _startX, _startY, _startTheta;
-    private SpinBox _goalX,  _goalY,  _goalTheta;
-    private Button  _resetBtn;
+    private SpinBox _goalX, _goalY, _goalTheta;
+    private Button _resetBtn;
 
     // === UI/units helpers ===
     // Set to 50f if you want UI unit = 50 px; set to 100f if you want UI unit = 100 px.
@@ -59,21 +59,6 @@ public partial class World : Node2D
         if (sb == null) return;
         sb.ValueChanged += _ => handler();  // live update
         sb.FocusExited += handler;         // safety net
-        
-        // Auto-highlight the text when focusing the field
-        var le = sb.GetLineEdit();
-        if (le != null)
-        {
-        // Defer to ensure it runs after Godot’s own focus/caret handling
-        le.FocusEntered += () => le.CallDeferred("select_all");
-
-        // Auto-select on first mouse click when not focused yet
-        le.GuiInput += (InputEvent ev) =>
-            {
-                if (ev is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left && !le.HasFocus())
-                    le.CallDeferred("select_all");
-            };
-        }
     }
 
     // Global/screen-space origin (right edge of panel + offset)
@@ -81,22 +66,6 @@ public partial class World : Node2D
     {
         float panel = _sidePanel != null ? _sidePanel.Size.X : 0f;
         return new Vector2(panel + WorldOriginOffset.X, WorldOriginOffset.Y);
-    }
-    
-    // Exact terminal pose (local normalized frame) using PoseStepper
-    private static (double x, double y, double th) ExactTerminalLocal(List<PathElement> best)
-    {
-        // Start at local (0,0,0) with R=1 (normalized)
-        return PoseStepper.ApplyPath((0.0, 0.0, 0.0), best);
-    }
-
-    // Wrap to [-π, π)
-    private static double WrapPi(double a)
-    {
-        a = Math.IEEERemainder(a, 2.0 * Math.PI);
-        if (a < -Math.PI) a += 2.0 * Math.PI;
-        if (a >= Math.PI) a -= Math.PI * 2.0;
-        return a;
     }
 
     public override void _Ready()
@@ -186,25 +155,25 @@ public partial class World : Node2D
         var origin = OriginScreen();
 
         var sRel = StartGizmo.GlobalPosition - origin;
-        if (_startX != null)     _startX.Value     = sRel.X / GRID;
-        if (_startY != null)     _startY.Value     = sRel.Y / GRID;
+        if (_startX != null) _startX.Value = sRel.X / GRID;
+        if (_startY != null) _startY.Value = sRel.Y / GRID;
         if (_startTheta != null) _startTheta.Value = Rad2Deg(StartGizmo.GlobalRotation);
 
         var gRel = GoalGizmo.GlobalPosition - origin;
-        if (_goalX != null)      _goalX.Value      = gRel.X / GRID;
-        if (_goalY != null)      _goalY.Value      = gRel.Y / GRID;
-        if (_goalTheta != null)  _goalTheta.Value  = Rad2Deg(GoalGizmo.GlobalRotation);
+        if (_goalX != null) _goalX.Value = gRel.X / GRID;
+        if (_goalY != null) _goalY.Value = gRel.Y / GRID;
+        if (_goalTheta != null) _goalTheta.Value = Rad2Deg(GoalGizmo.GlobalRotation);
     }
 
     private void ApplyDefaultsToUIAndWorld()
     {
         if (_turnRadiusInput != null) _turnRadiusInput.Value = DefaultTurnRadiusGrid;
-        if (_startX != null)          _startX.Value          = DefaultStartX;
-        if (_startY != null)          _startY.Value          = DefaultStartY;
-        if (_startTheta != null)      _startTheta.Value      = DefaultStartThetaDeg;
-        if (_goalX != null)           _goalX.Value           = DefaultGoalX;
-        if (_goalY != null)           _goalY.Value           = DefaultGoalY;
-        if (_goalTheta != null)       _goalTheta.Value       = DefaultGoalThetaDeg;
+        if (_startX != null) _startX.Value = DefaultStartX;
+        if (_startY != null) _startY.Value = DefaultStartY;
+        if (_startTheta != null) _startTheta.Value = DefaultStartThetaDeg;
+        if (_goalX != null) _goalX.Value = DefaultGoalX;
+        if (_goalY != null) _goalY.Value = DefaultGoalY;
+        if (_goalTheta != null) _goalTheta.Value = DefaultGoalThetaDeg;
 
         OnTurnRadiusCommitted();
         OnStartPoseCommitted();
@@ -222,9 +191,9 @@ public partial class World : Node2D
     {
         var origin = OriginScreen();
 
-        float xPx   = (_startX != null   ? (float)_startX.Value   * GRID : (StartGizmo.GlobalPosition - origin).X);
-        float yPx   = (_startY != null   ? (float)_startY.Value   * GRID : (StartGizmo.GlobalPosition - origin).Y);
-        float thRad = (_startTheta != null? Deg2Rad((float)_startTheta.Value) : StartGizmo.GlobalRotation);
+        float xPx = (_startX != null ? (float)_startX.Value * GRID : (StartGizmo.GlobalPosition - origin).X);
+        float yPx = (_startY != null ? (float)_startY.Value * GRID : (StartGizmo.GlobalPosition - origin).Y);
+        float thRad = (_startTheta != null ? Deg2Rad((float)_startTheta.Value) : StartGizmo.GlobalRotation);
 
         StartGizmo.GlobalPosition = origin + new Vector2(xPx, yPx);
         StartGizmo.GlobalRotation = thRad;
@@ -236,9 +205,9 @@ public partial class World : Node2D
     {
         var origin = OriginScreen();
 
-        float xPx   = (_goalX != null   ? (float)_goalX.Value   * GRID : (GoalGizmo.GlobalPosition - origin).X);
-        float yPx   = (_goalY != null   ? (float)_goalY.Value   * GRID : (GoalGizmo.GlobalPosition - origin).Y);
-        float thRad = (_goalTheta != null? Deg2Rad((float)_goalTheta.Value) : GoalGizmo.GlobalRotation);
+        float xPx = (_goalX != null ? (float)_goalX.Value * GRID : (GoalGizmo.GlobalPosition - origin).X);
+        float yPx = (_goalY != null ? (float)_goalY.Value * GRID : (GoalGizmo.GlobalPosition - origin).Y);
+        float thRad = (_goalTheta != null ? Deg2Rad((float)_goalTheta.Value) : GoalGizmo.GlobalRotation);
 
         GoalGizmo.GlobalPosition = origin + new Vector2(xPx, yPx);
         GoalGizmo.GlobalRotation = thRad;
@@ -263,17 +232,17 @@ public partial class World : Node2D
         var startG = ((double)StartGizmo.GlobalPosition.X,
                       (double)StartGizmo.GlobalPosition.Y,
                       (double)StartGizmo.GlobalRotation);
-        var goalG  = ((double)GoalGizmo.GlobalPosition.X,
+        var goalG = ((double)GoalGizmo.GlobalPosition.X,
                       (double)GoalGizmo.GlobalPosition.Y,
                       (double)GoalGizmo.GlobalRotation);
 
         var startM = ToMath(startG);
-        var goalM  = ToMath(goalG);
+        var goalM = ToMath(goalG);
 
         // 2) Normalize XY by R for planning (headings stay radians)
         double R = TurnRadius;
         var startNorm = (startM.x / R, startM.y / R, startM.th);
-        var goalNorm  = (goalM.x  / R, goalM.y  / R, goalM.th);
+        var goalNorm = (goalM.x / R, goalM.y / R, goalM.th);
 
         // 3) Get best RS path (in normalized units)
         var best = ReedsSheppPaths.GetOptimalPath(startNorm, goalNorm);
@@ -316,53 +285,28 @@ public partial class World : Node2D
         for (int i = 0; i < ptsWorldMath.Count; i++)
             ptsGodot[i] = ToGodot2D((ptsWorldMath[i].X, ptsWorldMath[i].Y));
 
-        // Ensure polyline starts at the actual start pose (robust against reversed sampling)
-        var startGodot = ToGodot2D((startM.x, startM.y));
-        if (ptsGodot.Length >= 2)
-        {
-            float dFirst = ptsGodot[0].DistanceTo(startGodot);
-            float dLast = ptsGodot[^1].DistanceTo(startGodot);
-            if (dLast < dFirst)
-            {
-                Array.Reverse(ptsGodot);    // fix direction for drawing
-                ptsWorldMath.Reverse();     // keep world-math list consistent with drawing (if you use it later)
-            }
-        }
-
         BestPath.Points = ptsGodot;
         BestPath.Width = 3;
         BestPath.DefaultColor = new Color(0.2f, 1f, 0.2f, 1f);
 
-        // --- Terminal pose / diagnostics using exact stepper ---
-
-        // 7) Exact local terminal pose (normalized) – robust orientation
-        var exactLocal = ExactTerminalLocal(best); // (xe, ye, the_local)
-
-        // 8) What the goal looks like in the start-local frame (normalized)
-        var goalLocal = Utils.ChangeOfBasis(startNorm, goalNorm);
-
-        // 9) Report local-frame errors (normalized units for x,y; radians for theta)
-        double dxLoc = exactLocal.x - goalLocal.x;
-        double dyLoc = exactLocal.y - goalLocal.y;
-        double dthLoc = WrapPi(exactLocal.th - goalLocal.theta);
-
-        // Keep your original prints, but now using exact orientation
-        GD.Print($"Reached (local norm): x={exactLocal.x:F4}, y={exactLocal.y:F4}, th={exactLocal.th:F4}");
-        GD.Print($"Goal    (local norm): x={goalLocal.x:F4}, y={goalLocal.y:F4}, th={goalLocal.theta:F4}");
-        GD.Print($"Error   (local norm): dx={dxLoc:F4}, dy={dyLoc:F4}, dth={dthLoc:F4}");
-
-        // 10) Optional: warn loudly if we see the “flip pattern” (e.g., near 180° or 120°)
-        if (Math.Abs(dthLoc) > 2.5 /*~143°*/)
+        // 7) Local-normalized ending pose and error (same as your original output)
+        var reachedLocal = ptsLocalNorm[^1];
+        double thEndLocal = 0.0;
+        foreach (var e in best)
         {
-            GD.PushWarning(
-                $"[RS WARNING] Large heading error detected (|dth|={Math.Abs(dthLoc):F3} rad). " +
-                "This indicates a sign/wrap mismatch. Check this test case in the sweeper."
-            );
+            if (e.Steering == Steering.STRAIGHT) continue;
+            int steer = e.Steering == Steering.LEFT ? +1 : -1;
+            int gear = e.Gear == Gear.FORWARD ? +1 : -1;
+            thEndLocal += e.Param * steer * gear; // radians
         }
+        thEndLocal = Utils.M(thEndLocal);
 
-        // 11) World-pixel end error (as before, using sampled polyline for position)
+        var goalLocal = Utils.ChangeOfBasis(startNorm, goalNorm);
+        GD.Print($"Reached (local norm): x={reachedLocal.X:F4}, y={reachedLocal.Y:F4}, th={thEndLocal:F4}");
+        GD.Print($"Goal    (local norm): x={goalLocal.x:F4}, y={goalLocal.y:F4}, th={goalLocal.theta:F4}");
+        GD.Print($"Error   (local norm): dx={(reachedLocal.X - goalLocal.x):F4}, dy={(reachedLocal.Y - goalLocal.y):F4}, dth={(Utils.M(thEndLocal - goalLocal.theta)):F4}");
+
         var lastWorld = ptsWorldMath[^1];
-        goalM = ToMath(((double)GoalGizmo.GlobalPosition.X, (double)GoalGizmo.GlobalPosition.Y, (double)GoalGizmo.GlobalRotation));
         GD.Print($"End error (world pixels): dx={(lastWorld.X - goalM.x):F2}, dy={(lastWorld.Y - goalM.y):F2}");
     }
 }

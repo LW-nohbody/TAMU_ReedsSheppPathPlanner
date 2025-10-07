@@ -35,7 +35,7 @@ public static class RsSampler
             else
             {
                 int steerSign = seg.Steering == Steering.LEFT ? +1 : -1;   // circle side
-                int gearSign  = seg.Gear     == Gear.FORWARD   ? +1 : -1;   // travel direction
+                int gearSign = seg.Gear == Gear.FORWARD ? +1 : -1;   // travel direction
 
                 // total signed heading change (radians)
                 double total = seg.Param * steerSign * gearSign;
@@ -63,7 +63,7 @@ public static class RsSampler
         }
         return pts.ToArray();
     }
-    
+
     public static Vector2[] SamplePolylineExact(
     (double x, double y, double theta) startWorldMath,
     List<PathElement> path,
@@ -97,7 +97,7 @@ public static class RsSampler
             else
             {
                 int steerSign = seg.Steering == Steering.LEFT ? +1 : -1;   // circle side
-                int gearSign  = seg.Gear     == Gear.FORWARD   ? +1 : -1;   // travel direction
+                int gearSign = seg.Gear == Gear.FORWARD ? +1 : -1;   // travel direction
 
                 double total = seg.Param;             // magnitude (≥ 0)
                 int n = PointsFor(total);

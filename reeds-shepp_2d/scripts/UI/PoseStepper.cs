@@ -23,7 +23,7 @@ public static class PoseStepper
             else
             {
                 int steer = seg.Steering == Steering.LEFT ? +1 : -1;
-                int gear  = seg.Gear     == Gear.FORWARD   ? +1 : -1;
+                int gear = seg.Gear == Gear.FORWARD ? +1 : -1;
 
                 // Signed heading change (radians), R=1 in normalized space
                 double dth = seg.Param * steer * gear;

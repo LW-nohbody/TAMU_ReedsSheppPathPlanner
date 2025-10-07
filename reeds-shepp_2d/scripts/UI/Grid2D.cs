@@ -57,8 +57,8 @@ public partial class Grid2D : Node2D
             DrawLine(new Vector2(0, y), new Vector2(vp.Size.X, y), GridColor, LineWidth);
 
         // Origin axes (distinct color)
-        DrawLine(new Vector2(originX, 0),       new Vector2(originX, vp.Size.Y), AxisColor, AxisWidth);
-        DrawLine(new Vector2(0, originY),       new Vector2(vp.Size.X, originY), AxisColor, AxisWidth);
+        DrawLine(new Vector2(originX, 0), new Vector2(originX, vp.Size.Y), AxisColor, AxisWidth);
+        DrawLine(new Vector2(0, originY), new Vector2(vp.Size.X, originY), AxisColor, AxisWidth);
 
         // Crosshair at exact origin
         DrawLine(new Vector2(originX - 6, originY), new Vector2(originX + 6, originY), AxisColor, AxisWidth);
