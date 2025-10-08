@@ -4,4 +4,7 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>ReedsShepp_2D</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PathPlanningLib\PathPlanningLib.csproj" />
+  </ItemGroup>
 </Project>
