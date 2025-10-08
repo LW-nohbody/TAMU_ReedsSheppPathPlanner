@@ -76,8 +76,8 @@ public partial class Main3D : Node3D
             var goalPos     = spawnPos + outward * GoalAdvance;
             double goalYaw  = startYaw + Mathf.Pi / 2.0;  // +90° = right in our math → 3D mapping
 
-            var pts = RSAdapter.ComputePath3D(spawnPos, startYaw, goalPos, goalYaw,
-                                            TurnRadiusMeters, SampleStepMeters);
+            var (pts, gears) = RSAdapter.ComputePath3D(spawnPos, startYaw, goalPos, goalYaw,
+                                           TurnRadiusMeters, SampleStepMeters);
 
             // pick a color per car
             Color[] pal = { new Color(1,0,0), new Color(1,0.5f,0), new Color(1,1,0), new Color(0,1,0), new Color(0,1,1) };
@@ -89,7 +89,7 @@ public partial class Main3D : Node3D
             DrawMarker(goalPos,  new Color(0,0,1)); // blue  = goal
 
             // feed path
-            car.SetPath(pts);
+            car.SetPath(pts, gears);
 
             _vehicles.Add(car);
         }
@@ -105,8 +105,8 @@ public partial class Main3D : Node3D
             var goal0    = spawn0 + outward0 * GoalAdvance;
             double yaw0g = yaw0 - Mathf.Pi / 2.0;
 
-            var pts0 = RSAdapter.ComputePath3D(spawn0, yaw0, goal0, yaw0g,
-                                            TurnRadiusMeters, SampleStepMeters);
+            var (pts0, _) = RSAdapter.ComputePath3D(spawn0, yaw0, goal0, yaw0g,
+                                        TurnRadiusMeters, SampleStepMeters);
             DrawPath(pts0);
         }
 
