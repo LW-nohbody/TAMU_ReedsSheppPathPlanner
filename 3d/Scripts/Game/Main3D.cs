@@ -13,6 +13,7 @@ public partial class Main3D : Node3D
 
     [Export] public NodePath CameraTopPath;
     [Export] public NodePath CameraChasePath;
+    [Export] public NodePath CameraFreePath;
     [Export] public NodePath PathLineMeshPath; // MeshInstance3D
 
     [Export] public float ArenaRadius = 10f;
@@ -27,15 +28,16 @@ public partial class Main3D : Node3D
     // Holds per-car path meshes & markers
     private Node3D _pathsParent;
     private System.Collections.Generic.List<VehicleAgent3D> _vehicles = new();
-    private Camera3D _camTop, _camChase;
+    private Camera3D _camTop, _camChase, _camFree;
     private MeshInstance3D _pathLine;
     private bool _usingTop = true;
 
     public override void _Ready()
     {
         // Grab cameras & path host
-        _camTop   = GetNode<Camera3D>(CameraTopPath);
+        _camTop = GetNode<Camera3D>(CameraTopPath);
         _camChase = GetNode<Camera3D>(CameraChasePath);
+        _camFree = GetNode<Camera3D>(CameraFreePath);
         _pathLine = GetNode<MeshInstance3D>(PathLineMeshPath);
         _pathsParent = new Node3D { Name = "Paths" };
         AddChild(_pathsParent);
@@ -50,43 +52,43 @@ public partial class Main3D : Node3D
         // Spawn N vehicles on a ring
         int N = Math.Max(1, VehicleCount);
         float step = Mathf.Tau / N;         // 2π / N
-        float r    = SpawnRadius;
+        float r = SpawnRadius;
 
         for (int i = 0; i < N; i++)
         {
             // angle, outward direction, spawn pos
-            float theta   = i * step;
-            var outward   = new Vector3(Mathf.Cos(theta), 0f, Mathf.Sin(theta)); // unit
-            var spawnPos  = outward * r;
+            float theta = i * step;
+            var outward = new Vector3(Mathf.Cos(theta), 0f, Mathf.Sin(theta)); // unit
+            var spawnPos = outward * r;
 
             // car should face OUTWARD (Godot's forward is -Z)
-            var basis     = Basis.LookingAt(outward, Vector3.Up);
-            var xform     = new Transform3D(basis, spawnPos);
+            var basis = Basis.LookingAt(outward, Vector3.Up);
+            var xform = new Transform3D(basis, spawnPos);
 
             // instantiate car
             var car = VehicleScene.Instantiate<VehicleAgent3D>();
             AddChild(car);
             car.GlobalTransform = xform;             // put car exactly at path start
-            car.ArenaRadius     = ArenaRadius;       // keep your arena clamp
+            car.ArenaRadius = ArenaRadius;       // keep your arena clamp
 
             // plan THIS car's path:
             //   start = (spawnPos, yaw=theta)
             //   goal  = a few meters forward, with final yaw turned 90° right
             double startYaw = theta;                 // 0=+X, CCW toward +Z
-            var goalPos     = spawnPos + outward * GoalAdvance;
-            double goalYaw  = startYaw + Mathf.Pi / 2.0;  // +90° = right in our math → 3D mapping
+            var goalPos = spawnPos + outward * GoalAdvance;
+            double goalYaw = startYaw + Mathf.Pi / 2.0;  // +90° = right in our math → 3D mapping
 
             var pts = RSAdapter.ComputePath3D(spawnPos, startYaw, goalPos, goalYaw,
                                             TurnRadiusMeters, SampleStepMeters);
 
             // pick a color per car
-            Color[] pal = { new Color(1,0,0), new Color(1,0.5f,0), new Color(1,1,0), new Color(0,1,0), new Color(0,1,1) };
+            Color[] pal = { new Color(1, 0, 0), new Color(1, 0.5f, 0), new Color(1, 1, 0), new Color(0, 1, 0), new Color(0, 1, 1) };
             var col = pal[i % pal.Length];
 
             // draw its path + start/goal markers
             DrawPathForCar(pts, col);
-            DrawMarker(spawnPos, new Color(0,1,0)); // green = start
-            DrawMarker(goalPos,  new Color(0,0,1)); // blue  = goal
+            DrawMarker(spawnPos, new Color(0, 1, 0)); // green = start
+            DrawMarker(goalPos, new Color(0, 0, 1)); // blue  = goal
 
             // feed path
             car.SetPath(pts);
@@ -100,9 +102,9 @@ public partial class Main3D : Node3D
             // Recompute the first path exactly like above to get the points for drawing
             float theta0 = 0f;
             var outward0 = new Vector3(Mathf.Cos(theta0), 0f, Mathf.Sin(theta0));
-            var spawn0   = outward0 * SpawnRadius;
-            double yaw0  = theta0;
-            var goal0    = spawn0 + outward0 * GoalAdvance;
+            var spawn0 = outward0 * SpawnRadius;
+            double yaw0 = theta0;
+            var goal0 = spawn0 + outward0 * GoalAdvance;
             double yaw0g = yaw0 - Mathf.Pi / 2.0;
 
             var pts0 = RSAdapter.ComputePath3D(spawn0, yaw0, goal0, yaw0g,
@@ -113,6 +115,7 @@ public partial class Main3D : Node3D
         // cameras
         _camTop.Current = true;
         _camChase.Current = false;
+        _camFree.Current = false;
 
         // If you want the chase cam to follow car 0 when you press Tab:
         // nothing else to do; FollowChaseCamera() already uses the first car if we point it there.
@@ -125,8 +128,17 @@ public partial class Main3D : Node3D
             _usingTop = !_usingTop;
             _camTop.Current = _usingTop;
             _camChase.Current = !_usingTop;
+            _camFree.Current = false;
         }
         if (!_usingTop) FollowChaseCamera(delta);
+
+        if (Input.IsActionJustPressed("select_free_camera"))
+        {
+            _camFree.Current = true;
+            _camTop.Current = false;
+            _camChase.Current = false;
+            _usingTop = !_usingTop; //Toggle so when return it resumes from the previous view
+        }
     }
 
     private void DrawPath(Vector3[] points)
