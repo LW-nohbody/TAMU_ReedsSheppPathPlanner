@@ -1,4 +1,1 @@
-namespace PathPlanningLib.Vehicles.Kinematics
-{
-    
-}
+namespace PathPlanningLib.Vehicles.Kinematics;

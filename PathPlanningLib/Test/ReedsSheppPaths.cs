@@ -1,84 +1,11 @@
-namespace PathPlanningLib.PathPlanners.ReedsShepp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PathPlanningLib.Geometry;
-using PathPlanningLib.Vehicles.Kinematics;
 
-public class ReedsSheppPlanner<TKinematics> : IPathPlanner<TKinematics>
-    where TKinematics : IKinematicModel
-{
-    private readonly double turningRadius;
+public enum Steering { LEFT = -1, RIGHT = 1, STRAIGHT = 0 }
+public enum Gear     { FORWARD = 1, BACKWARD = -1 }
 
-    public ReedsSheppPlanner(double turningRadius)
-    {
-        this.turningRadius = turningRadius;
-    }
-
-    /// <summary>
-    /// Plans a path from start to goal using Reeds–Shepp curves.
-    /// Returns a Path object (sequence of Poses).
-    /// </summary>
-    public Path PlanPath(Pose start, Pose goal, TKinematics model)
-    {
-        // Step 1: convert start/goal to tuples for Reeds–Shepp
-        var startTuple = (start.X / turningRadius, start.Y / turningRadius, start.Theta);
-        var goalTuple  = (goal.X / turningRadius,  goal.Y / turningRadius,  goal.Theta);
-
-        // Step 2: compute optimal Reeds–Shepp path (as PathElements)
-        var elements = ReedsSheppPaths.GetOptimalPath(startTuple, goalTuple);
-
-        // Step 3: convert PathElements to Path with Poses
-        return ConvertToPath(start, elements, turningRadius);
-    }
-
-    /// <summary>
-    /// Converts a list of Reeds–Shepp PathElements to a Path of Poses.
-    /// </summary>
-    private Path ConvertToPath(Pose start, List<PathElement> elements, double turningRadius)
-    {
-        var path = new Path();
-        double x = start.X, y = start.Y, theta = start.Theta;
-        path.AddPose(new Pose(x, y, theta));
-
-        foreach (var seg in elements)
-        {
-            double s = seg.Param;
-            int nSteps = (int)(s / 0.1) + 1;   // resolution: 0.1 units
-            double ds = s / nSteps;
-
-            for (int i = 0; i < nSteps; i++)
-            {
-                if (seg.Steering == Steering.STRAIGHT)
-                {
-                    x += ds * (int)seg.Gear * Math.Cos(theta);
-                    y += ds * (int)seg.Gear * Math.Sin(theta);
-                }
-                else
-                {
-                    // Arc propagation for left/right turns
-                    double radius = turningRadius;
-                    double dtheta = (int)seg.Steering * ds / radius * (int)seg.Gear;
-                    theta += dtheta;
-                    x += radius * (Math.Sin(theta) - Math.Sin(theta - dtheta));
-                    y -= radius * (Math.Cos(theta) - Math.Cos(theta - dtheta));
-                }
-
-                path.AddPose(new Pose(x, y, theta));
-            }
-        }
-
-        return path;
-    }
-}
-
-// Represents Reeds-Shepp steering commands
-internal public enum Steering { LEFT = -1, RIGHT = 1, STRAIGHT = 0 }
-// Represent forwards/backwards motion
-internal public enum Gear     { FORWARD = 1, BACKWARD = -1 }
-
-// Represents a segment of a Reeds–Shepp path
-internal record PathElement(double Param, Steering Steering, Gear Gear)
+public record PathElement(double Param, Steering Steering, Gear Gear)
 {
     public static PathElement Create(double param, Steering steering, Gear gear)
         => (param >= 0)
@@ -86,14 +13,13 @@ internal record PathElement(double Param, Steering Steering, Gear Gear)
            : new PathElement(-param, steering, gear).ReverseGear();
 
     public PathElement ReverseSteering() => this with { Steering = (Steering)(-(int)Steering) };
-    public PathElement ReverseGear() => this with { Gear = (Gear)(-(int)Gear) };
+    public PathElement ReverseGear()     => this with { Gear     = (Gear)(-(int)Gear) };
 
     public override string ToString()
         => $"{{ Steering: {Steering}\tGear: {Gear}\tdistance: {Math.Round(Param, 3)} }}";
 }
 
-// Reeds-Shepp Utility Function
-internal static class Utils
+public static class Utils
 {
     public static double M(double angle) // wrap to [0,2π)
     {
@@ -127,8 +53,7 @@ internal static class Utils
     }
 }
 
-// Represents Original 12 Reeds-Shepp Families
-internal static class ReedsSheppPaths
+public static class ReedsSheppPaths
 {
     // ---------- families 1..12 (all take phi in RADIANS) ----------
     public static List<PathElement> Path1(double x, double y, double phi)
@@ -136,9 +61,9 @@ internal static class ReedsSheppPaths
         var path = new List<PathElement>();
         var (u, t) = Utils.R(x - Math.Sin(phi), y - 1 + Math.Cos(phi));
         double v = Utils.M(phi - t);
-        path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
+        path.Add(PathElement.Create(t, Steering.LEFT,     Gear.FORWARD));
         path.Add(PathElement.Create(u, Steering.STRAIGHT, Gear.FORWARD));
-        path.Add(PathElement.Create(v, Steering.LEFT, Gear.FORWARD));
+        path.Add(PathElement.Create(v, Steering.LEFT,     Gear.FORWARD));
         return path;
     }
 
@@ -152,9 +77,9 @@ internal static class ReedsSheppPaths
             double u = Math.Sqrt(rho * rho - 4.0);
             double t = Utils.M(t1 + Math.Atan2(2.0, u));
             double v = Utils.M(t - phi);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
+            path.Add(PathElement.Create(t, Steering.LEFT,     Gear.FORWARD));
             path.Add(PathElement.Create(u, Steering.STRAIGHT, Gear.FORWARD));
-            path.Add(PathElement.Create(v, Steering.RIGHT, Gear.FORWARD));
+            path.Add(PathElement.Create(v, Steering.RIGHT,    Gear.FORWARD));
         }
         return path;
     }
@@ -171,9 +96,9 @@ internal static class ReedsSheppPaths
             double t = Utils.M(theta + Math.PI / 2.0 + A);
             double u = Utils.M(Math.PI - 2.0 * A);
             double v = Utils.M(phi - t - u);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(u, Steering.RIGHT, Gear.BACKWARD));
-            path.Add(PathElement.Create(v, Steering.LEFT, Gear.FORWARD));
+            path.Add(PathElement.Create(t, Steering.LEFT,   Gear.FORWARD));
+            path.Add(PathElement.Create(u, Steering.RIGHT,  Gear.BACKWARD));
+            path.Add(PathElement.Create(v, Steering.LEFT,   Gear.FORWARD));
         }
         return path;
     }
@@ -190,9 +115,9 @@ internal static class ReedsSheppPaths
             double t = Utils.M(theta + Math.PI / 2.0 + A);
             double u = Utils.M(Math.PI - 2.0 * A);
             double v = Utils.M(t + u - phi);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(u, Steering.RIGHT, Gear.BACKWARD));
-            path.Add(PathElement.Create(v, Steering.LEFT, Gear.BACKWARD));
+            path.Add(PathElement.Create(t, Steering.LEFT,   Gear.FORWARD));
+            path.Add(PathElement.Create(u, Steering.RIGHT,  Gear.BACKWARD));
+            path.Add(PathElement.Create(v, Steering.LEFT,   Gear.BACKWARD));
         }
         return path;
     }
@@ -209,9 +134,9 @@ internal static class ReedsSheppPaths
             double A = Math.Asin(2.0 * Math.Sin(u) / rho);
             double t = Utils.M(theta + Math.PI / 2.0 - A);
             double v = Utils.M(t - u - phi);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(u, Steering.RIGHT, Gear.FORWARD));
-            path.Add(PathElement.Create(v, Steering.LEFT, Gear.BACKWARD));
+            path.Add(PathElement.Create(t, Steering.LEFT,   Gear.FORWARD));
+            path.Add(PathElement.Create(u, Steering.RIGHT,  Gear.FORWARD));
+            path.Add(PathElement.Create(v, Steering.LEFT,   Gear.BACKWARD));
         }
         return path;
     }
@@ -239,10 +164,10 @@ internal static class ReedsSheppPaths
                 u = Utils.M(Math.PI - A);
                 v = Utils.M(phi - t + 2.0 * u);
             }
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(u, Steering.RIGHT, Gear.FORWARD));
-            path.Add(PathElement.Create(u, Steering.LEFT, Gear.BACKWARD));
-            path.Add(PathElement.Create(v, Steering.RIGHT, Gear.BACKWARD));
+            path.Add(PathElement.Create(t, Steering.LEFT,   Gear.FORWARD));
+            path.Add(PathElement.Create(u, Steering.RIGHT,  Gear.FORWARD));
+            path.Add(PathElement.Create(u, Steering.LEFT,   Gear.BACKWARD));
+            path.Add(PathElement.Create(v, Steering.RIGHT,  Gear.BACKWARD));
         }
         return path;
     }
@@ -260,10 +185,10 @@ internal static class ReedsSheppPaths
             double A = Math.Asin(2.0 * Math.Sin(u) / rho);
             double t = Utils.M(theta + Math.PI / 2.0 + A);
             double v = Utils.M(t - phi);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(u, Steering.RIGHT, Gear.BACKWARD));
-            path.Add(PathElement.Create(u, Steering.LEFT, Gear.BACKWARD));
-            path.Add(PathElement.Create(v, Steering.RIGHT, Gear.FORWARD));
+            path.Add(PathElement.Create(t, Steering.LEFT,   Gear.FORWARD));
+            path.Add(PathElement.Create(u, Steering.RIGHT,  Gear.BACKWARD));
+            path.Add(PathElement.Create(u, Steering.LEFT,   Gear.BACKWARD));
+            path.Add(PathElement.Create(v, Steering.RIGHT,  Gear.FORWARD));
         }
         return path;
     }
@@ -280,10 +205,10 @@ internal static class ReedsSheppPaths
             double A = Math.Atan2(2.0, u + 2.0);
             double t = Utils.M(theta + Math.PI / 2.0 + A);
             double v = Utils.M(t - phi + Math.PI / 2.0);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(Math.PI / 2.0, Steering.RIGHT, Gear.BACKWARD));
+            path.Add(PathElement.Create(t, Steering.LEFT,     Gear.FORWARD));
+            path.Add(PathElement.Create(Math.PI / 2.0, Steering.RIGHT,    Gear.BACKWARD));
             path.Add(PathElement.Create(u, Steering.STRAIGHT, Gear.BACKWARD));
-            path.Add(PathElement.Create(v, Steering.LEFT, Gear.BACKWARD));
+            path.Add(PathElement.Create(v, Steering.LEFT,     Gear.BACKWARD));
         }
         return path;
     }
@@ -300,10 +225,10 @@ internal static class ReedsSheppPaths
             double A = Math.Atan2(u + 2.0, 2.0);
             double t = Utils.M(theta + Math.PI / 2.0 - A);
             double v = Utils.M(t - phi - Math.PI / 2.0);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
+            path.Add(PathElement.Create(t, Steering.LEFT,     Gear.FORWARD));
             path.Add(PathElement.Create(u, Steering.STRAIGHT, Gear.FORWARD));
-            path.Add(PathElement.Create(Math.PI / 2.0, Steering.RIGHT, Gear.FORWARD));
-            path.Add(PathElement.Create(v, Steering.LEFT, Gear.BACKWARD));
+            path.Add(PathElement.Create(Math.PI / 2.0, Steering.RIGHT,    Gear.FORWARD));
+            path.Add(PathElement.Create(v, Steering.LEFT,     Gear.BACKWARD));
         }
         return path;
     }
@@ -319,10 +244,10 @@ internal static class ReedsSheppPaths
             double t = Utils.M(theta + Math.PI / 2.0);
             double u = rho - 2.0;
             double v = Utils.M(phi - t - Math.PI / 2.0);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(Math.PI / 2.0, Steering.RIGHT, Gear.BACKWARD));
+            path.Add(PathElement.Create(t, Steering.LEFT,     Gear.FORWARD));
+            path.Add(PathElement.Create(Math.PI / 2.0, Steering.RIGHT,    Gear.BACKWARD));
             path.Add(PathElement.Create(u, Steering.STRAIGHT, Gear.BACKWARD));
-            path.Add(PathElement.Create(v, Steering.RIGHT, Gear.BACKWARD));
+            path.Add(PathElement.Create(v, Steering.RIGHT,    Gear.BACKWARD));
         }
         return path;
     }
@@ -338,10 +263,10 @@ internal static class ReedsSheppPaths
             double t = Utils.M(theta);
             double u = rho - 2.0;
             double v = Utils.M(phi - t - Math.PI / 2.0);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
+            path.Add(PathElement.Create(t, Steering.LEFT,     Gear.FORWARD));
             path.Add(PathElement.Create(u, Steering.STRAIGHT, Gear.FORWARD));
-            path.Add(PathElement.Create(Math.PI / 2.0, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(v, Steering.RIGHT, Gear.BACKWARD));
+            path.Add(PathElement.Create(Math.PI / 2.0, Steering.LEFT,     Gear.FORWARD));
+            path.Add(PathElement.Create(v, Steering.RIGHT,    Gear.BACKWARD));
         }
         return path;
     }
@@ -358,11 +283,11 @@ internal static class ReedsSheppPaths
             double A = Math.Atan2(2.0, u + 4.0);
             double t = Utils.M(theta + Math.PI / 2.0 + A);
             double v = Utils.M(t - phi);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(Math.PI / 2.0, Steering.RIGHT, Gear.BACKWARD));
+            path.Add(PathElement.Create(t, Steering.LEFT,     Gear.FORWARD));
+            path.Add(PathElement.Create(Math.PI / 2.0, Steering.RIGHT,    Gear.BACKWARD));
             path.Add(PathElement.Create(u, Steering.STRAIGHT, Gear.BACKWARD));
-            path.Add(PathElement.Create(Math.PI / 2.0, Steering.LEFT, Gear.BACKWARD));
-            path.Add(PathElement.Create(v, Steering.RIGHT, Gear.FORWARD));
+            path.Add(PathElement.Create(Math.PI / 2.0, Steering.LEFT,     Gear.BACKWARD));
+            path.Add(PathElement.Create(v, Steering.RIGHT,    Gear.FORWARD));
         }
         return path;
     }

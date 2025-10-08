@@ -1,10 +1,8 @@
-namespace PathPlanningLib.PathPlanners
+namespace PathPlanningLib.PathPlanners;
+public interface IPathPlanner<TKinematics>
 {
-    public interface IPathPlanner<TKinematics>
-    {
-        Path PlanPath(
-            Pose start,
-            Pose goal,
-            TKinematics model);
-    }
+    Path PlanPath(
+        Pose start,
+        Pose goal,
+        TKinematics model);
 }

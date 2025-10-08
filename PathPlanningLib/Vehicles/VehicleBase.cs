@@ -1,21 +1,20 @@
-namespace PathPlanningLib.Vehicles
+namespace PathPlanningLib.Vehicles;
+
+// vehicle base class which each kinematic type vehicle will inherit from
+public abstract class VehicleBase<TKinematics> : IVehicle<TKinematics>
+    where TKinematics : IKinematicModel
 {
-    // vehicle base class which each kinematic type vehicle will inherit from
-    public abstract class VehicleBase<TKinematics> : IVehicle<TKinematics>
-        where TKinematics : IKinematicModel
+    public Pose Pose { get; set; }
+    public TKinematics Kinematics { get; }
+
+    protected VehicleBase(TKinematics kinematics, Pose? initialPose = null)
     {
-        public Pose Pose { get; set; }
-        public TKinematics Kinematics { get; }
+        Kinematics = kinematics;
+        Pose = initialPose ?? new Pose(0, 0, 0);
+    }
 
-        protected VehicleBase(TKinematics kinematics, Pose? initialPose = null)
-        {
-            Kinematics = kinematics;
-            Pose = initialPose ?? new Pose(0, 0, 0);
-        }
-
-        public virtual void Update(ControlInput control, double deltaTime)
-        {
-            Pose = Kinematics.Propagate(Pose, control, deltaTime);
-        }
+    public virtual void Update(ControlInput control, double deltaTime)
+    {
+        Pose = Kinematics.Propagate(Pose, control, deltaTime);
     }
 }

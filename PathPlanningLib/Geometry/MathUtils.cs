@@ -1,4 +1,1 @@
-namespace PathPlanningLib.Geometry
-{
-    
-}
+namespace PathPlanningLib.Geometry;
