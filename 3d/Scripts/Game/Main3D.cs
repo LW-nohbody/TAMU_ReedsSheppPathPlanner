@@ -15,7 +15,6 @@ public partial class Main3D : Node3D
     [Export] public NodePath CameraChasePath;
     [Export] public NodePath CameraFreePath;
     [Export] public NodePath PathLineMeshPath; // MeshInstance3D
-     [Export] public Node3D CameraPivot;
 
     [Export] public float ArenaRadius = 10f;
     [Export] public float TurnRadiusMeters = 2.0f;
@@ -140,13 +139,13 @@ public partial class Main3D : Node3D
 
             //Vertical Rotation
             _pitch += -mouseMotion.Relative.Y * MouseSensitivity;
-            _pitch = Mathf.Clamp(_pitch, Mathf.DegToRad(-90), Mathf.DegToRad(90)); // Clamp pitch
+            // _pitch = Mathf.Clamp(_pitch, Mathf.DegToRad(-90), Mathf.DegToRad(90)); // Clamp pitch
 
             //Horizontal Rotation
             _yaw += -mouseMotion.Relative.X * MouseSensitivity;
-            _yaw = Mathf.Clamp(_yaw, Mathf.DegToRad(-90), Mathf.DegToRad(90)); //Clamp yaw
+            // _yaw = Mathf.Clamp(_yaw, Mathf.DegToRad(-90), Mathf.DegToRad(90)); //Clamp yaw
 
-            CameraPivot.Rotation = new Vector3(_pitch, _yaw, 0);
+            _camFree.Rotation = new Vector3(_pitch, _yaw, 0);
         }
 
         else if ((@event is InputEventMouseMotion MouseMotion) && _movingFreeCam)
