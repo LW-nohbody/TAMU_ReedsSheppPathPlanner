@@ -112,8 +112,8 @@ public partial class Main3D : Node3D
     {
         if ((@event is InputEventMouseMotion mouseMotion) && _rotatingFreeCam)
         {
-            RotateY(-mouseMotion.Relative.X * MouseSensitivity);
-            RotateX(-mouseMotion.Relative.Y * MouseSensitivity);
+            _camFree.RotateY(-mouseMotion.Relative.X * MouseSensitivity);
+            _camFree.RotateX(-mouseMotion.Relative.Y * MouseSensitivity);
 
             //Vertical Rotation
             _pitch += -mouseMotion.Relative.Y * MouseSensitivity;
