@@ -3,7 +3,7 @@ using System;
 
 public partial class VehicleAgent3D : CharacterBody3D
 {
-    [Export] public float SpeedMps = 1.5f;
+    [Export] public float SpeedMps = 1.0f;
     [Export] public float ArenaRadius = 10.0f;   // meters
     [Export] public float TurnSmoothing = 8.0f;  // lerp gain
 
@@ -11,14 +11,29 @@ public partial class VehicleAgent3D : CharacterBody3D
     [Export] public float YawStopEpsDeg = 3.0f; // degrees
 
     private Vector3[] _path = Array.Empty<Vector3>();
+    private int[] _gears = Array.Empty<int>();
+
     private int _i = 0;
     private bool _done = true;
 
-    public void SetPath(Vector3[] pts)
+    // NEW: end-alignment state
+    private bool _aligning = false;
+    private Vector3 _finalAim = Vector3.Zero; // unit XZ direction to face at the end
+
+    public void SetPath(Vector3[] pts, int[] gears)
     {
         _path = pts ?? Array.Empty<Vector3>();
+        _gears = gears ?? Array.Empty<int>();
         _i = 0;
         _done = _path.Length == 0;
+
+        _aligning = false;
+        _finalAim = Vector3.Zero;
+    }
+
+    public void SetPath(Vector3[] pts)
+    {
+        SetPath(pts, Array.Empty<int>());
     }
 
     public override void _Ready()
@@ -30,16 +45,36 @@ public partial class VehicleAgent3D : CharacterBody3D
 
     public override void _PhysicsProcess(double delta)
     {
+        // 1) If we're in the end-alignment phase, only rotate smoothly until done.
+        if (_aligning)
+        {
+            Velocity = Vector3.Zero;
+            MoveAndSlide();
+
+            // Slerp toward the cached final facing
+            var desired = Basis.LookingAt(new Vector3(_finalAim.X, 0f, _finalAim.Z), Vector3.Up);
+            var slerped = GlobalTransform.Basis.Slerp(
+                desired, Mathf.Clamp((float)(TurnSmoothing * delta), 0f, 1f));
+            GlobalTransform = new Transform3D(slerped, GlobalTransform.Origin);
+
+            // Check yaw error
+            var fwd = -GlobalTransform.Basis.Z; fwd.Y = 0f; fwd = fwd.Normalized();
+            float dot = Mathf.Clamp(fwd.Dot(_finalAim), -1f, 1f);
+            float yawErrDeg = Mathf.RadToDeg(Mathf.Acos(dot));
+
+            if (yawErrDeg <= YawStopEpsDeg)
+            {
+                // Final snap to exact facing, then done.
+                GlobalTransform = new Transform3D(desired, GlobalTransform.Origin);
+                _aligning = false;
+                _done = true;
+            }
+            return;
+        }
+
+        // 2) If we're fully done (no aligning), just stop.
         if (_done)
         {
-            // keep slerping toward final tangent a few frames so we end nicely
-            if (_path.Length >= 2)
-            {
-                var finalTan = (_path[^1] - _path[^2]).Normalized();
-                var desiredEnd = Basis.LookingAt(new Vector3(finalTan.X, 0, finalTan.Z), Vector3.Up);
-                var slerpedEnd = GlobalTransform.Basis.Slerp(desiredEnd, Mathf.Clamp((float)(TurnSmoothing * delta), 0f, 1f));
-                GlobalTransform = new Transform3D(slerpedEnd, GlobalTransform.Origin);
-            }
             Velocity = Vector3.Zero;
             MoveAndSlide();
             return;
@@ -48,41 +83,44 @@ public partial class VehicleAgent3D : CharacterBody3D
         var cur = GlobalTransform.Origin;
         var tgt = _path[_i]; tgt.Y = 0f;
 
-        // tighten threshold a bit for your new scale
+        // Advance waypoint when close
         if (cur.DistanceTo(tgt) < 0.12f)
         {
             _i++;
             if (_i >= _path.Length)
             {
-                // clamp to the last point; stop translating, finish yaw alignment
+                // We just reached/passed the last point -> start end-alignment (no more translation).
                 _i = _path.Length - 1;
-                tgt = _path[_i];
 
-                var finalPos = tgt;
-                var finalTan = (_path[^1] - _path[^2]); finalTan.Y = 0f;
-                finalTan = finalTan.LengthSquared() > 1e-9f ? finalTan.Normalized() : -GlobalTransform.Basis.Z;
+                // Compute final tangent from last two points
+                Vector3 finalTan = Vector3.Zero;
+                if (_path.Length >= 2)
+                {
+                    finalTan = _path[^1] - _path[^2];
+                    finalTan.Y = 0f;
+                }
+                if (finalTan.LengthSquared() < 1e-9f)
+                    finalTan = -GlobalTransform.Basis.Z; // fallback to current facing
+                else
+                    finalTan = finalTan.Normalized();
 
-                var posErr = new Vector2(finalPos.X - cur.X, finalPos.Z - cur.Z).Length();
-                var forward = -GlobalTransform.Basis.Z; forward.Y = 0f; forward = forward.Normalized();
-                var dot = Mathf.Clamp(forward.Dot(finalTan), -1f, 1f);
-                var yawErrDeg = Mathf.RadToDeg(Mathf.Acos(dot));
+                // Respect the final gear for visual facing
+                int lastGear = (_gears.Length > 0) ? _gears[^1] : +1;
+                _finalAim = (lastGear >= 0) ? finalTan : -finalTan;
 
-                // freeze translation, keep rotating toward finalTan below
                 Velocity = Vector3.Zero;
                 MoveAndSlide();
 
-                if (posErr <= PosStopEps && yawErrDeg <= YawStopEpsDeg)
-                    _done = true;
-
-                // we handled this tick
+                _aligning = true;   // hand control to the alignment block above
                 return;
             }
             tgt = _path[_i];
         }
 
+        // Move toward current waypoint
         var dir = (tgt - cur); dir.Y = 0f;
         if (dir.LengthSquared() < 1e-6f)
-            dir = -GlobalTransform.Basis.Z; // keep heading
+            dir = -GlobalTransform.Basis.Z; // keep heading if degenerate
         else
             dir = dir.Normalized();
 
@@ -96,8 +134,14 @@ public partial class VehicleAgent3D : CharacterBody3D
             var finalTan = (_path[^1] - _path[^2]); finalTan.Y = 0f;
             if (finalTan.LengthSquared() > 1e-9f) aimDir = finalTan.Normalized();
         }
-        var desiredYaw = Basis.LookingAt(aimDir, Vector3.Up);
-        var slerpedYaw = GlobalTransform.Basis.Slerp(desiredYaw, Mathf.Clamp((float)(TurnSmoothing * delta), 0f, 1f));
+
+        // Face forward for gear>0, backward for gear<0 (visual only)
+        int gear = (_i < _gears.Length) ? _gears[_i] : +1;
+        var facingDir = (gear >= 0) ? aimDir : -aimDir;
+
+        var desiredYaw = Basis.LookingAt(facingDir, Vector3.Up);
+        var slerpedYaw = GlobalTransform.Basis.Slerp(
+            desiredYaw, Mathf.Clamp((float)(TurnSmoothing * delta), 0f, 1f));
         GlobalTransform = new Transform3D(slerpedYaw, GlobalTransform.Origin);
 
         // Plane lock + soft boundary

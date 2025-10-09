@@ -13,22 +13,20 @@ public partial class Main3D : Node3D
 
     [Export] public NodePath CameraTopPath;
     [Export] public NodePath CameraChasePath;
-    [Export] public NodePath PathLineMeshPath; // MeshInstance3D
 
     [Export] public float ArenaRadius = 10f;
     [Export] public float TurnRadiusMeters = 2.0f;
     [Export] public float SampleStepMeters = 0.25f;
 
     // Path drawing over ground
-    [Export] public float PathLift = 0.05f;   // lift above hit point
+    [Export] public float PathLift = 0.0f;   // lift above hit point
     [Export] public uint  GroundMask = 0;     // 0 = collide with all; or set to 1 if Arena is on layer 1
-    [Export] public bool  DebugPathOnTop = true;
+    [Export] public bool  DebugPathOnTop = false;
 
     // Holds per-car path meshes & markers
     private Node3D _pathsParent;
     private System.Collections.Generic.List<VehicleAgent3D> _vehicles = new();
     private Camera3D _camTop, _camChase;
-    private MeshInstance3D _pathLine;
     private bool _usingTop = true;
 
     public override void _Ready()
@@ -36,7 +34,6 @@ public partial class Main3D : Node3D
         // Grab cameras & path host
         _camTop   = GetNode<Camera3D>(CameraTopPath);
         _camChase = GetNode<Camera3D>(CameraChasePath);
-        _pathLine = GetNode<MeshInstance3D>(PathLineMeshPath);
         _pathsParent = new Node3D { Name = "Paths" };
         AddChild(_pathsParent);
 
@@ -76,8 +73,8 @@ public partial class Main3D : Node3D
             var goalPos     = spawnPos + outward * GoalAdvance;
             double goalYaw  = startYaw + Mathf.Pi / 2.0;  // +90° = right in our math → 3D mapping
 
-            var pts = RSAdapter.ComputePath3D(spawnPos, startYaw, goalPos, goalYaw,
-                                            TurnRadiusMeters, SampleStepMeters);
+            var (pts, gears) = RSAdapter.ComputePath3D(spawnPos, startYaw, goalPos, goalYaw,
+                                           TurnRadiusMeters, SampleStepMeters);
 
             // pick a color per car
             Color[] pal = { new Color(1,0,0), new Color(1,0.5f,0), new Color(1,1,0), new Color(0,1,0), new Color(0,1,1) };
@@ -89,33 +86,14 @@ public partial class Main3D : Node3D
             DrawMarker(goalPos,  new Color(0,0,1)); // blue  = goal
 
             // feed path
-            car.SetPath(pts);
+            car.SetPath(pts, gears);
 
             _vehicles.Add(car);
-        }
-
-        // Draw just the first car's path for now (to keep your single PathLine node)
-        if (_vehicles.Count > 0)
-        {
-            // Recompute the first path exactly like above to get the points for drawing
-            float theta0 = 0f;
-            var outward0 = new Vector3(Mathf.Cos(theta0), 0f, Mathf.Sin(theta0));
-            var spawn0   = outward0 * SpawnRadius;
-            double yaw0  = theta0;
-            var goal0    = spawn0 + outward0 * GoalAdvance;
-            double yaw0g = yaw0 - Mathf.Pi / 2.0;
-
-            var pts0 = RSAdapter.ComputePath3D(spawn0, yaw0, goal0, yaw0g,
-                                            TurnRadiusMeters, SampleStepMeters);
-            DrawPath(pts0);
         }
 
         // cameras
         _camTop.Current = true;
         _camChase.Current = false;
-
-        // If you want the chase cam to follow car 0 when you press Tab:
-        // nothing else to do; FollowChaseCamera() already uses the first car if we point it there.
     }
 
     public override void _Process(double delta)
@@ -127,19 +105,6 @@ public partial class Main3D : Node3D
             _camChase.Current = !_usingTop;
         }
         if (!_usingTop) FollowChaseCamera(delta);
-    }
-
-    private void DrawPath(Vector3[] points)
-    {
-        var im = new ImmediateMesh();
-        im.SurfaceBegin(Mesh.PrimitiveType.LineStrip);
-        foreach (var p in points)
-            im.SurfaceAddVertex(p);
-        im.SurfaceEnd();
-        _pathLine.Mesh = im;
-
-        var mat = new StandardMaterial3D { AlbedoColor = new Color(1, 0, 0) };
-        _pathLine.SetSurfaceOverrideMaterial(0, mat);
     }
 
     private void SnapChaseCamera()
