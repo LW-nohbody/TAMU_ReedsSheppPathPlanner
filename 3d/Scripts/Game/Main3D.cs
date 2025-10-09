@@ -40,8 +40,6 @@ public partial class Main3D : Node3D
     private bool _rotatingFreeCam = false;
     private float _pitch = 0f;
     private float _yaw = 0f;
-    private float _vert = 0f;
-    private float _horiz = 0f;
     private Vector2 _lastMousePos;
 
     public override void _Ready()
