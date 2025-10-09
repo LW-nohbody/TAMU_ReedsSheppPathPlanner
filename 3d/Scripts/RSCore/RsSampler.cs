@@ -65,6 +65,66 @@ namespace RSCore
             return pts.ToArray();
         }
 
+        public static void SamplePolylineWithGears(
+            (double x, double y, double theta) startWorld,
+            List<PathElement> path,
+            double R,
+            double ds,
+            List<Vector2> outPts,
+            List<int> outGears)
+        {
+            outPts.Clear();
+            outGears.Clear();
+
+            double x = startWorld.x, y = startWorld.y, th = startWorld.theta;
+            outPts.Add(new Vector2((float)x, (float)y));
+            outGears.Add(+1); // assume start forward
+
+            foreach (var seg in path)
+            {
+                int gear = (seg.Gear == Gear.FORWARD) ? +1 : -1;
+
+                if (seg.Steering == Steering.STRAIGHT)
+                {
+                    double len = seg.Param * R;
+                    double remaining = len;
+                    while (remaining > 1e-6)
+                    {
+                        double step = Math.Min(ds, remaining);
+                        x += gear * step * Math.Cos(th);
+                        y += gear * step * Math.Sin(th);
+                        outPts.Add(new Vector2((float)x, (float)y));
+                        outGears.Add(gear);
+                        remaining -= step;
+                    }
+                }
+                else
+                {
+                    int steerSign = seg.Steering == Steering.LEFT ? +1 : -1;
+                    int gearSign = gear;
+
+                    double total = seg.Param * steerSign * gearSign;
+                    double invk = R * steerSign;
+                    double remaining = Math.Abs(total);
+                    double dTheta = ds / R; // ds = R * dθ (magnitude)
+
+                    while (remaining > 1e-6)
+                    {
+                        double dth = Math.Min(dTheta, remaining) * Math.Sign(total);
+                        double thPrev = th;
+                        th += dth;
+
+                        x += (Math.Sin(th) - Math.Sin(thPrev)) * invk;
+                        y += -(Math.Cos(th) - Math.Cos(thPrev)) * invk;
+
+                        outPts.Add(new Vector2((float)x, (float)y));
+                        outGears.Add(gear);
+                        remaining -= Math.Abs(dth);
+                    }
+                }
+            }
+        }
+
         public static Vector2[] SamplePolylineExact(
         (double x, double y, double theta) startWorldMath,
         List<PathElement> path,
