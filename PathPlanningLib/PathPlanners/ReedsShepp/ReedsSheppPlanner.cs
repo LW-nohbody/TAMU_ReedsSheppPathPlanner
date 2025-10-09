@@ -2,8 +2,6 @@ namespace PathPlanningLib.PathPlanners.ReedsShepp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PathPlanningLib.Geometry;
-using PathPlanningLib.Vehicles.Kinematics;
 
 public class ReedsSheppPlanner<TKinematics> : IPathPlanner<TKinematics>
     where TKinematics : IKinematicModel
