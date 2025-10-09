@@ -9,7 +9,7 @@ public static class RSAdapter
     private static (double x, double y, double th) ToMath3D(Vector3 pos, double yawRad)
         => (pos.X, pos.Z, yawRad);
 
-    public static Vector3[] ComputePath3D(
+    public static (Vector3[] points, int[] gears) ComputePath3D(
         Vector3 startPos, double startYawRad,
         Vector3 goalPos,  double goalYawRad,
         double turnRadiusMeters,
@@ -27,22 +27,23 @@ public static class RSAdapter
         // 3) Optimal RS in normalized space
         var best = ReedsSheppPaths.GetOptimalPath(sN, gN);
         if (best == null || best.Count == 0)
-            return Array.Empty<Vector3>();
+            return (Array.Empty<Vector3>(), Array.Empty<int>());
 
-        // 4) Sample polyline in local normalized (start at 0,0,0)
-        var ptsLocalNorm = RsSampler.SamplePolylineExact((0.0, 0.0, 0.0), best, 1.0, sampleStepMeters / R);
+        // 4) Sample polyline and gears in local normalized (start at 0,0,0)
+        var pts2D = new List<Vector2>();
+        var gears = new List<int>();
+        RsSampler.SamplePolylineWithGears((0.0, 0.0, 0.0), best, 1.0, sampleStepMeters / R, pts2D, gears);
 
         // 5) Transform back to world-math (scale, rotate by start θ, translate by start x,y)
-        var list3 = new List<Vector3>(ptsLocalNorm.Length);
+        var list3 = new List<Vector3>(pts2D.Count);
         double c0 = Math.Cos(sM.th), s0 = Math.Sin(sM.th);
-        foreach (var p in ptsLocalNorm)
+        foreach (var p in pts2D)
         {
             double sx = p.X * R, sy = p.Y * R;
             double wx = sM.x + (sx * c0 - sy * s0);
             double wy = sM.y + (sx * s0 + sy * c0);
-            // math (x, y) -> 3D (x, 0, z=y)
-            list3.Add(new Vector3((float)wx, 0f, (float)wy));
+            list3.Add(new Vector3((float)wx, 0f, (float)wy)); // (x, 0, z=y)
         }
-        return list3.ToArray();
+        return (list3.ToArray(), gears.ToArray());
     }
 }
