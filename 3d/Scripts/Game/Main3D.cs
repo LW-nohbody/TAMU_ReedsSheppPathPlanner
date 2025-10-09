@@ -15,10 +15,15 @@ public partial class Main3D : Node3D
     [Export] public NodePath CameraChasePath;
     [Export] public NodePath CameraFreePath;
     [Export] public NodePath PathLineMeshPath; // MeshInstance3D
+     [Export] public Node3D CameraPivot;
 
     [Export] public float ArenaRadius = 10f;
     [Export] public float TurnRadiusMeters = 2.0f;
     [Export] public float SampleStepMeters = 0.25f;
+    [Export] public float MouseSensitivity = 0.005f;
+    [Export] public float TranslateSensitivity = 0.01f;
+   
+
 
     // Path drawing over ground
     [Export] public float PathLift = 0.05f;   // lift above hit point
@@ -31,6 +36,13 @@ public partial class Main3D : Node3D
     private Camera3D _camTop, _camChase, _camFree;
     private MeshInstance3D _pathLine;
     private bool _usingTop = true;
+    private bool _movingFreeCam = false;
+    private bool _rotatingFreeCam = false;
+    private float _pitch = 0f;
+    private float _yaw = 0f;
+    private float _vert = 0f;
+    private float _horiz = 0f;
+    private Vector2 _lastMousePos;
 
     public override void _Ready()
     {
@@ -121,6 +133,30 @@ public partial class Main3D : Node3D
         // nothing else to do; FollowChaseCamera() already uses the first car if we point it there.
     }
 
+    public override void _Input(InputEvent @event)
+    {
+        if ((@event is InputEventMouseMotion mouseMotion) && _rotatingFreeCam)
+        {
+            // Horizontal rotation (Yaw)
+            RotateY(-mouseMotion.Relative.X * MouseSensitivity);
+            RotateX(-mouseMotion.Relative.Y * MouseSensitivity);
+
+            // Vertical rotation (Pitch)
+            _pitch += -mouseMotion.Relative.Y * MouseSensitivity;
+            _pitch = Mathf.Clamp(_pitch, Mathf.DegToRad(-90), Mathf.DegToRad(90)); // Clamp pitch
+
+            _yaw += -mouseMotion.Relative.X * MouseSensitivity;
+            _yaw = Mathf.Clamp(_yaw, Mathf.DegToRad(-90), Mathf.DegToRad(90)); //Clamp yaw
+
+            CameraPivot.Rotation = new Vector3(_pitch, _yaw, 0);
+        }
+
+        else if ((@event is InputEventMouseMotion MouseMotion) && _movingFreeCam)
+        {
+            
+        }
+    }
+
     public override void _Process(double delta)
     {
         if (Input.IsActionJustPressed("toggle_camera"))
@@ -129,6 +165,7 @@ public partial class Main3D : Node3D
             _camTop.Current = _usingTop;
             _camChase.Current = !_usingTop;
             _camFree.Current = false;
+            _movingFreeCam = false;
         }
         if (!_usingTop) FollowChaseCamera(delta);
 
@@ -139,6 +176,30 @@ public partial class Main3D : Node3D
             _camChase.Current = false;
             _usingTop = !_usingTop; //Toggle so when return it resumes from the previous view
         }
+
+        // move free camera        
+        if (Input.IsActionPressed("translate_free_camera"))
+        {
+            // get movement of mouse
+            _rotatingFreeCam = false;
+            _movingFreeCam = true;
+            Input.MouseMode = Input.MouseModeEnum.Captured;
+            _lastMousePos = GetViewport().GetMousePosition();
+        }
+        else if (Input.IsActionPressed("rotate_free_camera"))
+        {
+            // get movement of mouse
+            _movingFreeCam = false;
+            _rotatingFreeCam = true;
+            Input.MouseMode = Input.MouseModeEnum.Captured;
+        }
+        else
+        {
+            _movingFreeCam = false;
+            _rotatingFreeCam = false;
+            Input.MouseMode = Input.MouseModeEnum.Visible;
+        }
+
     }
 
     private void DrawPath(Vector3[] points)
