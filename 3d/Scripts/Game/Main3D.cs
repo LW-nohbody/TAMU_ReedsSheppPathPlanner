@@ -137,14 +137,14 @@ public partial class Main3D : Node3D
     {
         if ((@event is InputEventMouseMotion mouseMotion) && _rotatingFreeCam)
         {
-            // Horizontal rotation (Yaw)
             RotateY(-mouseMotion.Relative.X * MouseSensitivity);
             RotateX(-mouseMotion.Relative.Y * MouseSensitivity);
 
-            // Vertical rotation (Pitch)
+            //Vertical Rotation
             _pitch += -mouseMotion.Relative.Y * MouseSensitivity;
             _pitch = Mathf.Clamp(_pitch, Mathf.DegToRad(-90), Mathf.DegToRad(90)); // Clamp pitch
 
+            //Horizontal Rotation
             _yaw += -mouseMotion.Relative.X * MouseSensitivity;
             _yaw = Mathf.Clamp(_yaw, Mathf.DegToRad(-90), Mathf.DegToRad(90)); //Clamp yaw
 
@@ -153,7 +153,16 @@ public partial class Main3D : Node3D
 
         else if ((@event is InputEventMouseMotion MouseMotion) && _movingFreeCam)
         {
-            
+            Vector2 delta = MouseMotion.Relative;
+
+            // Get camera's axis
+            Vector3 right = _camFree.GlobalTransform.Basis.X;
+            Vector3 up = _camFree.GlobalTransform.Basis.Y;
+
+            // Move the camera along its local right and up axes
+            Vector3 motion = (-right * delta.X + up * delta.Y) * TranslateSensitivity;
+
+            _camFree.GlobalTranslate(motion);
         }
     }
 
