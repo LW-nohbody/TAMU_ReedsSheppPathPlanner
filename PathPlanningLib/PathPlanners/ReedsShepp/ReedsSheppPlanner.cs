@@ -1,4 +1,7 @@
 namespace PathPlanningLib.PathPlanners.ReedsShepp;
+
+using PathPlanningLib.Vehicles.Kinematics;
+using PathPlanningLib.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Linq;

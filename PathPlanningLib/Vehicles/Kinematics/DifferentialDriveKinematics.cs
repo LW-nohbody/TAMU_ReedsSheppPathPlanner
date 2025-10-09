@@ -1,4 +1,5 @@
 namespace PathPlanningLib.Vehicles.Kinematics;
+using PathPlanningLib.Geometry;
 using System;
 
 public class DifferentialDriveKinematics : IKinematicModel
