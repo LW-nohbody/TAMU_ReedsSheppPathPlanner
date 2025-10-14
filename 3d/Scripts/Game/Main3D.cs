@@ -13,10 +13,15 @@ public partial class Main3D : Node3D
 
     [Export] public NodePath CameraTopPath;
     [Export] public NodePath CameraChasePath;
+    [Export] public NodePath CameraFreePath;
 
     [Export] public float ArenaRadius = 10f;
     [Export] public float TurnRadiusMeters = 2.0f;
     [Export] public float SampleStepMeters = 0.25f;
+    [Export] public float MouseSensitivity = 0.005f;
+    [Export] public float TranslateSensitivity = 0.01f;
+   
+
 
     // Path drawing over ground
     [Export] public float PathLift = 0.0f;   // lift above hit point
@@ -26,14 +31,20 @@ public partial class Main3D : Node3D
     // Holds per-car path meshes & markers
     private Node3D _pathsParent;
     private System.Collections.Generic.List<VehicleAgent3D> _vehicles = new();
-    private Camera3D _camTop, _camChase;
+    private Camera3D _camTop, _camChase, _camFree;
     private bool _usingTop = true;
+    private bool _movingFreeCam = false;
+    private bool _rotatingFreeCam = false;
+    private float _pitch = 0f;
+    private float _yaw = 0f;
+    private Vector2 _lastMousePos;
 
     public override void _Ready()
     {
         // Grab cameras & path host
-        _camTop   = GetNode<Camera3D>(CameraTopPath);
+        _camTop = GetNode<Camera3D>(CameraTopPath);
         _camChase = GetNode<Camera3D>(CameraChasePath);
+        _camFree = GetNode<Camera3D>(CameraFreePath);
         _pathsParent = new Node3D { Name = "Paths" };
         AddChild(_pathsParent);
 
@@ -47,43 +58,43 @@ public partial class Main3D : Node3D
         // Spawn N vehicles on a ring
         int N = Math.Max(1, VehicleCount);
         float step = Mathf.Tau / N;         // 2π / N
-        float r    = SpawnRadius;
+        float r = SpawnRadius;
 
         for (int i = 0; i < N; i++)
         {
             // angle, outward direction, spawn pos
-            float theta   = i * step;
-            var outward   = new Vector3(Mathf.Cos(theta), 0f, Mathf.Sin(theta)); // unit
-            var spawnPos  = outward * r;
+            float theta = i * step;
+            var outward = new Vector3(Mathf.Cos(theta), 0f, Mathf.Sin(theta)); // unit
+            var spawnPos = outward * r;
 
             // car should face OUTWARD (Godot's forward is -Z)
-            var basis     = Basis.LookingAt(outward, Vector3.Up);
-            var xform     = new Transform3D(basis, spawnPos);
+            var basis = Basis.LookingAt(outward, Vector3.Up);
+            var xform = new Transform3D(basis, spawnPos);
 
             // instantiate car
             var car = VehicleScene.Instantiate<VehicleAgent3D>();
             AddChild(car);
             car.GlobalTransform = xform;             // put car exactly at path start
-            car.ArenaRadius     = ArenaRadius;       // keep your arena clamp
+            car.ArenaRadius = ArenaRadius;       // keep your arena clamp
 
             // plan THIS car's path:
             //   start = (spawnPos, yaw=theta)
             //   goal  = a few meters forward, with final yaw turned 90° right
             double startYaw = theta;                 // 0=+X, CCW toward +Z
-            var goalPos     = spawnPos + outward * GoalAdvance;
-            double goalYaw  = startYaw + Mathf.Pi / 2.0;  // +90° = right in our math → 3D mapping
+            var goalPos = spawnPos + outward * GoalAdvance;
+            double goalYaw = startYaw + Mathf.Pi / 2.0;  // +90° = right in our math → 3D mapping
 
             var (pts, gears) = RSAdapter.ComputePath3D(spawnPos, startYaw, goalPos, goalYaw,
                                            TurnRadiusMeters, SampleStepMeters);
 
             // pick a color per car
-            Color[] pal = { new Color(1,0,0), new Color(1,0.5f,0), new Color(1,1,0), new Color(0,1,0), new Color(0,1,1) };
+            Color[] pal = { new Color(1, 0, 0), new Color(1, 0.5f, 0), new Color(1, 1, 0), new Color(0, 1, 0), new Color(0, 1, 1) };
             var col = pal[i % pal.Length];
 
             // draw its path + start/goal markers
             DrawPathForCar(pts, col);
-            DrawMarker(spawnPos, new Color(0,1,0)); // green = start
-            DrawMarker(goalPos,  new Color(0,0,1)); // blue  = goal
+            DrawMarker(spawnPos, new Color(0, 1, 0)); // green = start
+            DrawMarker(goalPos, new Color(0, 0, 1)); // blue  = goal
 
             // feed path
             car.SetPath(pts, gears);
@@ -94,6 +105,40 @@ public partial class Main3D : Node3D
         // cameras
         _camTop.Current = true;
         _camChase.Current = false;
+        _camFree.Current = false;
+    }
+
+    public override void _Input(InputEvent @event)
+    {
+        if ((@event is InputEventMouseMotion mouseMotion) && _rotatingFreeCam)
+        {
+            _camFree.RotateY(-mouseMotion.Relative.X * MouseSensitivity);
+            _camFree.RotateX(-mouseMotion.Relative.Y * MouseSensitivity);
+
+            //Vertical Rotation
+            _pitch += -mouseMotion.Relative.Y * MouseSensitivity;
+            // _pitch = Mathf.Clamp(_pitch, Mathf.DegToRad(-90), Mathf.DegToRad(90)); // Clamp pitch
+
+            //Horizontal Rotation
+            _yaw += -mouseMotion.Relative.X * MouseSensitivity;
+            // _yaw = Mathf.Clamp(_yaw, Mathf.DegToRad(-90), Mathf.DegToRad(90)); //Clamp yaw
+
+            _camFree.Rotation = new Vector3(_pitch, _yaw, 0);
+        }
+
+        else if ((@event is InputEventMouseMotion MouseMotion) && _movingFreeCam)
+        {
+            Vector2 delta = MouseMotion.Relative;
+
+            // Get camera's axis
+            Vector3 right = _camFree.GlobalTransform.Basis.X;
+            Vector3 up = _camFree.GlobalTransform.Basis.Y;
+
+            // Move the camera along its local right and up axes
+            Vector3 motion = (-right * delta.X + up * delta.Y) * TranslateSensitivity;
+
+            _camFree.GlobalTranslate(motion);
+        }
     }
 
     public override void _Process(double delta)
@@ -103,9 +148,44 @@ public partial class Main3D : Node3D
             _usingTop = !_usingTop;
             _camTop.Current = _usingTop;
             _camChase.Current = !_usingTop;
+            _camFree.Current = false;
+            _movingFreeCam = false;
         }
         if (!_usingTop) FollowChaseCamera(delta);
+
+        if (Input.IsActionJustPressed("select_free_camera"))
+        {
+            _camFree.Current = true;
+            _camTop.Current = false;
+            _camChase.Current = false;
+            _usingTop = !_usingTop; //Toggle so when return it resumes from the previous view
+        }
+
+        // move free camera        
+        if (Input.IsActionPressed("translate_free_camera"))
+        {
+            // get movement of mouse
+            _rotatingFreeCam = false;
+            _movingFreeCam = true;
+            Input.MouseMode = Input.MouseModeEnum.Captured;
+            _lastMousePos = GetViewport().GetMousePosition();
+        }
+        else if (Input.IsActionPressed("rotate_free_camera"))
+        {
+            // get movement of mouse
+            _movingFreeCam = false;
+            _rotatingFreeCam = true;
+            Input.MouseMode = Input.MouseModeEnum.Captured;
+        }
+        else
+        {
+            _movingFreeCam = false;
+            _rotatingFreeCam = false;
+            Input.MouseMode = Input.MouseModeEnum.Visible;
+        }
+
     }
+
 
     private void SnapChaseCamera()
     {

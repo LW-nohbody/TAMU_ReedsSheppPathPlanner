@@ -12,12 +12,20 @@ top_radius = 15.0
 bottom_radius = 15.0
 height = 0.1
 
-[node name="Main" type="Node3D"]
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_lquwl"]
+height = 0.1
+radius = 15.0
+
+[node name="Main" type="Node3D" node_paths=PackedStringArray("CameraPivot")]
 script = ExtResource("1_0xm2m")
 VehicleScene = ExtResource("2_0xm2m")
 GoalAdvance = 10.0
 CameraTopPath = NodePath("CameraTop")
 CameraChasePath = NodePath("CameraChase")
+CameraFreePath = NodePath("CameraFree")
+CameraPivot = NodePath("CameraFree")
+TurnRadiusMeters = 0.6
+SampleStepMeters = 0.1
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 
@@ -40,3 +48,5 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, -5)
 
 [node name="Camera3DView" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 5, 12)
+
+[node name="CameraFree" type="Camera3D" parent="."]
