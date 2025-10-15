@@ -15,7 +15,7 @@ public partial class Main3D : Node3D
     [Export] public NodePath CameraChasePath;
     [Export] public NodePath CameraFreePath;
 
-    [Export] public float ArenaRadius = 10f;
+    [Export] public float ArenaRadius = 15f;
     [Export] public float TurnRadiusMeters = 2.0f;
     [Export] public float SampleStepMeters = 0.25f;
     [Export] public float MouseSensitivity = 0.005f;
