@@ -104,7 +104,8 @@ public static class DubinsPaths
         phi = Utils.M(phi);
         var path = new List<PathElement>();
         var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
-        if (rho * rho >= 4.0)
+        // if (rho * rho >= 4.0)
+        if(rho >= 2.0)
         {
             double u = Math.Sqrt(rho * rho - 4.0);
             double t = Utils.M(t1 + Math.Atan2(2.0, u));
@@ -132,7 +133,8 @@ public static class DubinsPaths
         phi = Utils.M(phi);
         var path = new List<PathElement>();
         var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
-        if (rho * rho >= 4.0)
+        // if (rho * rho >= 4.0)
+        if(rho >= 2.0)
         {
             double u = Math.Sqrt(rho * rho - 4.0);
             double t = Utils.M(t1 + Math.Atan2(2.0, u));
