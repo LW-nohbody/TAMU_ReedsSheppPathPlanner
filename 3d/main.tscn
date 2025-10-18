@@ -18,6 +18,9 @@ VehicleScene = ExtResource("2_0xm2m")
 GoalAdvance = 10.0
 CameraTopPath = NodePath("CameraTop")
 CameraChasePath = NodePath("CameraChase")
+CameraFreePath = NodePath("CameraFree")
+TurnRadiusMeters = 0.6
+SampleStepMeters = 0.1
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 
@@ -40,3 +43,5 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, -5)
 
 [node name="Camera3DView" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 5, 12)
+
+[node name="CameraFree" type="Camera3D" parent="."]
