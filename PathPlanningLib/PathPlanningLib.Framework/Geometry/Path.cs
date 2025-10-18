@@ -3,43 +3,30 @@ namespace PathPlanningLib.Geometry;
 using System;
 using System.Collections.Generic;
 
-/// <summary>
-/// Represents a geometric path as a sequence of poses.
-/// </summary>
+// Represents a geometric path as a sequence of poses.
 public class Path
 {
-    /// <summary>
-    /// The ordered list of poses that make up the path.
-    /// </summary>
+    // The ordered list of poses that make up the path.
     public List<Pose> Poses { get; }
 
-    /// <summary>
-    /// Optional: The total length of the path (could be computed on demand).
-    /// </summary>
+    // Optional: The total length of the path (could be computed on demand).
     public double Length { get; private set; }
 
-    /// <summary>
-    /// Constructs an empty path.
-    /// </summary>
+    // Constructs an empty path.
     public Path()
     {
         Poses = new List<Pose>();
         Length = 0.0;
     }
 
-    /// <summary>
-    /// Constructs a path from a list of poses.
-    /// </summary>
-    /// <param name="poses">Initial sequence of poses</param>
+    // Constructs a path from a list of poses.
     public Path(IEnumerable<Pose> poses)
     {
         Poses = new List<Pose>(poses);
         ComputeLength();
     }
 
-    /// <summary>
-    /// Adds a new pose to the path and updates the total length.
-    /// </summary>
+    // Adds a new pose to the path and updates the total length.
     public void AddPose(Pose pose)
     {
         if (Poses.Count > 0)
@@ -53,9 +40,7 @@ public class Path
         Poses.Add(pose);
     }
 
-    /// <summary>
-    /// Recalculates the total path length.
-    /// </summary>
+    // Recalculates the total path length.
     public void ComputeLength()
     {
         Length = 0.0;
@@ -67,14 +52,10 @@ public class Path
         }
     }
 
-    /// <summary>
-    /// Returns true if the path has no poses.
-    /// </summary>
+    // Returns true if the path has no poses.
     public bool IsEmpty() => Poses.Count == 0;
 
-    /// <summary>
-    /// Clears the path.
-    /// </summary>
+    // Clears the path.
     public void Clear()
     {
         Poses.Clear();

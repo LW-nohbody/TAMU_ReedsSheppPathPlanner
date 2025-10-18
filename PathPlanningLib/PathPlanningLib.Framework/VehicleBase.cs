@@ -6,6 +6,8 @@ using PathPlanningLib.Vehicles.Kinematics;
 public abstract class VehicleBase<TKinematics> : IVehicle<TKinematics>
     where TKinematics : IKinematicModel
 {
+    public double Width { get; set; }
+    public double Length { get; set; }
     public Pose Pose { get; set; }
     public TKinematics Kinematics { get; }
 
