@@ -1,6 +1,6 @@
-namespace PathPlanningLib.PathPlanners;
+namespace PathPlanningLib.Algorithms;
 using PathPlanningLib.Geometry;
-public interface IPathPlanner<TKinematics>
+public interface IPathPlanner
 {
     Path PlanPath(
         Pose start,

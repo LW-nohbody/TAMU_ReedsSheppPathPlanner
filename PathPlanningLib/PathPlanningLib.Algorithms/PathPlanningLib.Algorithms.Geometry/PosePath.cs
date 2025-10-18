@@ -4,23 +4,23 @@ using System;
 using System.Collections.Generic;
 
 // Represents a geometric path as a sequence of poses.
-public class Path
+public class PosePath
 {
     // The ordered list of poses that make up the path.
     public List<Pose> Poses { get; }
 
-    // Optional: The total length of the path (could be computed on demand).
+    //The total length of the path (computed on demand with ComputeLength()).
     public double Length { get; private set; }
 
     // Constructs an empty path.
-    public Path()
+    public PosePath()
     {
         Poses = new List<Pose>();
         Length = 0.0;
     }
 
     // Constructs a path from a list of poses.
-    public Path(IEnumerable<Pose> poses)
+    public PosePath(IEnumerable<Pose> poses)
     {
         Poses = new List<Pose>(poses);
         ComputeLength();

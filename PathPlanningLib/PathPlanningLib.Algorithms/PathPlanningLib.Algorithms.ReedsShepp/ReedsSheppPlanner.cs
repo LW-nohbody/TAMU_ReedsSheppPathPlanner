@@ -1,4 +1,4 @@
-namespace PathPlanningLib.PathPlanners.ReedsShepp;
+namespace PathPlanningLib.Algorithms.ReedsShepp;
 
 using PathPlanningLib.Vehicles.Kinematics;
 using PathPlanningLib.Geometry;
@@ -16,10 +16,8 @@ public class ReedsSheppPlanner<TKinematics> : IPathPlanner<TKinematics>
         this.turningRadius = turningRadius;
     }
 
-    /// <summary>
     /// Plans a path from start to goal using Reeds–Shepp curves.
     /// Returns a Path object (sequence of Poses).
-    /// </summary>
     public Path PlanPath(Pose start, Pose goal, TKinematics model)
     {
         // Step 1: convert start/goal to tuples for Reeds–Shepp
@@ -33,9 +31,7 @@ public class ReedsSheppPlanner<TKinematics> : IPathPlanner<TKinematics>
         return ConvertToPath(start, elements, turningRadius);
     }
 
-    /// <summary>
     /// Converts a list of Reeds–Shepp PathElements to a Path of Poses.
-    /// </summary>
     private Path ConvertToPath(Pose start, List<PathElement> elements, double turningRadius)
     {
         var path = new Path();
