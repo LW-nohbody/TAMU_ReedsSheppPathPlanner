@@ -58,6 +58,8 @@ namespace RSCore
 
             // Create the mesh so it'll show in both editor and game
             CreateOrUpdateMesh();
+            AddToGroup("Obstacles");
+
         }
 
         public override void _Process(double delta)

@@ -21,8 +21,6 @@ shading_mode = 0
 albedo_color = Color(1, 0, 0, 0.3)
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_lquwl"]
-top_radius = 1.0
-bottom_radius = 1.0
 radial_segments = 32
 
 [node name="Main" type="Node3D"]
@@ -63,7 +61,9 @@ transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 
 script = ExtResource("3_1bvp3")
 
 [node name="CylinderObstacle1" type="Node3D" parent="ObstacleManager"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.85849, 0, -4.16703)
 script = ExtResource("4_lquwl")
+Radius = 0.5
 
 [node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObstacle1"]
 material_override = SubResource("StandardMaterial3D_1bvp3")
