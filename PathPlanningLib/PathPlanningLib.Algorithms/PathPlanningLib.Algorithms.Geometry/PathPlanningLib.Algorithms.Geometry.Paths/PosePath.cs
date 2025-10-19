@@ -15,9 +15,15 @@ public class PosePath : Path<Pose>
     public PosePath(IEnumerable<Pose> poses) : base(poses) { }
 
     /// Adds a pose to the path
-    public void AddPose(Pose pose)
+    public override void Add(Pose pose)
     {
         base.Add(pose); // use base class Add
+    }
+
+    /// Removes the first occurrence of a given element from the path.
+    public override bool Remove(Pose pose)
+    {
+        return base.Remove(pose);
     }
 
     /// Clears the path

@@ -2,140 +2,134 @@
 namespace PathPlanningLib.Algorithms.Dubins;
 
 using PathPlanningLib.Algorithms;
+using PathPlanningLib.Algorithms.Geometry;
+using PathPlanningLib.Algorithms.Geometry.Paths;
 using PathPlanningLib.Algorithms.Geometry.PathElements;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
 
 public class Dubins : IPathPlanner
 {
-    // ---------- families 1..12 (all take phi in RADIANS) ----------
-    public static List<PathElement> Path1(double x, double y, double phi)
+    // ---------- Internal Path Families 1..6 (all take phi in RADIANS) ----------
+    private static DubinsPath Path1(Pose pose)
     {
-        phi = Utils.M(phi);
-        var path = new List<PathElement>();
-        var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
+        var path = new DubinsPath();
+        double phi = MathUtils.NormalizeAngle(pose.Theta);
+        var (rho, t1) = MathUtils.CartesianToPolar(pose.X + Math.Sin(phi), pose.Y - 1 - Math.Cos(phi));
         if (rho <= 4.0)
         {
             double a = Math.Acos(rho / 4.0);
-            double u = Utils.M(Math.PI - 2.0 * a);
-            double t = Utils.M(t1 + Math.PI / 2.0 - a);
-            double v = Utils.M(phi - t - u);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(u, Steering.RIGHT, Gear.FORWARD));
-            path.Add(PathElement.Create(v, Steering.LEFT, Gear.FORWARD));
+            double u = MathUtils.NormalizeAngle(Math.PI - 2.0 * a);
+            double t = MathUtils.NormalizeAngle(t1 + Math.PI / 2.0 - a);
+            double v = MathUtils.NormalizeAngle(phi - t - u);
+            path.Add(DubinsElement.Create(t, Steering.LEFT));
+            path.Add(DubinsElement.Create(u, Steering.RIGHT));
+            path.Add(DubinsElement.Create(v, Steering.LEFT));
         }
         return path;
     }
 
-    public static List<PathElement> Path2(double x, double y, double phi)
+    private static DubinsPath Path2(Pose pose)
     {
-        phi = Utils.M(phi);
-        var path = new List<PathElement>();
-        var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
+        var path = new DubinsPath();
+        double phi = MathUtils.NormalizeAngle(pose.Theta);
+        var (rho, t1) = MathUtils.CartesianToPolar(pose.X + Math.Sin(phi), pose.Y - 1 - Math.Cos(phi));
         if (rho <= 4.0)
         {
             double a = Math.Acos(rho / 4.0);
-            double u = Utils.M(Math.PI - 2.0 * a);
-            double t = Utils.M(t1 - Math.PI / 2.0 + a);
-            double v = Utils.M(phi - t - u);
-            path.Add(PathElement.Create(t, Steering.RIGHT, Gear.FORWARD));
-            path.Add(PathElement.Create(u, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(v, Steering.RIGHT, Gear.FORWARD));
+            double u = MathUtils.NormalizeAngle(Math.PI - 2.0 * a);
+            double t = MathUtils.NormalizeAngle(t1 - Math.PI / 2.0 + a);
+            double v = MathUtils.NormalizeAngle(phi - t - u);
+            path.Add(DubinsElement.Create(t, Steering.RIGHT));
+            path.Add(DubinsElement.Create(u, Steering.LEFT));
+            path.Add(DubinsElement.Create(v, Steering.RIGHT));
         }
         return path;
     }
 
-    public static List<PathElement> Path3(double x, double y, double phi)
+    private static DubinsPath Path3(Pose pose)
     {
-        var path = new List<PathElement>();
-        var (u, t) = Utils.R(x - Math.Sin(phi), y - 1 + Math.Cos(phi));
-        double v = Utils.M(phi - t);
-        path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-        path.Add(PathElement.Create(u, Steering.STRAIGHT, Gear.FORWARD));
-        path.Add(PathElement.Create(v, Steering.LEFT, Gear.FORWARD));
+        var path = new DubinsPath();
+        var (u, t) = MathUtils.CartesianToPolar(pose.X - Math.Sin(pose.Theta), pose.Y - 1 + Math.Cos(pose.Theta));
+        double v = MathUtils.NormalizeAngle(pose.Theta - t);
+        path.Add(DubinsElement.Create(t, Steering.LEFT));
+        path.Add(DubinsElement.Create(u, Steering.STRAIGHT));
+        path.Add(DubinsElement.Create(v, Steering.LEFT));
         return path;
     }
 
-    public static List<PathElement> Path4(double x, double y, double phi)
+    private static DubinsPath Path4(Pose pose)
     {
-        phi = Utils.M(phi);
-        var path = new List<PathElement>();
-        var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
-        // if (rho * rho >= 4.0)
-        if(rho >= 2.0)
+        var path = new DubinsPath();
+        double phi = MathUtils.NormalizeAngle(pose.Theta);
+        var (rho, t1) = MathUtils.CartesianToPolar(pose.X + Math.Sin(phi), pose.Y - 1 - Math.Cos(phi));
+        if (rho >= 2.0)
         {
             double u = Math.Sqrt(rho * rho - 4.0);
-            double t = Utils.M(t1 + Math.Atan2(2.0, u));
-            double v = Utils.M(t - phi);
-            path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-            path.Add(PathElement.Create(u, Steering.STRAIGHT, Gear.FORWARD));
-            path.Add(PathElement.Create(v, Steering.RIGHT, Gear.FORWARD));
+            double t = MathUtils.NormalizeAngle(t1 + Math.Atan2(2.0, u));
+            double v = MathUtils.NormalizeAngle(t - phi);
+            path.Add(DubinsElement.Create(t, Steering.LEFT));
+            path.Add(DubinsElement.Create(u, Steering.STRAIGHT));
+            path.Add(DubinsElement.Create(v, Steering.RIGHT));
         }
         return path;
     }
 
-    public static List<PathElement> Path5(double x, double y, double phi)
+    private static DubinsPath Path5(Pose pose)
     {
-        var path = new List<PathElement>();
-        var (u, t) = Utils.R(x - Math.Sin(phi), y - 1 + Math.Cos(phi));
-        double v = Utils.M(phi - t);
-        path.Add(PathElement.Create(t, Steering.RIGHT, Gear.FORWARD));
-        path.Add(PathElement.Create(u, Steering.STRAIGHT, Gear.FORWARD));
-        path.Add(PathElement.Create(v, Steering.RIGHT, Gear.FORWARD));
+        var path = new DubinsPath();
+        var (u, t) = MathUtils.CartesianToPolar(pose.X - Math.Sin(pose.Theta), pose.Y - 1 + Math.Cos(pose.Theta));
+        double v = MathUtils.NormalizeAngle(pose.Theta - t);
+        path.Add(DubinsElement.Create(t, Steering.RIGHT));
+        path.Add(DubinsElement.Create(u, Steering.STRAIGHT));
+        path.Add(DubinsElement.Create(v, Steering.RIGHT));
         return path;
     }
 
-    public static List<PathElement> Path6(double x, double y, double phi)
+    private static DubinsPath Path6(Pose pose)
     {
-        phi = Utils.M(phi);
-        var path = new List<PathElement>();
-        var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
-        // if (rho * rho >= 4.0)
-        if(rho >= 2.0)
+        var path = new DubinsPath();
+        double phi = MathUtils.NormalizeAngle(pose.Theta);
+        var (rho, t1) = MathUtils.CartesianToPolar(pose.X + Math.Sin(phi), pose.Y - 1 - Math.Cos(phi));
+        if (rho >= 2.0)
         {
             double u = Math.Sqrt(rho * rho - 4.0);
-            double t = Utils.M(t1 + Math.Atan2(2.0, u));
-            double v = Utils.M(t - phi);
-            path.Add(PathElement.Create(t, Steering.RIGHT, Gear.FORWARD));
-            path.Add(PathElement.Create(u, Steering.STRAIGHT, Gear.FORWARD));
-            path.Add(PathElement.Create(v, Steering.LEFT, Gear.FORWARD));
+            double t = MathUtils.NormalizeAngle(t1 + Math.Atan2(2.0, u));
+            double v = MathUtils.NormalizeAngle(t - phi);
+            path.Add(DubinsElement.Create(t, Steering.RIGHT));
+            path.Add(DubinsElement.Create(u, Steering.STRAIGHT));
+            path.Add(DubinsElement.Create(v, Steering.LEFT));
         }
         return path;
     }
 
-    // ----- planner API: start/end in RADIANS, x/y normalized by R -----
-    public static List<List<PathElement>> GetAllPaths(
-        (double x, double y, double theta) start,
-        (double x, double y, double theta) end)
+    // ----- Planner APIs: start/end as Pose, radians, x/y normalized -----
+    public static List<DubinsPath> GetAllPaths(Pose start, Pose end)
     {
-        var local = Utils.ChangeOfBasis(start, end);      // radians in, radians out
-        double x = local.x, y = local.y, phi = Utils.M(local.theta); // ensure [0,2π)
+        Pose local = MathUtils.ChangeOfBasis(start, end); // Pose in start's local frame
 
-        var candidates = new List<List<PathElement>>
-    {
-        Path1(x,y,phi),  Path2(x,y,phi),  Path3(x,y,phi),  Path4(x,y,phi),
-        Path5(x,y,phi),  Path6(x,y,phi)
-    };
-
-        // // Re-enable the 1 symmetry variant for full 6 paths
-        // var more = new List<List<PathElement>>();
-        // foreach (var p in candidates)
-        // {
-        //     if (p.Count == 0) continue;
-        //     more.Add(Reflect(p));
-        // }
-        // candidates.AddRange(more);
+        var candidates = new List<DubinsPath>
+        {
+            Path1(local), Path2(local), Path3(local),
+            Path4(local), Path5(local), Path6(local)
+        };
 
         return candidates.Where(p => p.Count > 0).ToList();
     }
 
-    public static List<PathElement> GetOptimalPath(
-        (double x, double y, double theta) start,
-        (double x, double y, double theta) end)
+    public static DubinsPath GetOptimalPath(Pose start, Pose end)
     {
         var all = GetAllPaths(start, end);
-        return (all.Count == 0) ? new List<PathElement>() : all.OrderBy(p => p.Sum(e => e.Param)).First();
+
+        foreach (var path in all)
+            path.ComputeLength();
+
+        return (all.Count == 0)
+            ? new DubinsPath()
+            : all.OrderBy(p => p.Length).First();
     }
 }
+
+

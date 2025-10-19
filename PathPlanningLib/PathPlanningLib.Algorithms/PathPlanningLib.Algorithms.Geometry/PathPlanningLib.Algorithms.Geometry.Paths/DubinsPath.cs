@@ -12,9 +12,21 @@ public class DubinsPath : Path<DubinsElement>
     public DubinsPath(IEnumerable<DubinsElement> elements) : base(elements) { }
 
     /// Adds a new DubinsElement to the path
-    public void AddElement(DubinsElement element)
+    public override void Add(DubinsElement element)
     {
-        Add(element); // base class Add
+        base.Add(element); // base class Add
+    }
+
+    /// Removes the first occurrence of a given element from the path.
+    public override bool Remove(DubinsElement element)
+    {
+        return base.Remove(element);
+    }
+
+    /// Clears the path
+    public override void Clear()
+    {
+        base.Clear();
     }
 
     /// Recalculates the total path length
@@ -28,11 +40,5 @@ public class DubinsPath : Path<DubinsElement>
         }
 
         Length = total;
-    }
-
-    /// Clears the path
-    public override void Clear()
-    {
-        base.Clear();
     }
 }

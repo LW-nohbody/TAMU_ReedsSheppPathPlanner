@@ -12,10 +12,23 @@ public class ReedsSheppPath : Path<ReedsSheppElement>
     public ReedsSheppPath(IEnumerable<ReedsSheppElement> elements) : base(elements) { }
 
     /// Adds a new ReedsSheppElement to the path
-    public void AddElement(ReedsSheppElement element)
+    public override void Add(ReedsSheppElement element)
     {
         base.Add(element); // base class Add
     }
+
+    /// Removes the first occurrence of a given element from the path.
+    public override bool Remove(ReedsSheppElement element)
+    {
+        return base.Remove(element);
+    }
+
+    /// Clears the path
+    public override void Clear()
+    {
+        base.Clear();
+    }
+
 
     /// Recalculates the total path length
     public override void ComputeLength()
@@ -30,10 +43,20 @@ public class ReedsSheppPath : Path<ReedsSheppElement>
         Length = total;
     }
 
-    /// Clears the path
-    public override void Clear()
+    // Reverses gear for time-flip symmetry
+    public ReedsSheppPath Timeflip()
     {
-        base.Clear();
+        var flipped = new ReedsSheppPath(_elements.Select(e => e.ReverseGear()));
+        return flipped;
+    }
+
+    // Reverses steering for reflection symmetry
+    public ReedsSheppPath Reflect()
+    {
+        var reflected = new ReedsSheppPath(
+            _elements.Select(e => e with { Steering = (Steering)(-(int)e.Steering) })
+        );
+        return reflected;
     }
 }
 
