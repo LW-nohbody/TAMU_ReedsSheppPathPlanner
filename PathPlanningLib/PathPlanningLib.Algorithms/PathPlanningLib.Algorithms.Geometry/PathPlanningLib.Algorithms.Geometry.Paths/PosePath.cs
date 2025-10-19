@@ -1,65 +1,42 @@
 namespace PathPlanningLib.Algorithms.Geometry.Paths;
 
-using PathPlanningLib.Algorithms.Geometry.Paths;
+using PathPlanningLib.Algorithms.Geometry.PathElements;
+
 using System;
 using System.Collections.Generic;
 
 // Represents a geometric path as a sequence of poses.
-public class PosePath : Path
+public class PosePath : Path<Pose>
 {
-    // The ordered list of poses that make up the path.
-    public List<Pose> Poses { get; }
+    /// Default constructor: empty path
+    public PosePath() : base() { }
 
-    //The total length of the path (computed on demand with ComputeLength()).
-    public double Length { get; private set; }
+    /// Constructor from an enumerable of poses
+    public PosePath(IEnumerable<Pose> poses) : base(poses) { }
 
-    // Constructs an empty path.
-    public PosePath()
-    {
-        Poses = new List<Pose>();
-        Length = 0.0;
-    }
-
-    // Constructs a path from a list of poses.
-    public PosePath(IEnumerable<Pose> poses)
-    {
-        Poses = new List<Pose>(poses);
-        ComputeLength();
-    }
-
-    // Adds a new pose to the path and updates the total length.
+    /// Adds a pose to the path
     public void AddPose(Pose pose)
     {
-        if (Poses.Count > 0)
-        {
-            var lastPose = Poses[^1];
-            double dx = pose.X - lastPose.X;
-            double dy = pose.Y - lastPose.Y;
-            Length += Math.Sqrt(dx * dx + dy * dy);
-        }
-
-        Poses.Add(pose);
+        base.Add(pose); // use base class Add
     }
 
-    // Recalculates the total path length.
-    public void ComputeLength()
+    /// Clears the path
+    public override void Clear()
     {
-        Length = 0.0;
-        for (int i = 1; i < Poses.Count; i++)
-        {
-            double dx = Poses[i].X - Poses[i - 1].X;
-            double dy = Poses[i].Y - Poses[i - 1].Y;
-            Length += Math.Sqrt(dx * dx + dy * dy);
-        }
+        base.Clear(); // clears _elements and sets Length to 0
     }
 
-    // Returns true if the path has no poses.
-    public bool IsEmpty() => Poses.Count == 0;
-
-    // Clears the path.
-    public void Clear()
+    /// Computes the total path length
+    public override void ComputeLength()
     {
-        Poses.Clear();
-        Length = 0.0;
+        double total = 0.0;
+        for (int i = 1; i < _elements.Count; i++)
+        {
+            double dx = _elements[i].X - _elements[i - 1].X;
+            double dy = _elements[i].Y - _elements[i - 1].Y;
+            total += Math.Sqrt(dx * dx + dy * dy);
+        }
+        Length = total;
     }
 }
+

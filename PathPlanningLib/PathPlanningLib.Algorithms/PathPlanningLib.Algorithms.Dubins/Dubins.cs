@@ -1,58 +1,14 @@
 
 namespace PathPlanningLib.Algorithms.Dubins;
 
+using PathPlanningLib.Algorithms;
+using PathPlanningLib.Algorithms.Geometry.PathElements;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 
-// public enum Steering { LEFT = -1, RIGHT = 1, STRAIGHT = 0 }
-// public enum Gear { FORWARD = 1 }
-
-// public record PathElement(double Param, Steering Steering, Gear Gear)
-// {
-//     public static PathElement Create(double param, Steering steering, Gear gear)
-//         => new PathElement(param, steering, gear);
-
-//     public override string ToString()
-//         => $"{{ Steering: {Steering}\tGear: {Gear}\tdistance: {Math.Round(Param, 3)} }}";
-// }
-
-// public static class Utils
-// {
-//     public static double M(double angle) // wrap to [0,2π)
-//     {
-//         double twoPi = 2 * Math.PI;
-//         angle %= twoPi;
-//         if (angle < 0) angle += twoPi;
-//         return angle;
-//     }
-
-//     public static (double rho, double theta) PolarConversion(double x, double y)
-//     {
-//         double rho = Math.Sqrt(x * x + y * y);
-//         double theta = M(Math.Atan2(y, x));
-//         return (rho, theta);
-//     }
-
-//     // start/end: (x,y,thetaRadians). Returns end in start's local frame, theta in radians.
-//     public static (double x, double y, double theta) ChangeOfBasis(
-//         (double x, double y, double theta) start,
-//         (double x, double y, double theta) end)
-//     {
-//         double dx = end.x - start.x;
-//         double dy = end.y - start.y;
-//         double dtheta = M(end.theta - start.theta);
-
-//         double cos = Math.Cos(-start.theta);
-//         double sin = Math.Sin(-start.theta);
-//         double xNew = dx * cos - dy * sin;
-//         double yNew = dx * sin + dy * cos;
-//         return (xNew, yNew, dtheta);
-//     }
-// }
-
-public static class DubinsPaths
+public class Dubins : IPathPlanner
 {
     // ---------- families 1..12 (all take phi in RADIANS) ----------
     public static List<PathElement> Path1(double x, double y, double phi)
@@ -148,10 +104,6 @@ public static class DubinsPaths
         }
         return path;
     }
-
-
-    // public static List<PathElement> Reflect(List<PathElement> path) //TODO: Delete Reflect?
-    //     => path.Select(e => new PathElement(e.Param, (Steering)(-(int)e.Steering), e.Gear)).ToList();
 
     // ----- planner API: start/end in RADIANS, x/y normalized by R -----
     public static List<List<PathElement>> GetAllPaths(

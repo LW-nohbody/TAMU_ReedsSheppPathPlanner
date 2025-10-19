@@ -10,12 +10,12 @@ class Program
     {
         // Start and goal poses
         var start = new Pose(0, 0, 0);
-        var goal  = new Pose(5, 5, Math.PI / 2);
+        var goal = new Pose(5, 5, Math.PI / 2);
 
         // Original Reeds–Shepp
         var originalElements = ReedsSheppPaths.GetOptimalPath(
             (start.X, start.Y, start.Theta),
-            (goal.X,  goal.Y,  goal.Theta)
+            (goal.X, goal.Y, goal.Theta)
         );
 
         double originalLength = originalElements.Sum(e => e.Param);
