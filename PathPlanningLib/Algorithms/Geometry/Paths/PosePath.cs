@@ -44,5 +44,11 @@ public class PosePath : Path<Pose>
         }
         Length = total;
     }
+
+    public override PosePath Sample(double stepSize)
+    {
+        // use interpolation for sampling
+        return this;
+    }
 }
 

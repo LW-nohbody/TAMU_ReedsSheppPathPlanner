@@ -9,7 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public class ReedsShepp : IPathPlanner
+public class ReedsShepp : IPathPlanner<ReedsSheppPath, ReedsSheppElement>
 {
     // ---------- Internal Path Families 1..12 (Note that pose.Theta is in radians) ----------
     private static ReedsSheppPath Path1(Pose pose)
@@ -243,7 +243,7 @@ public class ReedsShepp : IPathPlanner
 
 
     // ----- Planner API: start/end as Pose: theta in radians, x/y normalized -----
-    public static List<ReedsSheppPath> GetAllPaths(Pose start, Pose end)
+    public List<ReedsSheppPath> GetAllPaths(Pose start, Pose end)
     {
         // Convert end into local coordinates relative to start
         Pose local = MathUtils.ChangeOfBasis(start, end);
@@ -268,7 +268,7 @@ public class ReedsShepp : IPathPlanner
         return candidates.Where(p => p.Count > 0).ToList();
     }
 
-    public static ReedsSheppPath GetOptimalPath(Pose start, Pose end)
+    public ReedsSheppPath GetOptimalPath(Pose start, Pose end)
     {
         var all = GetAllPaths(start, end);
         foreach (var path in all)

@@ -19,8 +19,8 @@ public abstract class Path<TElement> : IEnumerable<TElement>
     /// Provides read-only access to the elements that make up the path.
     public IReadOnlyList<TElement> Elements => _elements;
 
-    //The total length of the path (computed on demand with ComputeLength()).
-    public double Length { get; private set; }
+    //The total **GLOBAL** length of the path (computed on demand with ComputeLength()).
+    public double Length { get; protected set; }
 
     /// Default constructor that creates an empty path.
     protected Path() { Length = 0; }
@@ -75,4 +75,7 @@ public abstract class Path<TElement> : IEnumerable<TElement>
         ComputeLength(); // ensure Length is up to date
         return $"{GetType().Name}: {Count} elements, total distance {Math.Round(Length, 3)}";
     }
+
+    // Sample path as a PosePath
+    public abstract PosePath Sample(double stepSize);
 }

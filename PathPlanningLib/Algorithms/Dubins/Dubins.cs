@@ -10,7 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public class Dubins : IPathPlanner
+public class Dubins : IPathPlanner<DubinsPath, DubinsElement>
 {
     // ---------- Internal Path Families 1..6 (all take phi in RADIANS) ----------
     private static DubinsPath Path1(Pose pose)
@@ -106,7 +106,7 @@ public class Dubins : IPathPlanner
     }
 
     // ----- Planner APIs: start/end as Pose, radians, x/y normalized -----
-    public static List<DubinsPath> GetAllPaths(Pose start, Pose end)
+    public List<DubinsPath> GetAllPaths(Pose start, Pose end)
     {
         Pose local = MathUtils.ChangeOfBasis(start, end); // Pose in start's local frame
 
@@ -119,7 +119,7 @@ public class Dubins : IPathPlanner
         return candidates.Where(p => p.Count > 0).ToList();
     }
 
-    public static DubinsPath GetOptimalPath(Pose start, Pose end)
+    public DubinsPath GetOptimalPath(Pose start, Pose end)
     {
         var all = GetAllPaths(start, end);
 

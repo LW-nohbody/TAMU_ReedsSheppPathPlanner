@@ -37,6 +37,6 @@ public class MathUtils
         // Relative orientation
         double thetaLocal = NormalizeAngle(end.Theta - start.Theta);
 
-        return new Pose(xLocal, yLocal, thetaLocal);
+        return Pose.Create(xLocal, yLocal, thetaLocal);
     }
 }
