@@ -6,8 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public class ReedsSheppPlanner<TKinematics> : IPathPlanner<TKinematics>
-    where TKinematics : IKinematicModel
+public class ReedsShepp : IPathPlanner
 {
     private readonly double turningRadius;
 

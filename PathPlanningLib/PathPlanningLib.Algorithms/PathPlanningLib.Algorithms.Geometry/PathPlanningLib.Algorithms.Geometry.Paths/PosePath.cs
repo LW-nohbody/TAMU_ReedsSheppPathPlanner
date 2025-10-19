@@ -1,10 +1,11 @@
-namespace PathPlanningLib.Geometry;
+namespace PathPlanningLib.Algorithms.Geometry.Paths;
 
+using PathPlanningLib.Algorithms.Geometry.Paths;
 using System;
 using System.Collections.Generic;
 
 // Represents a geometric path as a sequence of poses.
-public class PosePath
+public class PosePath : Path
 {
     // The ordered list of poses that make up the path.
     public List<Pose> Poses { get; }

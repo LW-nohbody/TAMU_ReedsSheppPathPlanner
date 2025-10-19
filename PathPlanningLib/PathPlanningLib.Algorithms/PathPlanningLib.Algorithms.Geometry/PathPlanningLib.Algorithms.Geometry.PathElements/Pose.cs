@@ -1,5 +1,5 @@
-namespace PathPlanningLib.Geometry;
-public struct Pose
+namespace PathPlanningLib.Algorithms.Geometry.PathElements;
+public class Pose : PathElement
 {
     public double X { get; set; }
     public double Y { get; set; }

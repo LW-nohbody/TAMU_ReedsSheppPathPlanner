@@ -1,6 +1,7 @@
 namespace PathPlanningLib.Framework;
-using PathPlanningLib.Geometry;
-using PathPlanningLib.Vehicles.Kinematics;
+
+using PathPlanningLib.Algorithms.Geometry;
+using PathPlanningLib.Framework.Kinematics;
 
 // vehicle class 
 public class Vehicle

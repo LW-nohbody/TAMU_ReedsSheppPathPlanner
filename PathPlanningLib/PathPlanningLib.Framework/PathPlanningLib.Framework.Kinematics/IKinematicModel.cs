@@ -1,4 +1,4 @@
-namespace PathPlanningLib.Vehicles.Kinematics;
+namespace PathPlanningLib.Framework.Kinematics;
 using PathPlanningLib.Geometry;
 
 /// <summary>
