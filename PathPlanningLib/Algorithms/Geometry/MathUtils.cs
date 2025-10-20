@@ -39,4 +39,15 @@ public class MathUtils
 
         return Pose.Create(xLocal, yLocal, thetaLocal);
     }
+
+    /// Computes the shortest signed angular distance from angle 'from' to angle 'to'.
+    /// Returns a value in [-π, π].
+    public static double ShortestAngularDistance(double from, double to)
+    {
+        double delta = to - from;
+        delta = (delta + Math.PI) % (2.0 * Math.PI);  // wrap to [0, 2π)
+        if (delta < 0)
+            delta += 2.0 * Math.PI;                   // wrap to [0, 2π)
+        return delta - Math.PI;                        // shift to [-π, π]
+    }
 }

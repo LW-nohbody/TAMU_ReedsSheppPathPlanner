@@ -45,10 +45,46 @@ public class PosePath : Path<Pose>
         Length = total;
     }
 
+    // Only allows oversampling right now
     public override PosePath Sample(double stepSize)
     {
+        if (stepSize <= 0)
+            throw new ArgumentException("Step size must be positive.", nameof(stepSize));
+
         // use interpolation for sampling
-        return this;
+        var sampledPoses = new List<Pose>();
+        if (this.Count == 0)
+            return new PosePath(sampledPoses);
+
+        Pose lastPose = this.Elements[0];
+        sampledPoses.Add(lastPose);
+
+        for (int i = 1; i < this.Count; i++)
+        {
+            Pose current = this.Elements[i];
+            double dx = current.X - lastPose.X;
+            double dy = current.Y - lastPose.Y;
+            double dist = Math.Sqrt(dx * dx + dy * dy);
+
+            int nSteps = Math.Max(1, (int)Math.Floor(dist / stepSize));
+            for (int s = 1; s <= nSteps; s++)
+            {
+                // interpolation factor [0,1]
+                double t = (double)s / nSteps;
+
+                // perform interpolation
+                double interpX = lastPose.X + t * dx;
+                double interpY = lastPose.Y + t * dy;
+                double interpTheta = MathUtils.NormalizeAngle(
+                    lastPose.Theta + t * MathUtils.ShortestAngularDistance(lastPose.Theta, current.Theta)
+                );
+                sampledPoses.Add(Pose.Create(interpX, interpY, interpTheta));
+            }
+
+            lastPose = current;
+        }
+
+        return new PosePath(sampledPoses);
     }
 }
 

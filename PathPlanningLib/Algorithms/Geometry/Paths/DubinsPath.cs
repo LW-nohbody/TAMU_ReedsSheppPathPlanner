@@ -45,48 +45,58 @@ public class DubinsPath : Path<DubinsElement>
     public override PosePath Sample(double stepSize)
         => throw new InvalidOperationException("Dubins sampling requires a turning radius and start pose parameter.");
 
-    // stepSize = real-world step distance
     public PosePath Sample(double stepSize, double turningRadius, Pose startPose)
     {
-        var poses = new List<Pose>();
-        var current = startPose;
-        poses.Add(current);
+        if (stepSize <= 0)
+            throw new ArgumentException("Step size must be positive.", nameof(stepSize));
+        if (turningRadius <= 0)
+            throw new ArgumentException("Turning radius must be positive and greater than 0.", nameof(turningRadius));
+
+        List<Pose> poses = new List<Pose>();
+        double x = startPose.X;
+        double y = startPose.Y;
+        double theta = startPose.Theta;
+        poses.Add(startPose);
 
         foreach (var elem in Elements)
         {
-            double dir = elem.Steering == Steering.LEFT ? 1.0 :
-                        elem.Steering == Steering.RIGHT ? -1.0 : 0.0;
+            double s_norm = elem.Param;
+            double s_world = s_norm * turningRadius;
+            
+            // heuristically set that each segment must have at least 2 steps
+            int nSteps = Math.Max(2, (int)Math.Ceiling(s_world / stepSize));
+            double dsWorld = s_world / nSteps;
 
-            double s = 0.0;
-            while (s < elem.Param)
+            for (int i = 0; i < nSteps; i++)
             {
-                double ds = Math.Min(stepSize, elem.Param - s);
-
-                double newX = current.X;
-                double newY = current.Y;
-                double newTheta = current.Theta;
-
                 if (elem.Steering == Steering.STRAIGHT)
                 {
-                    // Move forward in current heading
-                    newX += ds * Math.Cos(current.Theta);
-                    newY += ds * Math.Sin(current.Theta);
+                    double move = dsWorld;
+                    x += move * Math.Cos(theta);
+                    y += move * Math.Sin(theta);
                 }
                 else
                 {
-                    // Turning arc (constant curvature = 1/turningRadius)
-                    double dtheta = dir * (ds / turningRadius);
-                    newX += turningRadius * (Math.Sin(current.Theta + dtheta) - Math.Sin(current.Theta));
-                    newY -= turningRadius * (Math.Cos(current.Theta + dtheta) - Math.Cos(current.Theta));
-                    newTheta = MathUtils.NormalizeAngle(current.Theta + dtheta);
-                }
+                    double steerSign = (int)elem.Steering; // +1 left, -1 right
+                    double dtheta = steerSign * (dsWorld / turningRadius);
+                    // rotate about instantaneous center
+                    double thetaPrev = theta;
+                    theta += dtheta;
 
-                current = Pose.Create(newX, newY, newTheta);
-                poses.Add(current);
-                s += ds;
+                    // arc-based incremental update (exact integration of circular arc)
+                    // center-based incremental:
+                    double cx = x - steerSign * turningRadius * Math.Sin(thetaPrev);
+                    double cy = y + steerSign * turningRadius * Math.Cos(thetaPrev);
+
+                    double newX = cx + steerSign * turningRadius * Math.Sin(theta);
+                    double newY = cy - steerSign * turningRadius * Math.Cos(theta);
+
+                    x = newX;
+                    y = newY;
+                }
+                poses.Add(Pose.Create(x, y, theta));
             }
         }
-
         return new PosePath(poses);
     }
 }

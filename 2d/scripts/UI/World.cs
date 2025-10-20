@@ -6,6 +6,7 @@ using PathPlanningLib.Algorithms;
 using PathPlanningLib.Algorithms.Geometry.PathElements;
 using PathPlanningLib.Algorithms.Geometry.Paths;
 using PathPlanningLib.Algorithms.ReedsShepp;
+using PathPlanningLib.Algorithms.Dubins;
 
 public partial class World : Node2D
 {
@@ -255,12 +256,18 @@ public partial class World : Node2D
         double R = TurnRadius;
 
         // Initialize new library
-        Pose startPose = Pose.Create(startM.x, startM.y, startM.th);
-        Pose goalPose = Pose.Create(goalM.x, goalM.y, goalM.th);
+        Pose startPose = Pose.Create(startM.x/R, startM.y/R, startM.th);
+        Pose goalPose = Pose.Create(goalM.x/R, goalM.y/R, goalM.th);
 
-        ReedsShepp rs_alg = new ReedsShepp();
-        ReedsSheppPath bestPath = rs_alg.GetOptimalPath(startPose, goalPose);
-        PosePath RSSampled = bestPath.Sample(1, R, startPose);
+        // ReedsShepp rs_alg = new ReedsShepp();
+        // ReedsSheppPath rs_path = rs_alg.GetOptimalPath(startPose, goalPose);
+
+        Dubins dubins_alg = new Dubins();
+        DubinsPath dubins_path = dubins_alg.GetOptimalPath(startPose, goalPose);
+
+        Pose globalStartPose = Pose.Create(startM.x, startM.y, startM.th);
+        PosePath bestPath = dubins_path.Sample(1, R, globalStartPose);
+        bestPath = bestPath.Sample(10000);
 
         if (bestPath == null || bestPath.Count == 0)
         {
@@ -272,9 +279,9 @@ public partial class World : Node2D
         var ptsGodot = new Vector2[bestPath.Count];
         for (int i = 0; i < bestPath.Count; i++)
         {
-            var p = RSSampled.Elements[i];
+            var p = bestPath.Elements[i];
+
             // p.X, p.Y are world-MATH coordinates (pixels), convert to Godot screen coordinates:
-            //ptsGodot[i] = ToGodot2D((p.X, p.Y)); // your helper flips y
             ptsGodot[i] = new Vector2((float) p.X, (float) (startM.y + startM.y - p.Y));
         }
 

@@ -19,6 +19,10 @@ public class Vehicle
         get => _planner;
         set
         {
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+            if (KinematicModel == null)
+                throw new InvalidOperationException("KinematicModel must be set before setting Planner.");
             if (!KinematicModel.CompatiblePlanners.Contains(value.GetType()))
                 throw new InvalidOperationException(
                     $"Planner {value.GetType().Name} is not compatible with {KinematicModel} kinematics."
