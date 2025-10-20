@@ -2,10 +2,10 @@ namespace PathPlanningLib.Framework.Kinematics;
 
 using PathPlanningLib.Algorithms.Geometry;
 
-/// Defines how a vehicle's pose evolves over time under a given control input.
+/// Defines how a a vehicle's motion via kinematics 
 public interface IKinematicModel
 {
     // int DegreesOfFreedom { get; }
-    // bool IsHolonomic { get; }
-    //Pose Propagate(Pose currentPose, ControlInput control, double deltaTime);
+    IPathPlanner<Path, PathElement> OptimalPlanner { get; }
+    IReadOnlyList<Type> CompatiblePlanners { get; }
 }

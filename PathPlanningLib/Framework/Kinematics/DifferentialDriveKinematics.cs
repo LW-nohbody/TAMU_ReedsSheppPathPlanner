@@ -4,17 +4,17 @@ using PathPlanningLib.Algorithms.Geometry.PathElements;
 
 using System;
 
-public class DifferentialDriveKinematics : IKinematicModel
-{
-    public double WheelRadius { get; }
-    public double WheelSeparation { get; }
-    public double MinTurningRadius => WheelSeparation / 2.0;
+// public class DifferentialDriveKinematics : IKinematicModel
+// {
+//     public double WheelRadius { get; }
+//     public double WheelSeparation { get; }
+//     public double MinTurningRadius => WheelSeparation / 2.0;
 
-    public DifferentialDriveKinematics(double wheelRadius, double wheelSeparation)
-    {
-        WheelRadius = wheelRadius;
-        WheelSeparation = wheelSeparation;
-    }
+//     public DifferentialDriveKinematics(double wheelRadius, double wheelSeparation)
+//     {
+//         WheelRadius = wheelRadius;
+//         WheelSeparation = wheelSeparation;
+//     }
 
     // public Pose Propagate(Pose start, ControlInput input, double detlaTime)
     // {
@@ -48,5 +48,5 @@ public class DifferentialDriveKinematics : IKinematicModel
     //         return Pose.Create(newX, newY, newTheta);
     //     }
     // }
-}
+// }
 

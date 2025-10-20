@@ -1,6 +1,6 @@
 namespace PathPlanningLib.Framework.Kinematics;
 
-public class CenterArticulatedKinematics : IKinematicModel
-{
+// public class CenterArticulatedKinematics : IKinematicModel
+// {
 
-}
+// }
