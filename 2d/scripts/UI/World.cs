@@ -2,9 +2,10 @@ using Godot;
 using System;
 using System.Collections.Generic;
 // TEST
-using PathPlanningLib.PathPlanners.ReedsShepp;
-using PathPlanningLib.Geometry;
-using PathPlanningLib.Vehicles.Kinematics;
+using PathPlanningLib.Algorithms;
+using PathPlanningLib.Algorithms.Geometry.PathElements;
+using PathPlanningLib.Algorithms.Geometry.Paths;
+using PathPlanningLib.Algorithms.ReedsShepp;
 
 public partial class World : Node2D
 {
@@ -254,25 +255,24 @@ public partial class World : Node2D
         double R = TurnRadius;
 
         // Initialize new library
-        ReedsSheppPlanner<DifferentialDriveKinematics> planner = new ReedsSheppPlanner<DifferentialDriveKinematics>(turningRadius: R);
-        DifferentialDriveKinematics model = new DifferentialDriveKinematics(1.0, 1.0);
+        Pose startPose = Pose.Create(startM.x, startM.y, startM.th);
+        Pose goalPose = Pose.Create(goalM.x, goalM.y, goalM.th);
 
-        Pose startPose = new Pose(startM.x, startM.y, startM.th);
-        Pose goalPose = new Pose(goalM.x, goalM.y, goalM.th); 
+        ReedsShepp rs_alg = new ReedsShepp();
+        ReedsSheppPath bestPath = rs_alg.GetOptimalPath(startPose, goalPose);
+        PosePath RSSampled = bestPath.Sample(1, R, startPose);
 
-        Path bestPath = planner.PlanPath(startPose, goalPose, model);
-
-        if (bestPath == null || bestPath.Poses.Count == 0)
+        if (bestPath == null || bestPath.Count == 0)
         {
             GD.Print("No RS path found.");
             BestPath.Points = Array.Empty<Vector2>();
             return;
         }
 
-        var ptsGodot = new Vector2[bestPath.Poses.Count];
-        for (int i = 0; i < bestPath.Poses.Count; i++)
+        var ptsGodot = new Vector2[bestPath.Count];
+        for (int i = 0; i < bestPath.Count; i++)
         {
-            var p = bestPath.Poses[i];
+            var p = RSSampled.Elements[i];
             // p.X, p.Y are world-MATH coordinates (pixels), convert to Godot screen coordinates:
             //ptsGodot[i] = ToGodot2D((p.X, p.Y)); // your helper flips y
             ptsGodot[i] = new Vector2((float) p.X, (float) (startM.y + startM.y - p.Y));

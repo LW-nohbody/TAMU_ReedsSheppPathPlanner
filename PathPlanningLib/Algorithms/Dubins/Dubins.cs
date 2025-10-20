@@ -106,7 +106,7 @@ public class Dubins : IPathPlanner<DubinsPath, DubinsElement>
     }
 
     // ----- Planner APIs: start/end as Pose, radians, x/y normalized -----
-    public List<DubinsPath> GetAllPaths(Pose start, Pose end)
+    public IEnumerable<DubinsPath> GetAllPaths(Pose start, Pose end)
     {
         Pose local = MathUtils.ChangeOfBasis(start, end); // Pose in start's local frame
 
@@ -126,9 +126,7 @@ public class Dubins : IPathPlanner<DubinsPath, DubinsElement>
         foreach (var path in all)
             path.ComputeLength();
 
-        return (all.Count == 0)
-            ? new DubinsPath()
-            : all.OrderBy(p => p.Length).First();
+        return (!all.Any()) ? new DubinsPath() : all.OrderBy(p => p.Length).First();
     }
 }
 

@@ -1,8 +1,9 @@
 namespace PathPlanningLib.Framework;
 
 using PathPlanningLib.Algorithms;
+using PathPlanningLib.Algorithms.Geometry;
 using PathPlanningLib.Algorithms.Geometry.PathElements;
-using PathPlanningLib.Algorithms.Geometry.Path;
+using PathPlanningLib.Algorithms.Geometry.Paths;
 using PathPlanningLib.Framework.Kinematics;
 
 // vehicle class 
@@ -10,10 +11,10 @@ public class Vehicle
 {
     public double? Width { get; set; }
     public double? Length { get; set; }
-    public Pose Pose { get; set; } //should a vehicle have a pose?
-    public IKinematicModel KinematicModel { get; private set; }
-    private IPathPlanner<Path, PathElement> _planner;
-    public IPathPlanner<Path, PathElement> Planner
+    public Pose? Pose { get; set; } //should a vehicle have a pose?
+    public IKinematicModel<Path<PathElement>, PathElement>? KinematicModel { get; private set; }
+    private IPathPlanner<Path<PathElement>, PathElement>? _planner;
+    public IPathPlanner<Path<PathElement>, PathElement>? Planner
     {
         get => _planner;
         set
@@ -27,8 +28,8 @@ public class Vehicle
     }
 
     public Vehicle(
-        IKinematicModel model = null,
-        IPathPlanner planner = null,
+        IKinematicModel<Path<PathElement>, PathElement> model = null,
+        IPathPlanner<Path<PathElement>, PathElement> planner = null,
         double? width = null,
         double? length = null,
         Pose pose = null)
@@ -37,7 +38,7 @@ public class Vehicle
         Length = length;
         Pose = pose;
 
-        KinematicModel = model ?? new NonHolonomicKinematics();
+        KinematicModel = model ?? (IKinematicModel<Path<PathElement>, PathElement>) new NonHolonomicKinematics();
 
         Planner = planner ?? KinematicModel.OptimalPlanner; 
     }
@@ -47,10 +48,10 @@ public class Vehicle
         return KinematicModel.CompatiblePlanners;
     }
 
-    public Path PlanPath(Pose start, Pose end)
+    public Path<PathElement> PlanPath(Pose start, Pose end)
     {
         if (Planner == null)
-            throw new InvalidOperationException("No planner set.");
+            throw new InvalidOperationException("No path planning algorithm set.");
 
         return Planner.GetOptimalPath(start, end);
     }
@@ -58,7 +59,7 @@ public class Vehicle
     public PosePath PlanPosePath(Pose start, Pose end, double stepSize)
     {
         if (Planner == null)
-            throw new InvalidOperationException("No planner set.");
+            throw new InvalidOperationException("No path planning algorithm set.");
 
         return Planner.GetOptimalPath(start, end).Sample(stepSize);
     }

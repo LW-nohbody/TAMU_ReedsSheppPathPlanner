@@ -243,7 +243,7 @@ public class ReedsShepp : IPathPlanner<ReedsSheppPath, ReedsSheppElement>
 
 
     // ----- Planner API: start/end as Pose: theta in radians, x/y normalized -----
-    public List<ReedsSheppPath> GetAllPaths(Pose start, Pose end)
+    public IEnumerable<ReedsSheppPath> GetAllPaths(Pose start, Pose end)
     {
         // Convert end into local coordinates relative to start
         Pose local = MathUtils.ChangeOfBasis(start, end);
@@ -274,6 +274,6 @@ public class ReedsShepp : IPathPlanner<ReedsSheppPath, ReedsSheppElement>
         foreach (var path in all)
             path.ComputeLength();
 
-        return all.Count == 0 ? new ReedsSheppPath() : all.OrderBy(p => p.Length).First();
+        return !all.Any() ? new ReedsSheppPath() : all.OrderBy(p => p.Length).First();
     }
 }

@@ -139,6 +139,9 @@ text = "Reset"
 
 [node name="WorldRoot" type="Node2D" parent="." node_paths=PackedStringArray("StartGizmo", "GoalGizmo", "BestPath")]
 script = ExtResource("1_fj7yv")
+StartGizmo = NodePath("StartGizmo")
+GoalGizmo = NodePath("GoalGizmo")
+BestPath = NodePath("BestPath")
 DefaultTurnRadiusGrid = 1.5
 DefaultStartX = 3.0
 DefaultGoalX = 10.0
@@ -153,9 +156,6 @@ GoalXPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer
 GoalYPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox/YHBox/GoalYInput")
 GoalThetaPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/GoalCarVBox/GoalCarHBox/AngleHBox/GoalAngleInput")
 ResetButtonPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputContainer/ResetButton")
-StartGizmo = NodePath("StartGizmo")
-GoalGizmo = NodePath("GoalGizmo")
-BestPath = NodePath("BestPath")
 
 [node name="Grid2D" type="Node2D" parent="WorldRoot"]
 script = ExtResource("2_aqk2v")
