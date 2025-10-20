@@ -1,9 +1,9 @@
 [gd_scene load_steps=10 format=3 uid="uid://dr1y4j2r5jbw4"]
 
 [ext_resource type="Script" uid="uid://ckyy26m1qqpmq" path="res://Scripts/Game/Main3D.cs" id="1_0xm2m"]
-[ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://vehicle.tscn" id="2_0xm2m"]
+[ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://Scenes/Vehicles/Vehicle_RS.tscn" id="2_0xm2m"]
 [ext_resource type="Material" uid="uid://c4mo3uu4w8b1c" path="res://Materials/dirt.tres" id="3_1bvp3"]
-[ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://terrainDisk.tscn" id="3_h2yge"]
+[ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="3_h2yge"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1bvp3"]
 sky_top_color = Color(0.361634, 0.42475, 0.999998, 1)

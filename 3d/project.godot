@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Reeds-Shepp_3D_Test"
-run/main_scene="res://main.tscn"
+run/main_scene="uid://cc5m8lpvnpnfv"
 config/features=PackedStringArray("4.4", "C#", "Forward Plus")
 
 [dotnet]

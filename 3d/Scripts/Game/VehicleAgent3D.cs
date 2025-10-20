@@ -7,11 +7,14 @@ public partial class VehicleAgent3D : CharacterBody3D
     [Export] public float SpeedMps = 1.0f;
     [Export] public float TurnSmoothing = 8.0f;  // yaw slerp gain
     [Export] public float YawStopEpsDeg = 3.0f;  // end alignment tolerance (deg)
+    [Export] public bool MovementEnabled = true;
+
+    [Signal] public delegate void PathFinishedEventHandler();
 
     private Vector3[] _path = Array.Empty<Vector3>();
     private int[] _gears = Array.Empty<int>();
 
-    private int  _i    = 0;
+    private int _i = 0;
     private bool _done = true;
 
     // Keep the prefab’s authored Y so nothing can push us down.
@@ -23,10 +26,10 @@ public partial class VehicleAgent3D : CharacterBody3D
 
     public void SetPath(Vector3[] pts, int[] gears)
     {
-        _path  = pts   ?? Array.Empty<Vector3>();
+        _path = pts ?? Array.Empty<Vector3>();
         _gears = gears ?? Array.Empty<int>();
-        _i     = 0;
-        _done  = _path.Length == 0;
+        _i = 0;
+        _done = _path.Length == 0;
 
         _aligning = false;
         _finalAim = Vector3.Zero;
@@ -45,6 +48,12 @@ public partial class VehicleAgent3D : CharacterBody3D
 
     public override void _PhysicsProcess(double delta)
     {
+        if (!MovementEnabled)
+        {
+            Velocity = Vector3.Zero;
+            return;
+        }
+
         // --- Rotate-only end alignment ---------------------------------------
         if (_aligning)
         {
@@ -68,6 +77,8 @@ public partial class VehicleAgent3D : CharacterBody3D
                 GlobalTransform = new Transform3D(desired, pos);
                 _aligning = false;
                 _done = true;
+
+                EmitSignal(SignalName.PathFinished);   // tell the brain we’re done
             }
             return;
         }
