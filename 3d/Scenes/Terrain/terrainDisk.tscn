@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3 uid="uid://jvambkvdo1tv"]
+
+[ext_resource type="Script" uid="uid://majfrlk0er0c" path="res://Scripts/Game/TerrainDisk.cs" id="1_jyadk"]
+
+[node name="Node3D" type="Node3D"]
+script = ExtResource("1_jyadk")
+Resolution = 200
+Amplitude = 0.4
+Frequency = 0.25
+Octaves = 4
+Gain = 0.5
