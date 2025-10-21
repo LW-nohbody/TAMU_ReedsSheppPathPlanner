@@ -1,0 +1,47 @@
+[gd_scene load_steps=9 format=3 uid="uid://bjwl37wdxs6ua"]
+
+[ext_resource type="Script" uid="uid://blufyusifktgd" path="res://Scripts/Game/VehicleAgent3D.cs" id="1_andsp"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7mycd"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_272bh"]
+material = SubResource("StandardMaterial3D_7mycd")
+size = Vector3(0.5, 0.5, 0.75)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_0xm2m"]
+size = Vector3(0.5, 0.5, 0.75)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ev2fh"]
+albedo_color = Color(0, 1, 0, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_ev2fh"]
+material = SubResource("StandardMaterial3D_ev2fh")
+top_radius = 0.2
+bottom_radius = 0.2
+height = 1.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qufrh"]
+albedo_color = Color(0, 1, 0, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_qufrh"]
+material = SubResource("StandardMaterial3D_qufrh")
+top_radius = 0.0
+bottom_radius = 0.4
+height = 0.75
+
+[node name="Vehicle" type="CharacterBody3D"]
+script = ExtResource("1_andsp")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_272bh")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_0xm2m")
+
+[node name="Arrow" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.3, 0, 0, 0, -1.31134e-08, -0.3, 0, 0.3, -1.31134e-08, 0, 0, -0.44)
+mesh = SubResource("CylinderMesh_ev2fh")
+
+[node name="ArrowHead" type="MeshInstance3D" parent="Arrow"]
+transform = Transform3D(1, 0, 0, 0, -1, 8.74228e-08, 0, -8.74228e-08, -1, 0, -0.75, 0)
+mesh = SubResource("CylinderMesh_qufrh")
