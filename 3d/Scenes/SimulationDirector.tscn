@@ -27,11 +27,11 @@ VehiclesRootPath = NodePath("VehiclesRoot")
 CameraTopPath = NodePath("Cameras/CameraTop")
 CameraChasePath = NodePath("Cameras/CameraChase")
 CameraFreePath = NodePath("Cameras/CameraFree")
+TerrainPath = NodePath("Terrain")
 VehicleCount = 10
 VehicleLength = 0.75
 VehicleWidth = 0.5
-NormalBlend = 0.2
-TerrainPath = NodePath("Terrain")
+DebugPathOnTop = false
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_q02dg")

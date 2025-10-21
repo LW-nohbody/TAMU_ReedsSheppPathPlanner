@@ -3,26 +3,34 @@ using System;
 
 public partial class VehicleAgent3D : CharacterBody3D
 {
+    [Export] public float SpeedMps = 1.2f;
     [Export] public float ArenaRadius = 15.0f;
-    [Export] public float SpeedMps = 1.0f;
-    [Export] public float TurnSmoothing = 8.0f;  // yaw slerp gain
-    [Export] public float YawStopEpsDeg = 3.0f;  // end alignment tolerance (deg)
-    [Export] public bool MovementEnabled = true;
+    [Export] public float TurnSmoothing = 8.0f;   // yaw smoothing
+    [Export] public float TiltSmoothing = 8.0f;   // pitch/roll smoothing
+    [Export] public float YawStopEpsDeg = 3.0f;
 
-    [Signal] public delegate void PathFinishedEventHandler();
+    // Ground follow
+    [Export] public float RideHeightFollow = 0.25f;
+    [Export(PropertyHint.Range, "0,1,0.01")] public float NormalBlendFollow = 0.2f;
+    [Export] public float Wheelbase = 2.0f;
+    [Export] public float TrackWidth = 1.2f;
+    [Export] public bool EnableTilt = true;
 
+    // Path
     private Vector3[] _path = Array.Empty<Vector3>();
     private int[] _gears = Array.Empty<int>();
-
     private int _i = 0;
     private bool _done = true;
 
-    // Keep the prefab’s authored Y so nothing can push us down.
-    private float _baseY = 0f;
-
-    // End-alignment (rotate-only)
+    // End yaw align
     private bool _aligning = false;
-    private Vector3 _finalAim = Vector3.Zero; // unit XZ direction to face at the end
+    private Vector3 _finalAim = Vector3.Zero; // unit XZ
+    private bool _holdYaw = false;          // lock azimuth when done
+    private Vector3 _holdAimXZ = Vector3.Zero;
+
+    // External terrain sampler
+    private TerrainDisk _terrain;
+    public void SetTerrain(TerrainDisk t) => _terrain = t;
 
     public void SetPath(Vector3[] pts, int[] gears)
     {
@@ -30,140 +38,215 @@ public partial class VehicleAgent3D : CharacterBody3D
         _gears = gears ?? Array.Empty<int>();
         _i = 0;
         _done = _path.Length == 0;
-
         _aligning = false;
         _finalAim = Vector3.Zero;
-    }
 
+        GD.Print($"[{Name}] SetPath: len={_path.Length}, gears={_gears.Length}, done={_done}");
+        for (int k = 0; k < _path.Length; ++k)
+            GD.Print($"   pt[{k}] = {_path[k]}  gear={(k < _gears.Length ? _gears[k] : +1)}");
+    }
     public void SetPath(Vector3[] pts) => SetPath(pts, Array.Empty<int>());
 
     public override void _Ready()
     {
-        // Preserve the scene-authored height; don’t zero it.
-        _baseY = GlobalTransform.Origin.Y;
+        // We’re not using physics movement; avoid collisions pushing us around while testing.
+        // (Optional) uncomment these two lines if needed:
+        // CollisionLayer = 0;
+        // CollisionMask = 0;
 
-        // Ensure no auto floor snapping interferes.
-        FloorSnapLength = 0f;
+        var p = GlobalTransform.Origin; p.Y = 0f;
+        GlobalTransform = new Transform3D(GlobalTransform.Basis.Orthonormalized(), p);
+
+        GD.Print($"[{Name}] Ready. movement=ON");
     }
 
     public override void _PhysicsProcess(double delta)
     {
-        if (!MovementEnabled)
-        {
-            Velocity = Vector3.Zero;
-            return;
-        }
+        float dt = (float)delta;
 
-        // --- Rotate-only end alignment ---------------------------------------
         if (_aligning)
         {
-            Velocity = Vector3.Zero;
-            MoveAndSlide();
+            var xz = GlobalTransform.Origin; xz.Y = 0f;
 
-            // Slerp yaw toward cached final facing (XZ)
-            var desired = Basis.LookingAt(new Vector3(_finalAim.X, 0f, _finalAim.Z), Vector3.Up);
-            var slerped = GlobalTransform.Basis.Slerp(desired, Mathf.Clamp((float)(TurnSmoothing * delta), 0f, 1f));
-            var pos = GlobalTransform.Origin; pos.Y = _baseY;          // keep height pinned
-            GlobalTransform = new Transform3D(slerped, pos);
+            // Let the tilt/ground-follow logic build the target basis using the FINAL AIM.
+            GroundFollowAt(xz, _finalAim, dt);
 
-            // Check yaw error
-            var fwd = -GlobalTransform.Basis.Z; fwd.Y = 0f; fwd = fwd.Normalized();
-            float dot = Mathf.Clamp(fwd.Dot(_finalAim), -1f, 1f);
-            float yawErrDeg = Mathf.RadToDeg(Mathf.Acos(dot));
+            // Check yaw error in XZ vs the final aim
+            var fwdNow = (-GlobalTransform.Basis.Z).WithY(0).Normalized();
+            float yawErrDeg = Mathf.RadToDeg(Mathf.Acos(Mathf.Clamp(fwdNow.Dot(_finalAim), -1f, 1f)));
 
             if (yawErrDeg <= YawStopEpsDeg)
             {
-                // Final snap to exact facing, still at prefab height
-                GlobalTransform = new Transform3D(desired, pos);
                 _aligning = false;
                 _done = true;
-
-                EmitSignal(SignalName.PathFinished);   // tell the brain we’re done
+                _holdYaw = true;       // lock the azimuth going forward
+                _holdAimXZ = _finalAim;
+                GD.Print($"[{Name}] Final align complete.");
             }
             return;
         }
-        // ---------------------------------------------------------------------
 
-        // Fully done: just stay put at prefab height.
         if (_done)
         {
-            Velocity = Vector3.Zero;
-            MoveAndSlide();
-            var stopPos = GlobalTransform.Origin; stopPos.Y = _baseY;
-            GlobalTransform = new Transform3D(GlobalTransform.Basis, stopPos);
+            var xz = GlobalTransform.Origin; xz.Y = 0f;
+
+            // If we’ve finished, preserve the cached azimuth and SNAP each frame.
+            var fwd = _holdYaw ? _holdAimXZ : (-GlobalTransform.Basis.Z).WithY(0).Normalized();
+            GroundFollowAt(xz, fwd, dt);
             return;
         }
 
-        // Current pos & target (we only care about XZ for navigation)
-        var cur = GlobalTransform.Origin;
-        var tgt = _path[_i];
+        // == Old stable follow: step toward current waypoint in XZ ==
+        var curXZ = GlobalTransform.Origin; curXZ.Y = 0f;
+        var tgt = _path[_i]; tgt.Y = 0f;
 
-        // Advance on XZ distance only
-        float distXZ = new Vector2(cur.X - tgt.X, cur.Z - tgt.Z).Length();
-        if (distXZ < 0.12f)
+        if (curXZ.DistanceTo(tgt) < 0.12f)
         {
+            GD.Print($"[{Name}] Reached wp[{_i}] @ {_path[_i]}");
             _i++;
             if (_i >= _path.Length)
             {
-                // Enter rotate-only end alignment
                 _i = _path.Length - 1;
 
-                // Final tangent from last two points
+                // Determine final facing from last segment, respect final gear
                 Vector3 finalTan = Vector3.Zero;
                 if (_path.Length >= 2)
                 {
-                    finalTan = _path[^1] - _path[^2];
-                    finalTan.Y = 0f;
+                    finalTan = (_path[^1] - _path[^2]).WithY(0);
+                    if (finalTan.LengthSquared() > 1e-9f) finalTan = finalTan.Normalized();
                 }
-                if (finalTan.LengthSquared() < 1e-9f)
-                    finalTan = -GlobalTransform.Basis.Z; // fallback to current facing
-                else
-                    finalTan = finalTan.Normalized();
+                if (finalTan.LengthSquared() < 1e-9f) finalTan = (-GlobalTransform.Basis.Z).WithY(0).Normalized();
 
-                // Respect final gear for visual facing
                 int lastGear = (_gears.Length > 0) ? _gears[^1] : +1;
                 _finalAim = (lastGear >= 0) ? finalTan : -finalTan;
 
-                Velocity = Vector3.Zero;
-                MoveAndSlide();
-
-                // Pin height and switch to alignment mode
-                var pos = GlobalTransform.Origin; pos.Y = _baseY;
-                GlobalTransform = new Transform3D(GlobalTransform.Basis, pos);
                 _aligning = true;
                 return;
             }
             tgt = _path[_i];
         }
 
-        // Move toward current waypoint (horizontal only)
-        var moveDir = new Vector3(tgt.X - cur.X, 0f, tgt.Z - cur.Z);
-        if (moveDir.LengthSquared() < 1e-6f)
-            moveDir = -GlobalTransform.Basis.Z;
-        else
-            moveDir = moveDir.Normalized();
+        // Direction to current waypoint
+        var dir = (tgt - curXZ).WithY(0);
+        dir = (dir.LengthSquared() < 1e-6f) ? (-GlobalTransform.Basis.Z).WithY(0) : dir.Normalized();
 
-        Velocity = moveDir * SpeedMps;
-        MoveAndSlide();
+        // Manual integration (no physics!)
+        var nextXZ = curXZ + dir * SpeedMps * dt;
 
-        // Smoothly face along the path tangent during traversal
-        Vector3 aimDir = moveDir;
+        // Soft arena clamp
+        float maxR = Mathf.Max(0.1f, ArenaRadius - 0.25f);
+        if (nextXZ.Length() > maxR) nextXZ = nextXZ.Normalized() * maxR;
+
+        // Smooth yaw toward tangent (respect gear)
+        Vector3 aimDir = dir;
         if (_i >= _path.Length - 1 && _path.Length >= 2)
         {
-            var finalTan = _path[^1] - _path[^2];
-            finalTan.Y = 0f;
-            if (finalTan.LengthSquared() > 1e-9f)
-                aimDir = finalTan.Normalized();
+            var finalTan = (_path[^1] - _path[^2]).WithY(0);
+            if (finalTan.LengthSquared() > 1e-9f) aimDir = finalTan.Normalized();
         }
-
         int gear = (_i < _gears.Length) ? _gears[_i] : +1;
         var facingDir = (gear >= 0) ? aimDir : -aimDir;
 
-        var desiredYaw = Basis.LookingAt(facingDir, Vector3.Up);
-        var slerpedYaw = GlobalTransform.Basis.Slerp(desiredYaw, Mathf.Clamp((float)(TurnSmoothing * delta), 0f, 1f));
+        var desiredYawMove = Basis.LookingAt(facingDir, Vector3.Up).Orthonormalized();
+        float ayawMove = 1f - Mathf.Exp(-TurnSmoothing * dt);
+        var yawBlendedMove = SafeSlerp(GlobalTransform.Basis, desiredYawMove, ayawMove);
+        GlobalTransform = new Transform3D(yawBlendedMove, new Vector3(nextXZ.X, 0f, nextXZ.Z));
 
-        // Apply yaw and re-pin Y so nothing drags us down
-        var pinned = GlobalTransform.Origin; pinned.Y = _baseY;
-        GlobalTransform = new Transform3D(slerpedYaw, pinned);
+        // Stick to ground at the NEW XZ, blending pitch/roll
+        GroundFollowAt(nextXZ, facingDir, dt);
     }
+
+    // --- Ground follow at a given XZ (blends pitch/roll, sets Y) ---------------
+    private void GroundFollowAt(Vector3 centerXZ, Vector3 facingDir, float dt)
+    {
+        if (_terrain == null) return;
+        if (!_terrain.SampleHeightNormal(centerXZ, out var hC, out var nC)) return;
+
+        // Always pin height
+        Vector3 pos = hC + Vector3.Up * RideHeightFollow;
+
+        if (!EnableTilt)
+        {
+            // Yaw already blended this frame; keep basis, set only Y
+            GlobalTransform = new Transform3D(GlobalTransform.Basis, pos);
+            return;
+        }
+
+        // --- EnableTilt path (can turn on later) ---
+        // Project facing onto ground to build a stable frame
+        Vector3 fwd = facingDir - nC * facingDir.Dot(nC);
+        if (fwd.LengthSquared() < 1e-6f) fwd = facingDir.WithY(0);
+        if (fwd.LengthSquared() < 1e-6f) fwd = Vector3.Forward;
+        fwd = fwd.Normalized();
+
+        Vector3 right = fwd.Cross(nC);
+        right = right.Normalized();
+        Vector3 zAxis = -fwd;                    // Godot forward is -Z
+        var desiredBasis = new Basis(right, nC, zAxis).Orthonormalized();
+
+        float a = 1f - Mathf.Exp(-TiltSmoothing * dt);
+        var blended = SafeSlerp(GlobalTransform.Basis, desiredBasis, a);
+        GlobalTransform = new Transform3D(blended, pos);
+    }
+
+    private static Vector3 PerpTo(Vector3 n)
+    {
+        return (Mathf.Abs(n.Y) < 0.99f ? n.Cross(Vector3.Up) : n.Cross(Vector3.Right)).Normalized();
+    }
+
+    private bool SampleGroundAt(Vector3 centerXZ, Vector3 desiredYawDir,
+                                out Vector3 hitC, out Vector3 n, out Basis desiredBasis)
+    {
+        hitC = Vector3.Zero; n = Vector3.Up; desiredBasis = Basis.Identity;
+
+        float halfL = Wheelbase * 0.5f;
+        float halfW = TrackWidth * 0.5f;
+
+        Vector3 yawFwd = desiredYawDir.WithY(0f);
+        if (yawFwd.LengthSquared() < 1e-9f) yawFwd = Vector3.Forward;
+        yawFwd = yawFwd.Normalized();
+        Vector3 yawRight = yawFwd.Cross(Vector3.Up).Normalized();
+
+        Vector3 pC = centerXZ;
+        Vector3 pFL = centerXZ + yawFwd * halfL + yawRight * halfW;
+        Vector3 pFR = centerXZ + yawFwd * halfL - yawRight * halfW;
+        Vector3 pRC = centerXZ - yawFwd * halfL;
+
+        if (!_terrain.SampleHeightNormal(pC, out var hC, out var nC)) return false;
+        if (!_terrain.SampleHeightNormal(pFL, out var hFL, out var _)) return false;
+        if (!_terrain.SampleHeightNormal(pFR, out var hFR, out var _)) return false;
+        if (!_terrain.SampleHeightNormal(pRC, out var hRC, out var _)) return false;
+
+        Vector3 nPlane = (hFR - hFL).Cross(hRC - hFL);
+        if (nPlane.LengthSquared() < 1e-6f) nPlane = nC;
+        nPlane = nPlane.Normalized();
+
+        float t = Mathf.Clamp(NormalBlendFollow, 0f, 1f);
+        n = (nPlane.Lerp(nC, t)).Normalized();
+        hitC = hC;
+
+        Vector3 fProj = (yawFwd - n * yawFwd.Dot(n));
+        if (fProj.LengthSquared() < 1e-8f) fProj = Vector3.Right.Cross(n);
+        fProj = fProj.Normalized();
+
+        Vector3 right = fProj.Cross(n).Normalized();
+        Vector3 zAxis = -fProj; // Godot forward
+        desiredBasis = new Basis(right, n, zAxis).Orthonormalized();
+        return true;
+    }
+
+    private static Basis SafeSlerp(in Basis fromB, in Basis toB, float t)
+    {
+        t = Mathf.Clamp(t, 0f, 1f);
+        var q0 = fromB.Orthonormalized().GetRotationQuaternion().Normalized();
+        var q1 = toB.Orthonormalized().GetRotationQuaternion().Normalized();
+        var q = q0.Slerp(q1, t).Normalized();
+        if (!q.IsNormalized() || float.IsNaN(q.W)) q = q0;
+        return new Basis(q).Orthonormalized();
+    }
+}
+
+static class Vec3Ext
+{
+    public static Vector3 WithY(this Vector3 v, float y) => new Vector3(v.X, y, v.Z);
 }
