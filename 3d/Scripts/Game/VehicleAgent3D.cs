@@ -3,7 +3,7 @@ using System;
 
 public partial class VehicleAgent3D : CharacterBody3D
 {
-    [Export] public float SpeedMps = 1.2f;
+    [Export] public float SpeedMps = 0.6f;
     [Export] public float ArenaRadius = 15.0f;
     [Export] public float TurnSmoothing = 8.0f;   // yaw smoothing
     [Export] public float TiltSmoothing = 8.0f;   // pitch/roll smoothing
@@ -49,11 +49,6 @@ public partial class VehicleAgent3D : CharacterBody3D
 
     public override void _Ready()
     {
-        // We’re not using physics movement; avoid collisions pushing us around while testing.
-        // (Optional) uncomment these two lines if needed:
-        // CollisionLayer = 0;
-        // CollisionMask = 0;
-
         var p = GlobalTransform.Origin; p.Y = 0f;
         GlobalTransform = new Transform3D(GlobalTransform.Basis.Orthonormalized(), p);
 
@@ -192,47 +187,6 @@ public partial class VehicleAgent3D : CharacterBody3D
     private static Vector3 PerpTo(Vector3 n)
     {
         return (Mathf.Abs(n.Y) < 0.99f ? n.Cross(Vector3.Up) : n.Cross(Vector3.Right)).Normalized();
-    }
-
-    private bool SampleGroundAt(Vector3 centerXZ, Vector3 desiredYawDir,
-                                out Vector3 hitC, out Vector3 n, out Basis desiredBasis)
-    {
-        hitC = Vector3.Zero; n = Vector3.Up; desiredBasis = Basis.Identity;
-
-        float halfL = Wheelbase * 0.5f;
-        float halfW = TrackWidth * 0.5f;
-
-        Vector3 yawFwd = desiredYawDir.WithY(0f);
-        if (yawFwd.LengthSquared() < 1e-9f) yawFwd = Vector3.Forward;
-        yawFwd = yawFwd.Normalized();
-        Vector3 yawRight = yawFwd.Cross(Vector3.Up).Normalized();
-
-        Vector3 pC = centerXZ;
-        Vector3 pFL = centerXZ + yawFwd * halfL + yawRight * halfW;
-        Vector3 pFR = centerXZ + yawFwd * halfL - yawRight * halfW;
-        Vector3 pRC = centerXZ - yawFwd * halfL;
-
-        if (!_terrain.SampleHeightNormal(pC, out var hC, out var nC)) return false;
-        if (!_terrain.SampleHeightNormal(pFL, out var hFL, out var _)) return false;
-        if (!_terrain.SampleHeightNormal(pFR, out var hFR, out var _)) return false;
-        if (!_terrain.SampleHeightNormal(pRC, out var hRC, out var _)) return false;
-
-        Vector3 nPlane = (hFR - hFL).Cross(hRC - hFL);
-        if (nPlane.LengthSquared() < 1e-6f) nPlane = nC;
-        nPlane = nPlane.Normalized();
-
-        float t = Mathf.Clamp(NormalBlendFollow, 0f, 1f);
-        n = (nPlane.Lerp(nC, t)).Normalized();
-        hitC = hC;
-
-        Vector3 fProj = (yawFwd - n * yawFwd.Dot(n));
-        if (fProj.LengthSquared() < 1e-8f) fProj = Vector3.Right.Cross(n);
-        fProj = fProj.Normalized();
-
-        Vector3 right = fProj.Cross(n).Normalized();
-        Vector3 zAxis = -fProj; // Godot forward
-        desiredBasis = new Basis(right, n, zAxis).Orthonormalized();
-        return true;
     }
 
     private static Basis SafeSlerp(in Basis fromB, in Basis toB, float t)

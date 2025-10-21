@@ -151,7 +151,7 @@ public partial class SimulationDirector : Node3D
             _movingFreeCam = false; _rotatingFreeCam = true;
             Input.MouseMode = Input.MouseModeEnum.Captured;
         }
-        else if (!_camFree.Current)
+        else
         {
             _movingFreeCam = _rotatingFreeCam = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
