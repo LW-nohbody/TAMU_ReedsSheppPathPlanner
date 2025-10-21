@@ -4,7 +4,7 @@ using PathPlanningLib.Algorithms;
 using PathPlanningLib.Algorithms.Geometry.PathElements;
 using PathPlanningLib.Algorithms.Geometry.Paths;
 
-/// Defines how a a vehicle's motion via kinematics 
+/// Defines a vehicle's motion via kinematics 
 public interface IKinematicModel<TPath, TElement>
     where TPath : Path<TElement>
     where TElement : PathElement

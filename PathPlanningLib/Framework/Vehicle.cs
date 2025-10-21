@@ -32,11 +32,11 @@ public class Vehicle
     }
 
     public Vehicle(
-        IKinematicModel<Path<PathElement>, PathElement> model = null,
-        IPathPlanner<Path<PathElement>, PathElement> planner = null,
+        IKinematicModel<Path<PathElement>, PathElement>? model = null,
+        IPathPlanner<Path<PathElement>, PathElement>? planner = null,
         double? width = null,
         double? length = null,
-        Pose pose = null)
+        Pose? pose = null)
     {
         Width = width;
         Length = length;

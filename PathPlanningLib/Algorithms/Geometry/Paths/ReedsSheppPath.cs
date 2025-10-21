@@ -1,6 +1,5 @@
 namespace PathPlanningLib.Algorithms.Geometry.Paths;
 
-using System.Security.Cryptography.X509Certificates;
 using PathPlanningLib.Algorithms.Geometry.PathElements;
 
 // Represents a Reeds-Shepp path consisting of ReedsSheppElements

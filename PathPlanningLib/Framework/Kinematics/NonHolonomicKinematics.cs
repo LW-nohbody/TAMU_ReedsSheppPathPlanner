@@ -11,7 +11,7 @@ public class NonHolonomicKinematics : IKinematicModel<ReedsSheppPath, ReedsShepp
 {
     private double? _turningRadius;
     private double? _maxVelocity;
-    double? TurningRadius
+    public double? TurningRadius
     {
         get => _turningRadius;
         set
@@ -20,7 +20,7 @@ public class NonHolonomicKinematics : IKinematicModel<ReedsSheppPath, ReedsShepp
             UpdateMissingParameters();
         }
     }
-    double? MaxVelocity { 
+    public double? MaxVelocity { 
         get => _maxVelocity;
         set
         {
