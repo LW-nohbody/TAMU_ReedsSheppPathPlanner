@@ -161,7 +161,6 @@ ResetButtonPath = NodePath("../UILayer/UIRoot/SidePanel/MarginContainer/InputCon
 script = ExtResource("2_aqk2v")
 
 [node name="BestPath" type="Line2D" parent="WorldRoot"]
-position = Vector2(-377, 0)
 points = PackedVector2Array(-1, 7)
 
 [node name="StartGizmo" type="Node2D" parent="WorldRoot"]

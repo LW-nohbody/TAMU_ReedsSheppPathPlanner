@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Algorithms", "Algorithms\PathPlanningLib.Algorithms.csproj", "{EF583895-012C-4390-A1CE-1FAD36919C6B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Framework", "Framework\PathPlanningLib.Framework.csproj", "{1787E6EE-E24D-462C-93B6-5811A308CC8F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EF583895-012C-4390-A1CE-1FAD36919C6B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EF583895-012C-4390-A1CE-1FAD36919C6B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EF583895-012C-4390-A1CE-1FAD36919C6B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EF583895-012C-4390-A1CE-1FAD36919C6B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1787E6EE-E24D-462C-93B6-5811A308CC8F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1787E6EE-E24D-462C-93B6-5811A308CC8F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1787E6EE-E24D-462C-93B6-5811A308CC8F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1787E6EE-E24D-462C-93B6-5811A308CC8F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
