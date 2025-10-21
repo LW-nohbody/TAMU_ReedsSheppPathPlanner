@@ -77,29 +77,75 @@ public partial class Main3D : Node3D
             car.GlobalTransform = xform;             // put car exactly at path start
             car.ArenaRadius = ArenaRadius;       // keep your arena clamp
 
-            // plan THIS car's path:
-            //   start = (spawnPos, yaw=theta)
-            //   goal  = a few meters forward, with final yaw turned 90° right
-            double startYaw = theta;                 // 0=+X, CCW toward +Z
-            var goalPos = spawnPos + outward * GoalAdvance;
-            double goalYaw = startYaw + Mathf.Pi / 2.0;  // +90° = right in our math → 3D mapping
 
-            var (pts, gears) = RSAdapter.ComputePath3D(spawnPos, startYaw, goalPos, goalYaw,
-                                           TurnRadiusMeters, SampleStepMeters);
+    // Create a per-vehicle path container (so each vehicle has its own drawings)
+    var pathContainer = new Node3D { Name = $"Path_{car.GetInstanceId()}" };
+    _pathsParent.AddChild(pathContainer);
 
-            // pick a color per car
-            Color[] pal = { new Color(1, 0, 0), new Color(1, 0.5f, 0), new Color(1, 1, 0), new Color(0, 1, 0), new Color(0, 1, 1) };
-            var col = pal[i % pal.Length];
+    // plan initial RS path
+    double startYaw = theta;
+    var goalPos = spawnPos + outward * GoalAdvance;
+    double goalYaw = startYaw + Mathf.Pi / 2.0;
 
-            // draw its path + start/goal markers
-            DrawPathForCar(pts, col);
-            DrawMarker(spawnPos, new Color(0, 1, 0)); // green = start
-            DrawMarker(goalPos, new Color(0, 0, 1)); // blue  = goal
+    var pts = RSAdapter.ComputePath3D(spawnPos, startYaw, goalPos, goalYaw,
+                                      TurnRadiusMeters, SampleStepMeters);
 
-            // feed path
-            car.SetPath(pts, gears);
+    // pick a color per car
+    Color[] pal = { new Color(1,0,0), new Color(1,0.5f,0), new Color(1,1,0), new Color(0,1,0), new Color(0,1,1) };
+    var col = pal[i % pal.Length];
 
-            _vehicles.Add(car);
+    // draw its initial path into its container
+    // draw its initial path into its container
+    DrawPathForCar(pts, col, pathContainer);
+
+    // draw start/goal markers
+    DrawMarker(spawnPos, new Color(0,1,0));
+    DrawMarker(goalPos,  new Color(0,0,1));
+
+    // SAFER event handling
+    Action<Vector3[]> handler = null;
+
+    handler = (Vector3[] newPath) =>
+    {
+        // Verify the car and container are still valid
+        if (!IsInstanceValid(car) || !IsInstanceValid(pathContainer))
+        {
+            // Disconnect if the car or container were freed
+            if (IsInstanceValid(car))
+                car.PathUpdated -= handler;
+            return;
+        }
+
+        // Clear and redraw the path
+        foreach (Node child in pathContainer.GetChildren())
+            child.QueueFree();
+
+        DrawPathForCar(newPath, col, pathContainer);
+    };
+
+    // Connect and remember the handler (in case you ever want to clean up later)
+    car.PathUpdated += handler;
+    // feed path to car
+    car.SetPath(pts);
+
+    _vehicles.Add(car);
+
+        }
+
+        // Draw just the first car's path for now (to keep your single PathLine node)
+        if (_vehicles.Count > 0)
+        {
+            // Recompute the first path exactly like above to get the points for drawing
+            float theta0 = 0f;
+            var outward0 = new Vector3(Mathf.Cos(theta0), 0f, Mathf.Sin(theta0));
+            var spawn0   = outward0 * SpawnRadius;
+            double yaw0  = theta0;
+            var goal0    = spawn0 + outward0 * GoalAdvance;
+            double yaw0g = yaw0 - Mathf.Pi / 2.0;
+
+            var pts0 = RSAdapter.ComputePath3D(spawn0, yaw0, goal0, yaw0g,
+                                            TurnRadiusMeters, SampleStepMeters);
+            DrawPath(pts0);
         }
 
         // cameras
@@ -152,38 +198,28 @@ public partial class Main3D : Node3D
             _movingFreeCam = false;
         }
         if (!_usingTop) FollowChaseCamera(delta);
+    }
 
-        if (Input.IsActionJustPressed("select_free_camera"))
-        {
-            _camFree.Current = true;
-            _camTop.Current = false;
-            _camChase.Current = false;
-            _usingTop = !_usingTop; //Toggle so when return it resumes from the previous view
-        }
+    private void DrawPath(Vector3[] points)
+    {
+        var im = new ImmediateMesh();
+        im.SurfaceBegin(Mesh.PrimitiveType.LineStrip);
+        foreach (var p in points)
+            im.SurfaceAddVertex(p);
+        im.SurfaceEnd();
+        _pathLine.Mesh = im;
 
-        // move free camera        
-        if (Input.IsActionPressed("translate_free_camera"))
-        {
-            // get movement of mouse
-            _rotatingFreeCam = false;
-            _movingFreeCam = true;
-            Input.MouseMode = Input.MouseModeEnum.Captured;
-            _lastMousePos = GetViewport().GetMousePosition();
-        }
-        else if (Input.IsActionPressed("rotate_free_camera"))
-        {
-            // get movement of mouse
-            _movingFreeCam = false;
-            _rotatingFreeCam = true;
-            Input.MouseMode = Input.MouseModeEnum.Captured;
-        }
-        else
-        {
-            _movingFreeCam = false;
-            _rotatingFreeCam = false;
-            Input.MouseMode = Input.MouseModeEnum.Visible;
-        }
+        var mat = new StandardMaterial3D { AlbedoColor = new Color(1, 0, 0) };
+        _pathLine.SetSurfaceOverrideMaterial(0, mat);
+    }
 
+    private void OnVehiclePathUpdated(Vector3[] newPath)
+    {
+        // Remove previous path meshes
+        foreach (var child in _pathsParent.GetChildren())
+            child.QueueFree();
+
+        DrawPathForCar(newPath, new Color(1, 0, 0));
     }
 
 
@@ -257,6 +293,33 @@ public partial class Main3D : Node3D
 
         _pathsParent.AddChild(mi);
     }
+
+    private void DrawPathForCar(Vector3[] points, Color col, Node3D parent)
+    {
+        if (points == null || points.Length < 2) return;
+
+        var mi = new MeshInstance3D();
+        var im = new ImmediateMesh();
+
+        im.SurfaceBegin(Mesh.PrimitiveType.LineStrip);
+        for (int i = 0; i < points.Length; i++)
+        {
+            var p = points[i];
+            var y = SampleSurfaceY(p);
+            im.SurfaceAddVertex(new Vector3(p.X, y, p.Z));
+        }
+        im.SurfaceEnd();
+
+        mi.Mesh = im;
+
+        var mat = new StandardMaterial3D { AlbedoColor = col };
+        mat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+        if (DebugPathOnTop) mat.NoDepthTest = true;
+        mi.SetSurfaceOverrideMaterial(0, mat);
+
+        parent.AddChild(mi);
+    }
+
 
     private void DrawMarker(Vector3 pos, Color col)
     {
