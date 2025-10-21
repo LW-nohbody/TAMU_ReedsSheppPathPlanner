@@ -15,7 +15,7 @@ public partial class Main3D : Node3D
     [Export] public NodePath CameraChasePath;
     [Export] public NodePath CameraFreePath;
 
-    [Export] public float ArenaRadius = 10f;
+    [Export] public float ArenaRadius = 15f;
     [Export] public float TurnRadiusMeters = 2.0f;
     [Export] public float SampleStepMeters = 0.25f;
     [Export] public float MouseSensitivity = 0.005f;
@@ -32,6 +32,7 @@ public partial class Main3D : Node3D
     private Node3D _pathsParent;
     private System.Collections.Generic.List<VehicleAgent3D> _vehicles = new();
     private Camera3D _camTop, _camChase, _camFree;
+    private MeshInstance3D _pathLine;
     private bool _usingTop = true;
     private bool _movingFreeCam = false;
     private bool _rotatingFreeCam = false;
@@ -87,14 +88,14 @@ public partial class Main3D : Node3D
     var goalPos = spawnPos + outward * GoalAdvance;
     double goalYaw = startYaw + Mathf.Pi / 2.0;
 
-    var pts = RSAdapter.ComputePath3D(spawnPos, startYaw, goalPos, goalYaw,
+    var (pts, gears) = RSAdapter.ComputePath3D(spawnPos, startYaw, goalPos, goalYaw,
                                       TurnRadiusMeters, SampleStepMeters);
+            
 
     // pick a color per car
     Color[] pal = { new Color(1,0,0), new Color(1,0.5f,0), new Color(1,1,0), new Color(0,1,0), new Color(0,1,1) };
     var col = pal[i % pal.Length];
 
-    // draw its initial path into its container
     // draw its initial path into its container
     DrawPathForCar(pts, col, pathContainer);
 
@@ -126,7 +127,7 @@ public partial class Main3D : Node3D
     // Connect and remember the handler (in case you ever want to clean up later)
     car.PathUpdated += handler;
     // feed path to car
-    car.SetPath(pts);
+    car.SetPath(pts, gears);
 
     _vehicles.Add(car);
 
@@ -143,7 +144,7 @@ public partial class Main3D : Node3D
             var goal0    = spawn0 + outward0 * GoalAdvance;
             double yaw0g = yaw0 - Mathf.Pi / 2.0;
 
-            var pts0 = RSAdapter.ComputePath3D(spawn0, yaw0, goal0, yaw0g,
+            var (pts0, gears0) = RSAdapter.ComputePath3D(spawn0, yaw0, goal0, yaw0g,
                                             TurnRadiusMeters, SampleStepMeters);
             DrawPath(pts0);
         }
@@ -198,6 +199,37 @@ public partial class Main3D : Node3D
             _movingFreeCam = false;
         }
         if (!_usingTop) FollowChaseCamera(delta);
+
+        if (Input.IsActionJustPressed("select_free_camera"))
+        {
+            _camFree.Current = true;
+            _camTop.Current = false;
+            _camChase.Current = false;
+            _usingTop = !_usingTop; //Toggle so when return it resumes from the previous view
+        }
+
+        // move free camera        
+        if (Input.IsActionPressed("translate_free_camera"))
+        {
+            // get movement of mouse
+            _rotatingFreeCam = false;
+            _movingFreeCam = true;
+            Input.MouseMode = Input.MouseModeEnum.Captured;
+            _lastMousePos = GetViewport().GetMousePosition();
+        }
+        else if (Input.IsActionPressed("rotate_free_camera"))
+        {
+            // get movement of mouse
+            _movingFreeCam = false;
+            _rotatingFreeCam = true;
+            Input.MouseMode = Input.MouseModeEnum.Captured;
+        }
+        else
+        {
+            _movingFreeCam = false;
+            _rotatingFreeCam = false;
+            Input.MouseMode = Input.MouseModeEnum.Visible;
+        }
     }
 
     private void DrawPath(Vector3[] points)

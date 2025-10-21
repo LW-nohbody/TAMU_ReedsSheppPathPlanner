@@ -273,10 +273,11 @@ double midYaw = toMidV.LengthSquared() > 1e-9 ? Math.Atan2(toMidV.Z, toMidV.X) :
 
             // compute RS segments in try/catch to avoid unexpected exceptions propagating
             Vector3[] rs1 = Array.Empty<Vector3>(), rs2 = Array.Empty<Vector3>();
+            
             try
             {
-                rs1 = RSAdapter.ComputePath3D(start, startYaw, mid, midYaw, turnRadiusMeters, sampleStepMeters);
-                rs2 = RSAdapter.ComputePath3D(mid, midYaw, goal, goalYaw, turnRadiusMeters, sampleStepMeters);
+                (rs1, var gears1) = RSAdapter.ComputePath3D(start, startYaw, mid, midYaw, turnRadiusMeters, sampleStepMeters);
+                (rs2, var gears2) = RSAdapter.ComputePath3D(mid, midYaw, goal, goalYaw, turnRadiusMeters, sampleStepMeters);
             }
             catch (Exception e)
             {
