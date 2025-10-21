@@ -256,17 +256,20 @@ public partial class World : Node2D
         double R = TurnRadius;
 
         // Initialize new library
-        Pose startPose = Pose.Create(startM.x/R, startM.y/R, startM.th);
-        Pose goalPose = Pose.Create(goalM.x/R, goalM.y/R, goalM.th);
+        Pose startPose = Pose.Create(startM.x/R, startM.y/R, -startM.th);
+        Pose goalPose = Pose.Create(goalM.x / R, goalM.y / R, goalM.th);
 
         ReedsShepp rs_alg = new ReedsShepp();
         ReedsSheppPath rs_path = rs_alg.GetOptimalPath(startPose, goalPose);
+        Pose globalStartPose = Pose.Create(startM.x, startM.y, startM.th);
+        PosePath bestPath = rs_path.Sample(1, R, globalStartPose);
 
         // Dubins dubins_alg = new Dubins();
         // DubinsPath dubins_path = dubins_alg.GetOptimalPath(startPose, goalPose);
+        // Pose globalStartPose = Pose.Create(startM.x, startM.y, startM.th);
+        // PosePath bestPath = dubins_path.Sample(1, R, globalStartPose);
 
-        Pose globalStartPose = Pose.Create(startM.x, startM.y, startM.th);
-        PosePath bestPath = rs_path.Sample(1, R, globalStartPose);
+
         // bestPath = bestPath.Sample(10000);
 
         if (bestPath == null || bestPath.Count == 0)
