@@ -29,7 +29,8 @@ public partial class SimulationDirector : Node3D
 
     // Cameras
     [Export] public float   MouseSensitivity     = 0.005f;
-    [Export] public float   TranslateSensitivity = 0.01f;
+    [Export] public float TranslateSensitivity = 0.01f;
+    [Export] public float ZoomSensitivity = 1.0f;
     [Export] public float   ChaseLerp            = 8.0f;
     [Export] public Vector3 ChaseOffset          = new(0, 2.5f, 5.5f);
 
@@ -108,7 +109,7 @@ public partial class SimulationDirector : Node3D
     {
         if (e is InputEventMouseMotion mm && _rotatingFreeCam)
         {
-            _yaw   += -mm.Relative.X * MouseSensitivity;
+            _yaw += -mm.Relative.X * MouseSensitivity;
             _pitch += -mm.Relative.Y * MouseSensitivity;
             _camFree.Rotation = new Vector3(_pitch, _yaw, 0);
         }
@@ -116,9 +117,34 @@ public partial class SimulationDirector : Node3D
         {
             Vector2 d = mm2.Relative;
             Vector3 right = _camFree.GlobalTransform.Basis.X;
-            Vector3 up    = _camFree.GlobalTransform.Basis.Y;
+            Vector3 up = _camFree.GlobalTransform.Basis.Y;
             Vector3 motion = (-right * d.X + up * d.Y) * TranslateSensitivity;
             _camFree.GlobalTranslate(motion);
+        }
+        else if (e is InputEventMouseButton mb && _camFree.Current)
+        {
+            if (mb.ButtonIndex == MouseButton.WheelUp)
+            {
+                // Get the forward direction (-Z axis in local space)
+                Vector3 forward = -_camFree.GlobalTransform.Basis.Z.Normalized();
+
+                // Calculate new position
+                Vector3 newPosition = _camFree.GlobalTransform.Origin + forward * -ZoomSensitivity;
+
+                _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPosition);
+
+            }
+            else if(mb.ButtonIndex == MouseButton.WheelDown)
+            {
+                // Get the forward direction (-Z axis in local space)
+                Vector3 forward = -_camFree.GlobalTransform.Basis.Z.Normalized();
+
+                // Calculate new position
+                Vector3 newPosition = _camFree.GlobalTransform.Origin + forward * ZoomSensitivity;
+
+                _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPosition);
+
+            }
         }
     }
 
