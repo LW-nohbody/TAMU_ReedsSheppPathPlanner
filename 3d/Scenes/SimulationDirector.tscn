@@ -1,9 +1,11 @@
-[gd_scene load_steps=8 format=3 uid="uid://cc5m8lpvnpnfv"]
+[gd_scene load_steps=12 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
-[ext_resource type="Script" uid="uid://c35djx2f1850r" path="res://Scripts/SimCore/Godot/SimulationDirector.cs" id="1_tjpb3"]
+[ext_resource type="Script" uid="uid://dvesbj6y80hfr" path="res://Scripts/SimCore/Godot/SimulationDirector.cs" id="1_tjpb3"]
 [ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://Scenes/Vehicles/Vehicle_RS.tscn" id="2_q02dg"]
 [ext_resource type="Material" uid="uid://c4mo3uu4w8b1c" path="res://Materials/dirt.tres" id="4_q02dg"]
+[ext_resource type="Script" uid="uid://dp351n8gu4yi4" path="res://Scripts/Game/ObstacleManager.cs" id="5_qfmbg"]
+[ext_resource type="Script" uid="uid://bh6ewc840q2c7" path="res://Scripts/Game/CylinderObstacle.cs" id="6_xklxq"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tjpb3"]
 sky_top_color = Color(0.361634, 0.42475, 0.999998, 1)
@@ -18,6 +20,17 @@ ambient_light_source = 3
 ambient_light_color = Color(1, 1, 1, 1)
 ambient_light_sky_contribution = 0.7
 tonemap_mode = 3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_nl4sy"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_hk6n0"]
+top_radius = 1.0
+bottom_radius = 1.0
+radial_segments = 32
 
 [node name="SimulationDirector" type="Node3D"]
 transform = Transform3D(0.984884, 0, 0, 0, 0.984884, 0, 0, 0, 0.984884, 0, 0, 0)
@@ -61,3 +74,14 @@ Frequency = 0.15
 Octaves = 2
 Smooth = 0.9
 MaterialOverride = ExtResource("4_q02dg")
+
+[node name="ObstacleManager" type="Node3D" parent="."]
+script = ExtResource("5_qfmbg")
+
+[node name="CylinderObs1" type="Node3D" parent="ObstacleManager"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.19776, 0, -5.50917)
+script = ExtResource("6_xklxq")
+
+[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs1"]
+material_override = SubResource("StandardMaterial3D_nl4sy")
+mesh = SubResource("CylinderMesh_hk6n0")
