@@ -1,7 +1,7 @@
 [gd_scene load_steps=8 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
-[ext_resource type="Script" uid="uid://c35djx2f1850r" path="res://Scripts/SimCore/Godot/SimulationDirector.cs" id="1_tjpb3"]
+[ext_resource type="Script" uid="uid://cr4t38vvmoapm" path="res://Scripts/SimCore/Godot/SimulationDirector.cs" id="1_tjpb3"]
 [ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://Scenes/Vehicles/Vehicle_RS.tscn" id="2_q02dg"]
 [ext_resource type="Material" uid="uid://c4mo3uu4w8b1c" path="res://Materials/dirt.tres" id="4_q02dg"]
 
@@ -27,6 +27,7 @@ VehiclesRootPath = NodePath("VehiclesRoot")
 CameraTopPath = NodePath("Cameras/CameraTop")
 CameraChasePath = NodePath("Cameras/CameraChase")
 CameraFreePath = NodePath("Cameras/CameraFree")
+CameraOrbitPath = NodePath("Cameras/CameraOrbit")
 TerrainPath = NodePath("Terrain")
 VehicleCount = 10
 VehicleLength = 0.75
@@ -55,6 +56,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, -5)
 
 [node name="CameraFree" type="Camera3D" parent="Cameras"]
 transform = Transform3D(-4.37114e-08, -0.5, 0.866025, 0, 0.866025, 0.5, -1, 2.18557e-08, -3.78552e-08, 0, 5, 0)
+
+[node name="CameraOrbit" type="Camera3D" parent="Cameras"]
+transform = Transform3D(1.015348, 0, 0, 0, 1.015348, 0, 0, 0, 1.015348, 0, 2, 17)
 
 [node name="Terrain" parent="." instance=ExtResource("1_rtcuc")]
 Frequency = 0.15
