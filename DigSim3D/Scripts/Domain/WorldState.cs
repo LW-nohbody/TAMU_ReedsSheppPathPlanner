@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 using Godot;
+using DigSim3D.App;
 
-namespace SimCore.Core
+namespace DigSim3D.Domain
 {
     /// Snapshot the scheduler/planner can read.
     public sealed class WorldState

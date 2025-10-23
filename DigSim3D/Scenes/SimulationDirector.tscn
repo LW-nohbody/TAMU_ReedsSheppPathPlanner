@@ -1,9 +1,8 @@
-[gd_scene load_steps=8 format=3 uid="uid://cc5m8lpvnpnfv"]
+[gd_scene load_steps=7 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
-[ext_resource type="Script" uid="uid://c35djx2f1850r" path="res://Scripts/SimCore/Godot/SimulationDirector.cs" id="1_tjpb3"]
+[ext_resource type="Script" uid="uid://bjy5klmfh1o1x" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
 [ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://Scenes/Vehicles/Vehicle_RS.tscn" id="2_q02dg"]
-[ext_resource type="Material" uid="uid://c4mo3uu4w8b1c" path="res://Materials/dirt.tres" id="4_q02dg"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tjpb3"]
 sky_top_color = Color(0.361634, 0.42475, 0.999998, 1)
@@ -20,6 +19,7 @@ ambient_light_sky_contribution = 0.7
 tonemap_mode = 3
 
 [node name="SimulationDirector" type="Node3D"]
+transform = Transform3D(0.984884, 0, 0, 0, 0.984884, 0, 0, 0, 0.984884, 0, 0, 0)
 script = ExtResource("1_tjpb3")
 VehicleScene = ExtResource("2_q02dg")
 VehiclesRootPath = NodePath("VehiclesRoot")
@@ -56,7 +56,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, -5)
 transform = Transform3D(-4.37114e-08, -0.5, 0.866025, 0, 0.866025, 0.5, -1, 2.18557e-08, -3.78552e-08, 0, 5, 0)
 
 [node name="Terrain" parent="." instance=ExtResource("1_rtcuc")]
+transform = Transform3D(0.999996, -0.00255967, 0.000692282, 0.00255972, 0.999997, -8.11034e-05, -0.000692072, 8.2874e-05, 1, 0, 0, 0)
 Frequency = 0.15
 Octaves = 2
 Smooth = 0.9
-MaterialOverride = ExtResource("4_q02dg")

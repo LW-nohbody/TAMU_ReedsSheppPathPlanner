@@ -1,39 +1,32 @@
-using System;
 using Godot;
-using SimCore.Core;
-using ThreeD.Debugging;
+using DigSim3D.Domain;
+using DigSim3D.Debugging;
 
-
-namespace SimCore.Services
+namespace DigSim3D.Services
 {
     // Thin wrapper around your existing RSAdapter.ComputePath3D
     public sealed class ReedsSheppPlanner : IPathPlanner
     {
-        private readonly float _sampleStep;
+        private readonly float _step;
+        public ReedsSheppPlanner(float step = 0.25f) => _step = step;
 
-        public ReedsSheppPlanner(float sampleStepMeters = 0.25f)
-        {
-            _sampleStep = sampleStepMeters;
-        }
-
-        public PlannedPath Plan(Pose start, Pose goal, VehicleSpec spec, WorldState _world)
+        public PlannedPath Plan(Pose start, Pose goal, VehicleSpec spec, WorldState world)
         {
             var startPos = new Vector3((float)start.X, 0, (float)start.Z);
             var goalPos = new Vector3((float)goal.X, 0, (float)goal.Z);
 
-            var pathId = DebugPath.Begin("3d.adapter", 0, 0);
+            var pathId = DebugPath.Begin("digsim.adapter", 0, 0);
 
             DebugPath.Check(pathId, "inputs_world",
                 ("s.x", startPos.X), ("s.y", startPos.Z), ("s.th", start.Yaw),
-                ("g.x", goalPos.X),  ("g.y", goalPos.Z),  ("g.th", goal.Yaw),
-                ("R", spec.TurnRadius), ("stepM", _sampleStep));
-
+                ("g.x", goalPos.X), ("g.y", goalPos.Z), ("g.th", goal.Yaw),
+                ("R", spec.TurnRadius), ("stepM", _step));
 
             var (pts, gears) = RSAdapter.ComputePath3D(
                 startPos, start.Yaw, goalPos, goal.Yaw,
                 turnRadiusMeters: spec.TurnRadius,
-                sampleStepMeters: _sampleStep
-            );
+                sampleStepMeters: _step);
+
 
             if (pts != null && pts.Length > 0)
             {
@@ -47,10 +40,9 @@ namespace SimCore.Services
                 DebugPath.End(pathId, "empty_path");
             }
 
-
             var path = new PlannedPath();
-            path.Points.AddRange(pts);
-            path.Gears.AddRange(gears);
+            if (pts != null) path.Points.AddRange(pts);
+            if (gears != null) path.Gears.AddRange(gears);
             return path;
         }
     }

@@ -1,18 +1,20 @@
 using Godot;
 using System;
 using System.Collections.Generic;
-using SimCore.Core;
-using SimCore.Services;
+using DigSim3D.Domain;
+using DigSim3D.Services;
+
+namespace DigSim3D.App;
 
 public partial class SimulationDirector : Node3D
 {
-    [Export] public PackedScene VehicleScene;
-    [Export] public NodePath VehiclesRootPath;
-    [Export] public NodePath CameraTopPath;
-    [Export] public NodePath CameraChasePath;
-    [Export] public NodePath CameraFreePath;
+    [Export] public PackedScene VehicleScene = null!;
+    [Export] public NodePath VehiclesRootPath = null!;
+    [Export] public NodePath CameraTopPath = null!;
+    [Export] public NodePath CameraChasePath = null!;
+    [Export] public NodePath CameraFreePath = null!;
 
-    [Export] public NodePath TerrainPath;
+    [Export] public NodePath TerrainPath = null!;
 
     // Spawn / geometry
     [Export] public int VehicleCount = 8;
@@ -35,12 +37,15 @@ public partial class SimulationDirector : Node3D
 
     // Debug
     [Export] public bool DebugPathOnTop = true;
+    [Export] public bool DiagUseHardcodedTargets = false;
+    [Export] public float DiagTargetRadius = 10.0f;
 
-    private TerrainDisk _terrain;
-    private Node3D _vehiclesRoot;
-    private readonly List<VehicleAgent3D> _vehicles = new();
 
-    private Camera3D _camTop, _camChase, _camFree;
+    private TerrainDisk _terrain = null!;
+    private Node3D _vehiclesRoot = null!;
+    private readonly List<VehicleVisualizer> _vehicles = new();
+
+    private Camera3D _camTop = null!, _camChase = null!, _camFree = null!;
     private bool _usingTop = true;
     private bool _movingFreeCam = false, _rotatingFreeCam = false;
     private float _pitch = 0f, _yaw = 0f;
@@ -66,7 +71,7 @@ public partial class SimulationDirector : Node3D
             var outward = new Vector3(Mathf.Cos(theta), 0, Mathf.Sin(theta)).Normalized();
             var spawnXZ = outward * SpawnRadius;
 
-            var car = VehicleScene.Instantiate<VehicleAgent3D>();
+            var car = VehicleScene.Instantiate<VehicleVisualizer>();
             _vehiclesRoot.AddChild(car);
             car.SetTerrain(_terrain);
             car.GlobalTransform = new Transform3D(Basis.Identity, spawnXZ);
@@ -80,20 +85,23 @@ public partial class SimulationDirector : Node3D
         }
 
         // === PLAN FIRST DIG TARGETS (after all cars exist) ===
-        var scheduler = new SimCore.Services.RadialScheduler();
+        var scheduler = new RadialScheduler();
 
         // attach a tiny brain node per car (so scheduler can read pose cleanly)
-        var brains = new List<SimCore.Core.VehicleBrain>(_vehicles.Count);
+        var brains = new List<VehicleBrain>(_vehicles.Count);
         foreach (var v in _vehicles)
         {
-            var brain = new SimCore.Core.VehicleBrain();
+            var brain = new VehicleBrain();
             v.AddChild(brain);
             brains.Add(brain);
         }
 
-        // center of tank in world (change if you use a different origin)
+        // center of tank in world (use the actual terrain transform)
+        var center = _terrain.GlobalTransform.Origin;
+        GD.Print($"[DEBUG] vehicles.Count = {_vehicles.Count}");
+        GD.Print($"[DEBUG] brains.Count   = {brains.Count}");
         var digTargets = scheduler.PlanFirstDigTargets(
-            brains, _terrain, Vector3.Zero, SimCore.Core.DigScoring.Default);
+            brains, _terrain, center, DigScoring.Default);
 
         // Build RS paths to the assigned spots
         for (int k = 0; k < _vehicles.Count; k++)
@@ -119,6 +127,11 @@ public partial class SimulationDirector : Node3D
 
             GD.Print($"[Director] {car.Name} RS path: {pts.Length} samples");
         }
+
+        GD.Print($"[DEBUG]Terrain center = {_terrain.GlobalTransform.Origin}");
+        GD.Print($"[DEBUG]Vehicle[0] pos  = {_vehicles[0].GlobalTransform.Origin}");
+        GD.Print($"[DEBUG]Target[0] = {digTargets[0].digPos}");
+
 
         _camTop.Current = true; _camChase.Current = false; _camFree.Current = false;
     }
@@ -199,7 +212,7 @@ public partial class SimulationDirector : Node3D
     // ------------------------------------------------
 
     // === Placement on terrain using FL/FR/RC (unchanged) =======================
-    private void PlaceOnTerrain(VehicleAgent3D car, Vector3 outward)
+    private void PlaceOnTerrain(VehicleVisualizer car, Vector3 outward)
     {
         var yawBasis = Basis.LookingAt(outward, Vector3.Up);
         float halfL = VehicleLength * 0.5f;

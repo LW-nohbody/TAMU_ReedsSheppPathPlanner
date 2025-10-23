@@ -1,9 +1,11 @@
 namespace PathPlanningLib.Algorithms;
 
-using PathPlanningLib.Algorithms.Geometry.PathElements;
+using System.Collections.Generic;
 using PathPlanningLib.Algorithms.Geometry.Paths;
+using PathPlanningLib.Algorithms.Geometry.PathElements;
 
-public interface IPathPlanner<out TPath, out TElement>
+/// Generic planner interface shared by Dubins / Reeds–Shepp (and future planners).
+public interface IPathPlanner<TPath, TElement>
     where TPath : Path<TElement>
     where TElement : PathElement
 {

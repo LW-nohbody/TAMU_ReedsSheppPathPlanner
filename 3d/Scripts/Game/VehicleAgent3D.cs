@@ -42,8 +42,8 @@ public partial class VehicleAgent3D : CharacterBody3D
         _finalAim = Vector3.Zero;
 
         GD.Print($"[{Name}] SetPath: len={_path.Length}, gears={_gears.Length}, done={_done}");
-        for (int k = 0; k < _path.Length; ++k)
-            GD.Print($"   pt[{k}] = {_path[k]}  gear={(k < _gears.Length ? _gears[k] : +1)}");
+        // for (int k = 0; k < _path.Length; ++k)
+        //     GD.Print($"   pt[{k}] = {_path[k]}  gear={(k < _gears.Length ? _gears[k] : +1)}");
     }
     public void SetPath(Vector3[] pts) => SetPath(pts, Array.Empty<int>());
 
@@ -97,7 +97,7 @@ public partial class VehicleAgent3D : CharacterBody3D
 
         if (curXZ.DistanceTo(tgt) < 0.12f)
         {
-            GD.Print($"[{Name}] Reached wp[{_i}] @ {_path[_i]}");
+            // GD.Print($"[{Name}] Reached wp[{_i}] @ {_path[_i]}");
             _i++;
             if (_i >= _path.Length)
             {
