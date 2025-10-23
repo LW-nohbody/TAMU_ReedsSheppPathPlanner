@@ -1,11 +1,11 @@
 [gd_scene load_steps=24 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
-[ext_resource type="Script" uid="uid://dvesbj6y80hfr" path="res://Scripts/SimCore/Godot/SimulationDirector.cs" id="1_tjpb3"]
+[ext_resource type="Script" uid="uid://cr4t38vvmoapm" path="res://Scripts/SimCore/Godot/SimulationDirector.cs" id="1_tjpb3"]
 [ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://Scenes/Vehicles/Vehicle_RS.tscn" id="2_q02dg"]
 [ext_resource type="Material" uid="uid://c4mo3uu4w8b1c" path="res://Materials/dirt.tres" id="4_q02dg"]
-[ext_resource type="Script" uid="uid://dp351n8gu4yi4" path="res://Scripts/Game/ObstacleManager.cs" id="5_qfmbg"]
-[ext_resource type="Script" uid="uid://bh6ewc840q2c7" path="res://Scripts/Game/CylinderObstacle.cs" id="6_xklxq"]
+[ext_resource type="Script" uid="uid://ckbmxb1gwlror" path="res://Scripts/Game/ObstacleManager.cs" id="5_qfmbg"]
+[ext_resource type="Script" uid="uid://beifoswm5jnu1" path="res://Scripts/Game/CylinderObstacle.cs" id="6_xklxq"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tjpb3"]
 sky_top_color = Color(0.361634, 0.42475, 0.999998, 1)
