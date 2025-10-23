@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using SimCore.Core;
 using SimCore.Services;
+using System.Runtime;
 
 public partial class SimulationDirector : Node3D
 {
@@ -11,6 +12,7 @@ public partial class SimulationDirector : Node3D
     [Export] public NodePath CameraTopPath;
     [Export] public NodePath CameraChasePath;
     [Export] public NodePath CameraFreePath;
+    [Export] public NodePath CameraOrbitPath;
 
     [Export] public NodePath TerrainPath;
 
@@ -28,10 +30,11 @@ public partial class SimulationDirector : Node3D
     [Export] public float SampleStepMeters = 0.25f;
 
     // Cameras
-    [Export] public float MouseSensitivity = 0.005f;
+    [Export] public float   MouseSensitivity     = 0.005f;
     [Export] public float TranslateSensitivity = 0.01f;
-    [Export] public float ChaseLerp = 8.0f;
-    [Export] public Vector3 ChaseOffset = new(0, 2.5f, 5.5f);
+    [Export] public float ZoomSensitivity = 1.0f;
+    [Export] public float   ChaseLerp            = 8.0f;
+    [Export] public Vector3 ChaseOffset          = new(0, 2.5f, 5.5f);
 
     // Debug
     [Export] public bool DebugPathOnTop = true;
@@ -40,10 +43,11 @@ public partial class SimulationDirector : Node3D
     private Node3D _vehiclesRoot;
     private readonly List<VehicleAgent3D> _vehicles = new();
 
-    private Camera3D _camTop, _camChase, _camFree;
+    private Camera3D _camTop, _camChase, _camFree, _camOrbit;
     private bool _usingTop = true;
-    private bool _movingFreeCam = false, _rotatingFreeCam = false;
-    private float _pitch = 0f, _yaw = 0f;
+    private bool _movingFreeCam = false, _rotatingFreeCam = false, _rotatingOrbitCam = false;
+    private float _freePitch = 0f, _freeYaw = 0f, _orbitPitch = 0, _orbitYaw = 0, Distance = 15.0f;
+    private float MinPitchDeg = -5, MaxPitchDeg = 89, MinDist = 0.5f, MaxDist = 18f;
 
     [Export] public NodePath ObstacleManagerPath;
     private ObstacleManager _obstacleManager;
@@ -56,6 +60,7 @@ public partial class SimulationDirector : Node3D
         _camTop = GetNode<Camera3D>(CameraTopPath);
         _camChase = GetNode<Camera3D>(CameraChasePath);
         _camFree = GetNode<Camera3D>(CameraFreePath);
+        _camOrbit = GetNode<Camera3D>(CameraOrbitPath);
 
         // Terrain (strict)
         _terrain = GetNodeOrNull<TerrainDisk>(TerrainPath);
@@ -137,10 +142,6 @@ public partial class SimulationDirector : Node3D
                 Terrain = _terrain
             };
 
-            
-            
-
-
             // Get path using hybrid planner
             var hybridPlanner = new HybridReedsSheppPlanner();
             PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, world);
@@ -158,10 +159,7 @@ public partial class SimulationDirector : Node3D
 
         }
 
-        
-        
-
-        _camTop.Current = true; _camChase.Current = false; _camFree.Current = false;
+        _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
     }
 
     // ---------- Input / camera (unchanged) ----------
@@ -169,9 +167,9 @@ public partial class SimulationDirector : Node3D
     {
         if (e is InputEventMouseMotion mm && _rotatingFreeCam)
         {
-            _yaw += -mm.Relative.X * MouseSensitivity;
-            _pitch += -mm.Relative.Y * MouseSensitivity;
-            _camFree.Rotation = new Vector3(_pitch, _yaw, 0);
+            _freeYaw += -mm.Relative.X * MouseSensitivity;
+            _freePitch += -mm.Relative.Y * MouseSensitivity;
+            _camFree.Rotation = new Vector3(_freePitch, _freeYaw, 0);
         }
         else if (e is InputEventMouseMotion mm2 && _movingFreeCam)
         {
@@ -180,6 +178,69 @@ public partial class SimulationDirector : Node3D
             Vector3 up = _camFree.GlobalTransform.Basis.Y;
             Vector3 motion = (-right * d.X + up * d.Y) * TranslateSensitivity;
             _camFree.GlobalTranslate(motion);
+        }
+        else if (e is InputEventMouseButton mb && _camFree.Current)
+        {
+            if (mb.ButtonIndex == MouseButton.WheelUp)
+            {
+                // Get the forward direction (-Z axis in local space)
+                Vector3 forward = -_camFree.GlobalTransform.Basis.Z.Normalized();
+
+                // Calculate new position
+                Vector3 newPosition = _camFree.GlobalTransform.Origin + forward * -ZoomSensitivity;
+
+                _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPosition);
+
+            }
+            else if (mb.ButtonIndex == MouseButton.WheelDown)
+            {
+                // Get the forward direction (-Z axis in local space)
+                Vector3 forward = -_camFree.GlobalTransform.Basis.Z.Normalized();
+
+                // Calculate new position
+                Vector3 newPosition = _camFree.GlobalTransform.Origin + forward * ZoomSensitivity;
+
+                _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPosition);
+
+            }
+        }
+        else if (e is InputEventMouseMotion mm3 && _rotatingOrbitCam)
+        {
+            _orbitYaw -= mm3.Relative.X * MouseSensitivity;
+            _orbitPitch -= mm3.Relative.Y * MouseSensitivity;
+            _orbitPitch = Mathf.Clamp(_orbitPitch, Mathf.DegToRad(MinPitchDeg), Mathf.DegToRad(MaxPitchDeg));
+
+            Vector3 targetPosition = _terrain.GlobalTransform.Origin;
+
+            float x = Distance * Mathf.Cos(_orbitPitch) * Mathf.Sin(_orbitYaw);
+            float y = Distance * Mathf.Sin(_orbitPitch);
+            float z = Distance * Mathf.Cos(_orbitPitch) * Mathf.Cos(_orbitYaw);
+
+            Vector3 camOrbitPos = targetPosition + new Vector3(x, y, z);
+            _camOrbit.GlobalTransform = new Transform3D(_camOrbit.Basis, camOrbitPos);
+            _camOrbit.LookAt(targetPosition, Vector3.Up);
+        }
+        else if (e is InputEventMouseButton mb2 && _camOrbit.Current)
+        {
+            if (mb2.ButtonIndex == MouseButton.WheelUp)
+            {
+                Distance += ZoomSensitivity;
+            }
+            else if (mb2.ButtonIndex == MouseButton.WheelDown)
+            {
+                Distance -= ZoomSensitivity;
+            }
+            Distance = Mathf.Clamp(Distance, MinDist, MaxDist);
+
+            Vector3 targetPosition = _terrain.GlobalTransform.Origin;
+
+            float x = Distance * Mathf.Cos(_orbitPitch) * Mathf.Sin(_orbitYaw);
+            float y = Distance * Mathf.Sin(_orbitPitch);
+            float z = Distance * Mathf.Cos(_orbitPitch) * Mathf.Cos(_orbitYaw);
+
+            Vector3 camOrbitPos = targetPosition + new Vector3(x, y, z);
+            _camOrbit.GlobalTransform = new Transform3D(_camOrbit.Basis, camOrbitPos);
+            _camOrbit.LookAt(targetPosition, Vector3.Up);
         }
     }
 
@@ -190,8 +251,8 @@ public partial class SimulationDirector : Node3D
             _usingTop = !_usingTop;
             _camTop.Current = _usingTop;
             _camChase.Current = !_usingTop;
-            _camFree.Current = false;
-            _movingFreeCam = _rotatingFreeCam = false;
+            _camFree.Current = _camOrbit.Current = false;
+            _movingFreeCam = _rotatingFreeCam = _rotatingOrbitCam = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
         }
         if (!_usingTop) FollowChaseCamera(delta);
@@ -199,22 +260,29 @@ public partial class SimulationDirector : Node3D
         if (Input.IsActionJustPressed("select_free_camera"))
         {
             _camFree.Current = true;
-            _camTop.Current = _camChase.Current = false;
+            _camTop.Current = _camChase.Current = _camOrbit.Current = false;
         }
 
-        if (Input.IsActionPressed("translate_free_camera"))
+        if (Input.IsActionJustPressed("select_orbit_camera"))
         {
-            _movingFreeCam = true; _rotatingFreeCam = false;
+            _camOrbit.Current = true;
+            _camTop.Current = _camChase.Current = _camFree.Current = false;
+        }
+
+        if (Input.IsActionPressed("translate_free_camera") && _camFree.Current)
+        {
+            _movingFreeCam = true; _rotatingFreeCam = _rotatingOrbitCam = false;
             Input.MouseMode = Input.MouseModeEnum.Captured;
         }
-        else if (Input.IsActionPressed("rotate_free_camera"))
+        else if (Input.IsActionPressed("rotate_camera"))
         {
-            _movingFreeCam = false; _rotatingFreeCam = true;
+            _movingFreeCam = false;
+            _rotatingFreeCam = _camFree.Current; _rotatingOrbitCam = _camOrbit.Current;
             Input.MouseMode = Input.MouseModeEnum.Captured;
         }
         else
         {
-            _movingFreeCam = _rotatingFreeCam = false;
+            _movingFreeCam = _rotatingFreeCam = _rotatingOrbitCam = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
         }
     }
