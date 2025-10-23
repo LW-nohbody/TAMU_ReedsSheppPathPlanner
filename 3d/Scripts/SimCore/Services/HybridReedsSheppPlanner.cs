@@ -77,13 +77,14 @@ namespace SimCore.Services
             }
 
             // Attempt to replan
-            var merged = TryReplanWithMidpoints(startPos, goalPos, spec.TurnRadius, gridPath, obstacles, goal.Yaw);
+            var merged = TryReplanWithMidpoints(startPos, goalPos, spec.TurnRadius, gridPath, obstacles, startGear: 1, 
+    goal.Yaw);
 
-            if (merged != null)
+            if (merged.points != null)
             {
-                GD.Print($"✅ Hybrid replanning succeeded — {merged.Count} points total.");
+                GD.Print($"✅ Hybrid replanning succeeded — {merged.points.Count} points total.");
                 //DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, merged, _gridSize, _gridExtent);
-                return BuildPath(merged, Enumerable.Repeat(1, merged.Count).ToList());
+                return BuildPath(merged.points, merged.gears);
             }
 
             GD.PrintErr("❌ Could not find clear RS route via midpoints. Returning fallback RS path.");
@@ -95,13 +96,14 @@ namespace SimCore.Services
         // ================================================================
         // 🔧 Replanning logic — old midpoint-subdivision logic modernized
         // ================================================================
-        private List<Vector3> TryReplanWithMidpoints(
+        private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
             Vector3 start,
             Vector3 goal,
             double turnRadius,
             List<Vector3> gridPath,
             List<CylinderObstacle> obstacles,
-            double preservedFinalYaw) // <- pass in the original car yaw
+            int startGear,
+            double goalYaw) // <- now taking goalYaw directly
         {
             int attempts = 0;
             int n = gridPath.Count;
@@ -118,76 +120,54 @@ namespace SimCore.Services
 
                     var mid = gridPath[idx];
 
-                    // --- Tangents like VehicleAgent3D ---
+                    // --- Compute tangents like VehicleAgent3D ---
                     Vector3 startTangent = (gridPath[Math.Min(1, n - 1)] - gridPath[0]).WithY(0).Normalized();
                     Vector3 midTangentPrev = (gridPath[idx] - gridPath[idx - 1]).WithY(0).Normalized();
                     Vector3 midTangentNext = (gridPath[Math.Min(idx + 1, n - 1)] - gridPath[idx]).WithY(0).Normalized();
-                    Vector3 goalTangent = (gridPath[^1] - gridPath[^2]).WithY(0).Normalized();
-
-                    // Smooth midpoint tangent
                     Vector3 midTangent = ((midTangentPrev + midTangentNext) * 0.5f).Normalized();
 
                     double startYaw = Math.Atan2(startTangent.Z, startTangent.X);
-                    double midYaw = Math.Atan2(midTangent.Z, midTangent.X);
-
-                    // Preserve final orientation from before replanning
-                    double goalYaw = preservedFinalYaw;
+                    double midYaw   = Math.Atan2(midTangent.Z, midTangent.X);
 
                     attempts += 2;
 
-                    var (rs1, _) = RSAdapter.ComputePath3D(
-                        start, startYaw, mid, midYaw,
-                        turnRadiusMeters: turnRadius,
-                        sampleStepMeters: _sampleStep
-                    );
-                    var (rs2, _) = RSAdapter.ComputePath3D(
-                        mid, midYaw, goal, goalYaw,
-                        turnRadiusMeters: turnRadius,
-                        sampleStepMeters: _sampleStep
-                    );
+                    // --- Compute RS paths ---
+                    var (rs1, rs1Gears) = RSAdapter.ComputePath3D(start, startYaw, mid, midYaw, turnRadius, _sampleStep);
+                    var (rs2, rs2Gears) = RSAdapter.ComputePath3D(mid, midYaw, goal, goalYaw, turnRadius, _sampleStep);
 
-                    if (rs1.Length == 0 || rs2.Length == 0)
-                        continue;
+                    if (rs1.Length == 0 || rs2.Length == 0) continue;
+                    if (!PathIsValid(rs1.ToList(), obstacles) || !PathIsValid(rs2.ToList(), obstacles)) continue;
 
-                    bool coll1 = !PathIsValid(rs1.ToList(), obstacles);
-                    bool coll2 = !PathIsValid(rs2.ToList(), obstacles);
+                    // --- Merge positions and gears ---
+                    var merged = new List<Vector3>(rs1);
+                    var mergedGears = new List<int>(rs1Gears);
 
-                    GD.Print($"[Hybrid] try idx={idx}, attempts={attempts}, coll1={coll1}, coll2={coll2}");
+                    int startIdx = 0;
+                    if (merged.Last().DistanceTo(rs2[0]) < 1e-3f)
+                        startIdx = 1;
 
-                    if (!coll1 && !coll2)
+                    merged.AddRange(rs2.Skip(startIdx));
+                    mergedGears.AddRange(rs2Gears.Skip(startIdx));
+
+                    // --- Enforce start gear and final yaw ---
+                    if (mergedGears.Count > 0)
                     {
-                        // --- Merge while preserving tangent direction ---
-                        var merged = new List<Vector3>(rs1);
-                        if (rs2.Length > 0)
-                        {
-                            Vector3 dir1 = (rs1[^1] - rs1[Math.Max(0, rs1.Length - 2)]).WithY(0).Normalized();
-                            Vector3 dir2 = (rs2[Math.Min(1, rs2.Length - 1)] - rs2[0]).WithY(0).Normalized();
-
-                            // If angle between rs1 and rs2 tangents > small threshold, align rs2
-                            float dot = dir1.Dot(dir2);
-                            if (dot < 0.99f)
-                            {
-                                GD.Print($"[Hybrid] Adjusting rs2 to align yaw continuity (dot={dot:F3})");
-                                // Simple fix: reverse rs2 if it points opposite
-                                if (dot < 0.0f)
-                                    rs2.Reverse();
-                            }
-
-                            if (merged.Last().DistanceTo(rs2.First()) < 1e-3f)
-                                merged.AddRange(rs2.Skip(1));
-                            else
-                                merged.AddRange(rs2);
-                        }
-
-                        GD.Print($"✅ Replanning succeeded — merged path {merged.Count} pts, mid idx={idx}");
-                        return merged;
+                        mergedGears[0] = startGear;
+                        mergedGears[^1] = rs2Gears.Last(); // preserves RS end segment direction
                     }
+
+                    GD.Print($"✅ Replanning succeeded — merged path {merged.Count} pts, mid idx={idx}");
+                    return (merged, mergedGears);
                 }
             }
 
             GD.PrintErr("❌ Midpoint replanning failed after all attempts.");
-            return null;
+            return (null, null);
         }
+
+
+
+
 
 
 
