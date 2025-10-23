@@ -35,7 +35,6 @@ VehicleScene = ExtResource("2_0xm2m")
 GoalAdvance = 10.0
 CameraTopPath = NodePath("CameraTop")
 CameraChasePath = NodePath("CameraChase")
-CameraFreePath = NodePath("CameraFree")
 TurnRadiusMeters = 0.6
 SampleStepMeters = 0.1
 

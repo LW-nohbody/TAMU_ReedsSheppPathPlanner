@@ -45,6 +45,10 @@ public partial class SimulationDirector : Node3D
     private bool _movingFreeCam = false, _rotatingFreeCam = false;
     private float _pitch = 0f, _yaw = 0f;
 
+    [Export] public NodePath ObstacleManagerPath;
+    private ObstacleManager _obstacleManager;
+
+
     public override void _Ready()
     {
         // Nodes
@@ -57,6 +61,17 @@ public partial class SimulationDirector : Node3D
         _terrain = GetNodeOrNull<TerrainDisk>(TerrainPath);
         if (_terrain == null) { GD.PushError("SimulationDirector: TerrainPath not set to a TerrainDisk."); return; }
         GD.Print($"[Director] Terrain OK: {_terrain.Name}");
+
+        _obstacleManager = GetNodeOrNull<ObstacleManager>(ObstacleManagerPath);
+        if (_obstacleManager == null)
+        {
+            GD.PushError("SimulationDirector: ObstacleManagerPath not set or not found.");
+            return;
+        }
+
+        // Build global static navigation grid from obstacles BEFORE spawning vehicles
+        var obstacleList = _obstacleManager.GetObstacles();
+        GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.5f, gridExtent: 40);
 
         // Spawn on ring
         int N = Math.Max(1, VehicleCount);
@@ -105,20 +120,46 @@ public partial class SimulationDirector : Node3D
             var fwd = (-car.GlobalTransform.Basis.Z);
             double startYaw = MathF.Atan2(fwd.Z, fwd.X);
             var start = car.GlobalTransform.Origin;
+            var goal = start + outward * GoalAdvance;        // go out 5m
+            double goalYaw = startYaw + Mathf.Pi / 2.0;      // then +90° right
 
-            var (pts, gears) = RSAdapter.ComputePath3D(
-                start, startYaw,
-                digPos, approachYaw,
-                TurnRadiusMeters, SampleStepMeters);
+            // === Build a real path for THIS car using the new Hybrid planner ===
 
-            DrawPathProjectedToTerrain(pts, new Color(1, 1, 1));
+            // Build start/goal poses
+            var startPose = new Pose(start.X, start.Z, startYaw);
+            var goalPose = new Pose(goal.X, goal.Z, goalYaw);
+
+            // Grab vehicle spec (you may already have this stored per car)
+            VehicleSpec spec = car.Spec; // adjust this if spec is retrieved differently
+            WorldState world = new WorldState
+            {
+                Obstacles = obstacleList,
+                Terrain = _terrain
+            };
+
+            
+            
+
+
+            // Get path using hybrid planner
+            var hybridPlanner = new HybridReedsSheppPlanner();
+            PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, world);
+
+            // Draw and feed to vehicle
+            DrawPathProjectedToTerrain(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
             DrawMarkerProjected(start, new Color(0, 1, 0));
-            DrawMarkerProjected(digPos, new Color(0, 0, 1));
+            DrawMarkerProjected(goal, new Color(0, 0, 1));
 
-            car.SetPath(pts, gears);
+            car.SetPath(path.Points.ToArray(), path.Gears.ToArray());
 
-            GD.Print($"[Director] {car.Name} RS path: {pts.Length} samples");
+            _vehicles.Add(car);
+
+            GD.Print($"[Director] {car.Name} RS path: {path.Points.Count} samples");
+
         }
+
+        
+        
 
         _camTop.Current = true; _camChase.Current = false; _camFree.Current = false;
     }
