@@ -21,13 +21,13 @@ ambient_light_color = Color(1, 1, 1, 1)
 ambient_light_sky_contribution = 0.7
 tonemap_mode = 3
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_nl4sy"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qfmbg"]
 transparency = 1
 cull_mode = 2
 shading_mode = 0
 albedo_color = Color(1, 0, 0, 0.3)
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_hk6n0"]
+[sub_resource type="CylinderMesh" id="CylinderMesh_xklxq"]
 top_radius = 1.0
 bottom_radius = 1.0
 radial_segments = 32
@@ -47,6 +47,7 @@ VehicleWidth = 0.5
 GoalAdvance = 10.0
 SampleStepMeters = 0.15
 DebugPathOnTop = false
+ObstacleManagerPath = NodePath("ObstacleManager")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_q02dg")
@@ -83,5 +84,5 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.19776, 0, -5.50917)
 script = ExtResource("6_xklxq")
 
 [node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs1"]
-material_override = SubResource("StandardMaterial3D_nl4sy")
-mesh = SubResource("CylinderMesh_hk6n0")
+material_override = SubResource("StandardMaterial3D_qfmbg")
+mesh = SubResource("CylinderMesh_xklxq")

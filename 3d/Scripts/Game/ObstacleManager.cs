@@ -49,4 +49,10 @@ public partial class ObstacleManager : Node3D
             o.QueueFree();
         obstacles.Clear();
     }
+
+    public List<Obstacle3D> GetObstacles()
+    {
+        return obstacles;
+    }
+
 }

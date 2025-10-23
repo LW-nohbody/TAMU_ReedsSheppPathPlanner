@@ -202,4 +202,9 @@ public partial class CylinderObstacle : Obstacle3D
 
         return true;
     }
+
+
+    // --- Added for planners ---
+    public Vector3 Center => GlobalPosition;
+
 }
