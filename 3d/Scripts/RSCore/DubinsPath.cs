@@ -51,7 +51,7 @@ using System.Security.Cryptography;
 
 public static class DubinsPaths
 {
-    // ---------- families 1..12 (all take phi in RADIANS) ----------
+    // ---------- families 1..6 (all take phi in RADIANS) ----------
     public static List<PathElement> Path1(double x, double y, double phi)
     {
         phi = Utils.M(phi);
@@ -163,15 +163,6 @@ public static class DubinsPaths
         Path1(x,y,phi),  Path2(x,y,phi),  Path3(x,y,phi),  Path4(x,y,phi),
         Path5(x,y,phi),  Path6(x,y,phi)
     };
-
-        // // Re-enable the 1 symmetry variant for full 6 paths
-        // var more = new List<List<PathElement>>();
-        // foreach (var p in candidates)
-        // {
-        //     if (p.Count == 0) continue;
-        //     more.Add(Reflect(p));
-        // }
-        // candidates.AddRange(more);
 
         return candidates.Where(p => p.Count > 0).ToList();
     }
