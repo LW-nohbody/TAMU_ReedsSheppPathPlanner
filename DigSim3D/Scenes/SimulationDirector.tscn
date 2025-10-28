@@ -175,7 +175,7 @@ material_override = SubResource("StandardMaterial3D_paq1p")
 mesh = SubResource("CylinderMesh_5352s")
 
 [node name="CylinderObs5" type="Node3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.3059, 0, -2.95574)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.68406, 0, -2.95574)
 script = ExtResource("4_cyl")
 
 [node name="EditorMesh" type="MeshInstance3D" parent="Obstacles/CylinderObs5"]
