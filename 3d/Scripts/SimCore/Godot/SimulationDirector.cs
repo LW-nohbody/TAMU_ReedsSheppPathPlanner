@@ -30,11 +30,11 @@ public partial class SimulationDirector : Node3D
     [Export] public float SampleStepMeters = 0.25f;
 
     // Cameras
-    [Export] public float   MouseSensitivity     = 0.005f;
+    [Export] public float MouseSensitivity = 0.005f;
     [Export] public float TranslateSensitivity = 0.01f;
     [Export] public float ZoomSensitivity = 1.0f;
-    [Export] public float   ChaseLerp            = 8.0f;
-    [Export] public Vector3 ChaseOffset          = new(0, 2.5f, 5.5f);
+    [Export] public float ChaseLerp = 8.0f;
+    [Export] public Vector3 ChaseOffset = new(0, 2.5f, 5.5f);
 
     // Debug
     [Export] public bool DebugPathOnTop = true;
@@ -74,9 +74,12 @@ public partial class SimulationDirector : Node3D
             return;
         }
 
-        // Build global static navigation grid from obstacles BEFORE spawning vehicles
-        var obstacleList = _obstacleManager.GetObstacles();
-        GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.5f, gridExtent: 40);
+        // Collect obstacles once and build grid ONCE
+        List<Obstacle3D> obstacleList = _obstacleManager.GetObstacles();
+        if (obstacleList.Count > 0)
+        {
+            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.5f, gridExtent: 40);
+        }
 
         // Spawn on ring
         int N = Math.Max(1, VehicleCount);
@@ -96,13 +99,11 @@ public partial class SimulationDirector : Node3D
             car.Wheelbase = VehicleLength;
             car.TrackWidth = VehicleWidth;
 
-            _vehicles.Add(car);
+            _vehicles.Add(car);                    // <-- put this back
         }
 
         // === PLAN FIRST DIG TARGETS (after all cars exist) ===
         var scheduler = new SimCore.Services.RadialScheduler();
-
-        // attach a tiny brain node per car (so scheduler can read pose cleanly)
         var brains = new List<SimCore.Core.VehicleBrain>(_vehicles.Count);
         foreach (var v in _vehicles)
         {
@@ -111,52 +112,47 @@ public partial class SimulationDirector : Node3D
             brains.Add(brain);
         }
 
-        // center of tank in world (change if you use a different origin)
         var digTargets = scheduler.PlanFirstDigTargets(
             brains, _terrain, Vector3.Zero, SimCore.Core.DigScoring.Default);
 
-        // Build RS paths to the assigned spots
+        if (obstacleList.Count > 0)
+        {
+            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.5f, gridExtent: 40);
+        }
+
+        // === Build paths to the assigned dig targets (scheduler-driven) ===
         for (int k = 0; k < _vehicles.Count; k++)
         {
             var car = _vehicles[k];
             var (digPos, approachYaw) = digTargets[k];
 
-            // current forward yaw in XZ
-            var fwd = (-car.GlobalTransform.Basis.Z);
+            // current forward yaw in XZ (Godot forward is -Z)
+            var fwd = -car.GlobalTransform.Basis.Z;
             double startYaw = MathF.Atan2(fwd.Z, fwd.X);
             var start = car.GlobalTransform.Origin;
-            var goal = start + outward * GoalAdvance;        // go out 5m
-            double goalYaw = startYaw + Mathf.Pi / 2.0;      // then +90° right
 
-            // === Build a real path for THIS car using the new Hybrid planner ===
-
-            // Build start/goal poses
+            // Planner poses use X/Z + yaw
             var startPose = new Pose(start.X, start.Z, startYaw);
-            var goalPose = new Pose(goal.X, goal.Z, goalYaw);
+            var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
 
-            // Grab vehicle spec (you may already have this stored per car)
-            VehicleSpec spec = car.Spec; // adjust this if spec is retrieved differently
-            WorldState world = new WorldState
+            // Vehicle + world (note: Obstacles is List<Obstacle3D>)
+            VehicleSpec spec = car.Spec;
+            var world = new WorldState
             {
-                Obstacles = obstacleList,
+                Obstacles = obstacleList,   // <— List<Obstacle3D>
                 Terrain = _terrain
             };
 
-            // Get path using hybrid planner
             var hybridPlanner = new HybridReedsSheppPlanner();
             PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, world);
 
-            // Draw and feed to vehicle
             DrawPathProjectedToTerrain(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
             DrawMarkerProjected(start, new Color(0, 1, 0));
-            DrawMarkerProjected(goal, new Color(0, 0, 1));
+            DrawMarkerProjected(digPos, new Color(0, 0, 1));
 
             car.SetPath(path.Points.ToArray(), path.Gears.ToArray());
 
-            _vehicles.Add(car);
-
-            GD.Print($"[Director] {car.Name} RS path: {path.Points.Count} samples");
-
+            GD.Print($"[Director] {car.Name} path: {path.Points.Count} samples");
         }
 
         _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;

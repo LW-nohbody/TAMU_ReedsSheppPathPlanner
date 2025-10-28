@@ -5,7 +5,7 @@ namespace DigSim3D.App
 {
     public partial class VehicleVisualizer : CharacterBody3D
     {
-        [Export] public float SpeedMps = 0.6f;
+        [Export] public float SpeedMps = 1.0f;
         [Export] public float ArenaRadius = 15.0f;
         [Export] public float TurnSmoothing = 8.0f;      // yaw smoothing while moving
         [Export] public float TiltSmoothing = 8.0f;      // pitch/roll smoothing

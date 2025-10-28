@@ -22,7 +22,7 @@ namespace DigSim3D.Debugging
             if (!Enabled || Verbosity < 2) return;
             var sb = new StringBuilder();
             foreach (var (k,v) in kv) sb.Append($" {k}={Fmt(v)}");
-            GD.Print($"[PATH/CHECK] {id} :: {tag}:{sb}");
+            // GD.Print($"[PATH/CHECK] {id} :: {tag}:{sb}");
         }
 
         public static void End(string id, string status="ok", params (string k, object v)[] kv)

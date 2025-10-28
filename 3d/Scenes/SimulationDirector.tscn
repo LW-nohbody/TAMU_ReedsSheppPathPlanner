@@ -1,11 +1,11 @@
-[gd_scene load_steps=12 format=3 uid="uid://cc5m8lpvnpnfv"]
+[gd_scene load_steps=22 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
-[ext_resource type="Script" uid="uid://cr4t38vvmoapm" path="res://Scripts/SimCore/Godot/SimulationDirector.cs" id="1_tjpb3"]
+[ext_resource type="Script" uid="uid://c35djx2f1850r" path="res://Scripts/SimCore/Godot/SimulationDirector.cs" id="1_tjpb3"]
 [ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://Scenes/Vehicles/Vehicle_RS.tscn" id="2_q02dg"]
 [ext_resource type="Material" uid="uid://c4mo3uu4w8b1c" path="res://Materials/dirt.tres" id="4_q02dg"]
-[ext_resource type="Script" uid="uid://ckbmxb1gwlror" path="res://Scripts/Game/ObstacleManager.cs" id="5_qfmbg"]
-[ext_resource type="Script" uid="uid://beifoswm5jnu1" path="res://Scripts/Game/CylinderObstacle.cs" id="6_xklxq"]
+[ext_resource type="Script" uid="uid://vi51reyibnct" path="res://Scripts/Game/ObstacleManager.cs" id="5_qfmbg"]
+[ext_resource type="Script" uid="uid://dejmlbesug4pj" path="res://Scripts/Game/CylinderObstacle.cs" id="6_xklxq"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tjpb3"]
 sky_top_color = Color(0.361634, 0.42475, 0.999998, 1)
@@ -32,6 +32,61 @@ top_radius = 1.0
 bottom_radius = 1.0
 radial_segments = 32
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_nl4sy"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_hk6n0"]
+top_radius = 1.0
+bottom_radius = 1.0
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_xcytq"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_paq1p"]
+top_radius = 1.0
+bottom_radius = 1.0
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5352s"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_4ksok"]
+top_radius = 1.0
+bottom_radius = 1.0
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ayuat"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_qfrvw"]
+top_radius = 1.0
+bottom_radius = 1.0
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sin3t"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_qocqs"]
+top_radius = 1.0
+bottom_radius = 1.0
+radial_segments = 32
+
 [node name="SimulationDirector" type="Node3D"]
 script = ExtResource("1_tjpb3")
 VehicleScene = ExtResource("2_q02dg")
@@ -41,10 +96,11 @@ CameraChasePath = NodePath("Cameras/CameraChase")
 CameraFreePath = NodePath("Cameras/CameraFree")
 CameraOrbitPath = NodePath("Cameras/CameraOrbit")
 TerrainPath = NodePath("Terrain")
-VehicleCount = 10
+VehicleCount = 20
 VehicleLength = 0.75
 VehicleWidth = 0.5
 GoalAdvance = 10.0
+TurnRadiusMeters = 1.0
 SampleStepMeters = 0.15
 DebugPathOnTop = false
 ObstacleManagerPath = NodePath("ObstacleManager")
@@ -71,7 +127,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, -5)
 transform = Transform3D(-4.37114e-08, -0.5, 0.866025, 0, 0.866025, 0.5, -1, 2.18557e-08, -3.78552e-08, 0, 5, 0)
 
 [node name="CameraOrbit" type="Camera3D" parent="Cameras"]
-transform = Transform3D(1.015348, 0, 0, 0, 1.015348, 0, 0, 0, 1.015348, 0, 2, 17)
+transform = Transform3D(1.01535, 0, 0, 0, 1.01535, 0, 0, 0, 1.01535, 0, 2, 17)
 
 [node name="Terrain" parent="." instance=ExtResource("1_rtcuc")]
 Frequency = 0.15
@@ -89,3 +145,48 @@ script = ExtResource("6_xklxq")
 [node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs1"]
 material_override = SubResource("StandardMaterial3D_qfmbg")
 mesh = SubResource("CylinderMesh_xklxq")
+
+[node name="CylinderObs2" type="Node3D" parent="ObstacleManager"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.39552, 0, 5.76878)
+script = ExtResource("6_xklxq")
+
+[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs2"]
+material_override = SubResource("StandardMaterial3D_nl4sy")
+mesh = SubResource("CylinderMesh_hk6n0")
+skeleton = NodePath("../../CylinderObs2")
+
+[node name="CylinderObs3" type="Node3D" parent="ObstacleManager"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.35526, 0, 5.76878)
+script = ExtResource("6_xklxq")
+
+[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs3"]
+material_override = SubResource("StandardMaterial3D_xcytq")
+mesh = SubResource("CylinderMesh_paq1p")
+skeleton = NodePath("../../CylinderObs2")
+
+[node name="CylinderObs4" type="Node3D" parent="ObstacleManager"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.58439, 0, 7.975)
+script = ExtResource("6_xklxq")
+
+[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs4"]
+material_override = SubResource("StandardMaterial3D_5352s")
+mesh = SubResource("CylinderMesh_4ksok")
+skeleton = NodePath("../../CylinderObs2")
+
+[node name="CylinderObs5" type="Node3D" parent="ObstacleManager"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.3059, 0, -2.95574)
+script = ExtResource("6_xklxq")
+
+[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs5"]
+material_override = SubResource("StandardMaterial3D_ayuat")
+mesh = SubResource("CylinderMesh_qfrvw")
+skeleton = NodePath("../../CylinderObs2")
+
+[node name="CylinderObs6" type="Node3D" parent="ObstacleManager"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.00206, 0, -3.32226)
+script = ExtResource("6_xklxq")
+
+[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs6"]
+material_override = SubResource("StandardMaterial3D_sin3t")
+mesh = SubResource("CylinderMesh_qocqs")
+skeleton = NodePath("../../CylinderObs2")
