@@ -74,12 +74,9 @@ public partial class SimulationDirector : Node3D
             return;
         }
 
-        // Collect obstacles once and build grid ONCE
-        List<Obstacle3D> obstacleList = _obstacleManager.GetObstacles();
-        if (obstacleList.Count > 0)
-        {
-            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.5f, gridExtent: 40);
-        }
+        // Build global static navigation grid from obstacles BEFORE spawning vehicles
+        var obstacleList = _obstacleManager.GetObstacles();
+        GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 1.0f);
 
         // Spawn on ring
         int N = Math.Max(1, VehicleCount);
