@@ -72,6 +72,8 @@ public static class DubinsPaths
 
     public static List<PathElement> Path2(double x, double y, double phi)
     {
+        y = -y;
+        phi = -phi;
         phi = Utils.M(phi);
         var path = new List<PathElement>();
         var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
@@ -104,7 +106,6 @@ public static class DubinsPaths
         phi = Utils.M(phi);
         var path = new List<PathElement>();
         var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
-        // if (rho * rho >= 4.0)
         if(rho >= 2.0)
         {
             double u = Math.Sqrt(rho * rho - 4.0);
@@ -119,6 +120,8 @@ public static class DubinsPaths
 
     public static List<PathElement> Path5(double x, double y, double phi)
     {
+        y = -y;
+        phi = -phi;
         var path = new List<PathElement>();
         var (u, t) = Utils.R(x - Math.Sin(phi), y - 1 + Math.Cos(phi));
         double v = Utils.M(phi - t);
@@ -130,6 +133,8 @@ public static class DubinsPaths
 
     public static List<PathElement> Path6(double x, double y, double phi)
     {
+        y = -y;
+        phi = -phi;
         phi = Utils.M(phi);
         var path = new List<PathElement>();
         var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
@@ -145,10 +150,6 @@ public static class DubinsPaths
         }
         return path;
     }
-
-
-    // public static List<PathElement> Reflect(List<PathElement> path) //TODO: Delete Reflect?
-    //     => path.Select(e => new PathElement(e.Param, (Steering)(-(int)e.Steering), e.Gear)).ToList();
 
     // ----- planner API: start/end in RADIANS, x/y normalized by R -----
     public static List<List<PathElement>> GetAllPaths(
