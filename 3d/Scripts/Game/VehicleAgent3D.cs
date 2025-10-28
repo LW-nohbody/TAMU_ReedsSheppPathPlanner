@@ -1,5 +1,7 @@
 using Godot;
 using System;
+using SimCore.Core;
+
 
 public partial class VehicleAgent3D : CharacterBody3D
 {
@@ -15,6 +17,11 @@ public partial class VehicleAgent3D : CharacterBody3D
     [Export] public float Wheelbase = 2.0f;
     [Export] public float TrackWidth = 1.2f;
     [Export] public bool EnableTilt = true;
+
+    [Export(PropertyHint.Range, "0.1,10,0.1")]
+    public float TurnRadiusMeters = 1.0f;
+    public VehicleSpec Spec { get; private set; }
+
 
     // Path
     private Vector3[] _path = Array.Empty<Vector3>();
@@ -89,9 +96,10 @@ public partial class VehicleAgent3D : CharacterBody3D
         _aligning = false;
         _finalAim = Vector3.Zero;
 
-        GD.Print($"[{Name}] SetPath: len={_path.Length}, gears={_gears.Length}, done={_done}");
-        for (int k = 0; k < _path.Length; ++k)
-            GD.Print($"   pt[{k}] = {_path[k]}  gear={(k < _gears.Length ? _gears[k] : +1)}");
+        // Debug prints commented out to reduce noise (as per main branch)
+        //GD.Print($"[{Name}] SetPath: len={_path.Length}, gears={_gears.Length}, done={_done}");
+        //for (int k = 0; k < _path.Length; ++k)
+        //    GD.Print($"   pt[{k}] = {_path[k]}  gear={(k < _gears.Length ? _gears[k] : +1)}");
 
         // If controller was given an empty path, attempt a small local recovery if we're in a depression.
         if (_path.Length == 0)
@@ -140,7 +148,6 @@ public partial class VehicleAgent3D : CharacterBody3D
                     _gears = new int[] { +1, +1, +1 };
                     _i = 0;
                     _done = false;
-                    SimulationDirector.ProblemLogger.Log(this.Name, $"LocalRecovery: climbing out of {depthDiff:F2}m pit toward {bestEscapeDir}");
                     GD.Print($"[{Name}] LocalRecovery: climbing {depthDiff:F2}m toward {bestEscapeDir}, path={escape1},{escape2}");
                 }
             }
@@ -153,7 +160,14 @@ public partial class VehicleAgent3D : CharacterBody3D
         var p = GlobalTransform.Origin; p.Y = 0f;
         GlobalTransform = new Transform3D(GlobalTransform.Basis.Orthonormalized(), p);
 
-        GD.Print($"[{Name}] Ready. movement=ON");
+        Spec = new VehicleSpec
+        {
+            TurnRadius = TurnRadiusMeters,  // now uses the editor-exposed value
+            MaxSpeed = SpeedMps
+        };
+
+
+        //GD.Print($"[{Name}] Ready. movement=ON");
     }
 
     public override void _PhysicsProcess(double delta)
@@ -184,7 +198,7 @@ public partial class VehicleAgent3D : CharacterBody3D
                 _done = true;
                 _holdYaw = true;       // lock the azimuth going forward
                 _holdAimXZ = _finalAim;
-                GD.Print($"[{Name}] Final align complete.");
+                //GD.Print($"[{Name}] Final align complete.");
             }
             return;
         }
@@ -205,7 +219,7 @@ public partial class VehicleAgent3D : CharacterBody3D
 
         if (curXZ.DistanceTo(tgt) < 0.12f)
         {
-            GD.Print($"[{Name}] Reached wp[{_i}] @ {_path[_i]}");
+            //GD.Print($"[{Name}] Reached wp[{_i}] @ {_path[_i]}");
             _i++;
             if (_i >= _path.Length)
             {
