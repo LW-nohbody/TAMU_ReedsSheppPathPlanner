@@ -15,6 +15,12 @@ public partial class ObstacleManager : Node3D
         }
 
         GD.Print($"[ObstacleManager] Loaded {obstacles.Count} obstacles.");
+
+        foreach (var obs in obstacles)
+        {
+            GD.Print($"Obstacle {obs.Name} - Global Position: {obs.GlobalPosition}");
+        }
+
     }
 
     public bool PathIsValid(List<Vector3> pathPoints)

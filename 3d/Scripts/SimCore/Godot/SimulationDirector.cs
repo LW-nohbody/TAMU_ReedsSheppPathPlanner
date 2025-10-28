@@ -76,7 +76,7 @@ public partial class SimulationDirector : Node3D
 
         // Build global static navigation grid from obstacles BEFORE spawning vehicles
         var obstacleList = _obstacleManager.GetObstacles();
-        GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.5f, gridExtent: 40);
+        GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 1.0f);
 
         // Spawn on ring
         int N = Math.Max(1, VehicleCount);
