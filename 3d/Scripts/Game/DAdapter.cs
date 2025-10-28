@@ -3,7 +3,6 @@ using DCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
 
 public static class DAdapter
 {
@@ -15,6 +14,7 @@ public static class DAdapter
 		Vector3 startPos, double startYawRad,
 		Vector3 goalPos, double goalYawRad,
 		double turnRadiusMeters,
+		float fieldRadius,
 		double sampleStepMeters = 0.25)
 	{
 		// 1) 3D → math
@@ -27,10 +27,10 @@ public static class DAdapter
 		var gN = (gM.x / R, gM.y / R, gM.th);
 
 		// 3) Optimal RS in normalized space
-		var best = DubinsPaths.GetOptimalPath(sN, gN);
-		if (best == null || best.Count == 0)
-			return (Array.Empty<Vector3>(), Array.Empty<int>());
-		best = null;
+		// List<PathElement> best = DubinsPaths.GetOptimalPath(sN, gN);
+		// if (best == null || best.Count == 0)
+		// 	return (Array.Empty<Vector3>(), Array.Empty<int>());
+		List<PathElement> best = null;
 
 		//get the shortest valid path
 		var all = DubinsPaths.GetAllPaths(sN, gN);
@@ -40,12 +40,14 @@ public static class DAdapter
 		}
 		var orderedAll = all.OrderBy(p => p.Sum(e => e.Param));
 		foreach (var path in orderedAll)
-		{   
-			//TODO: Find the max radius we want for the Dubins cars and pass here
-			if (ValidatePath(startPos, startYawRad, path, turnRadiusMeters, sampleStepMeters, 15))
+		{
+			if (ValidatePath(startPos, startYawRad, path, turnRadiusMeters, sampleStepMeters, fieldRadius))
 			{
 				best = path;
+				GD.Print($"[DAdapter] Selected Path {path[0].Param}: {path[0].Steering}, {path[1].Param}: {path[1].Steering}, {path[2].Param}: {path[2].Steering}");
+				break;
 			}
+			GD.Print($"[DAdapter] Discarded Path {path[0].Param}: {path[0].Steering}, {path[1].Param}: {path[1].Steering}, {path[2].Param}: {path[2].Steering}");			
 		}
 		if(best == null)
 		{
@@ -87,7 +89,7 @@ public static class DAdapter
 		foreach (var elem in testPath)
 		{
 			double length = elem.Param;
-			double dir = (elem.Steering == Steering.LEFT) ? 1.0 : (elem.Steering == Steering.RIGHT) ? -1.0 : 0.0;
+			double dir = (elem.Steering == Steering.LEFT) ? -1.0 : (elem.Steering == Steering.RIGHT) ? 1.0 : 0.0;
 			double distance = 0.0;
 
 			while (distance < length)
