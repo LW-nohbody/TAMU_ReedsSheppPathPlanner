@@ -1,7 +1,7 @@
 [gd_scene load_steps=8 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
-[ext_resource type="Script" uid="uid://c35djx2f1850r" path="res://Scripts/SimCore/Godot/SimulationDirector.cs" id="1_tjpb3"]
+[ext_resource type="Script" uid="uid://cv36bywayhpcp" path="res://Scripts/SimCore/Godot/SimulationDirector.cs" id="1_tjpb3"]
 [ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://Scenes/Vehicles/Vehicle_RS.tscn" id="2_q02dg"]
 [ext_resource type="Material" uid="uid://c4mo3uu4w8b1c" path="res://Materials/dirt.tres" id="4_q02dg"]
 
@@ -61,3 +61,9 @@ Frequency = 0.15
 Octaves = 2
 Smooth = 0.9
 MaterialOverride = ExtResource("4_q02dg")
+
+[node name="Node" type="Node" parent="."]
+
+[node name="Node" type="Node" parent="Node"]
+
+[node name="Node" type="Node" parent="Node/Node"]

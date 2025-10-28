@@ -282,4 +282,131 @@ public partial class TerrainDisk : Node3D
             _staticBody.AddChild(_colShape);
         }
     }
+
+    // Lower a circular area (world XZ) by deltaHeight (positive lowers).
+    public void LowerArea(Vector3 worldXZ, float radius, float deltaHeight)
+    {
+        // Convert to local coordinates used by _heights
+        Vector3 local = ToLocal(worldXZ);
+        float cx = local.X, cz = local.Z;
+
+        // iterate grid and subtract deltaHeight where within radius
+        for (int j = 0; j < _N; j++)
+        {
+            float z = -Radius + j * _step;
+            for (int i = 0; i < _N; i++)
+            {
+                float x = -Radius + i * _step;
+                if (float.IsNaN(_heights[i, j])) continue;
+                float dx = x - cx; float dz = z - cz;
+                if (dx*dx + dz*dz <= radius*radius)
+                {
+                    _heights[i, j] = _heights[i, j] - deltaHeight;
+                }
+            }
+        }
+
+        // Recompute normals and mesh after modifying heights
+        RecomputeNormalsAndMesh();
+    }
+
+    // Return the maximum local height value (before transform into world space).
+    public float GetMaxLocalHeight()
+    {
+        float maxh = float.MinValue;
+        for (int j = 0; j < _N; j++)
+            for (int i = 0; i < _N; i++)
+                if (!float.IsNaN(_heights[i, j]) && _heights[i, j] > maxh)
+                    maxh = _heights[i, j];
+        return maxh == float.MinValue ? 0f : maxh;
+    }
+
+    private void RecomputeNormalsAndMesh()
+    {
+        // normals (central diff)
+        for (int j = 0; j < _N; j++)
+        {
+            for (int i = 0; i < _N; i++)
+            {
+                if (float.IsNaN(_heights[i, j])) { _norms[i, j] = Vector3.Up; continue; }
+
+                int il = Math.Max(0, i - 1), ir = Math.Min(_N - 1, i + 1);
+                int jd = Math.Max(0, j - 1), ju = Math.Min(_N - 1, j + 1);
+
+                float hL = _heights[il, j]; if (float.IsNaN(hL)) hL = _heights[i, j];
+                float hR = _heights[ir, j]; if (float.IsNaN(hR)) hR = _heights[i, j];
+                float hD = _heights[i, jd]; if (float.IsNaN(hD)) hD = _heights[i, j];
+                float hU = _heights[i, ju]; if (float.IsNaN(hU)) hU = _heights[i, j];
+
+                Vector3 dx = new Vector3(2f * _step, hR - hL, 0f);
+                Vector3 dz = new Vector3(0f, hU - hD, 2f * _step);
+
+                _norms[i, j] = dz.Cross(dx).Normalized(); // y-up
+            }
+        }
+
+        // --- mesh build -------------------------------------------------------
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+
+        for (int j = 0; j < _N - 1; j++)
+        {
+            float z0 = -Radius + j * _step;
+            float z1 = z0 + _step;
+
+            for (int i = 0; i < _N - 1; i++)
+            {
+                float x0 = -Radius + i * _step;
+                float x1 = x0 + _step;
+
+                if (float.IsNaN(_heights[i, j]) || float.IsNaN(_heights[i + 1, j]) ||
+                    float.IsNaN(_heights[i, j + 1]) || float.IsNaN(_heights[i + 1, j + 1]))
+                    continue;
+
+                Vector3 v00 = new Vector3(x0, _heights[i, j],     z0);
+                Vector3 v10 = new Vector3(x1, _heights[i + 1, j], z0);
+                Vector3 v01 = new Vector3(x0, _heights[i, j + 1], z1);
+                Vector3 v11 = new Vector3(x1, _heights[i + 1, j + 1], z1);
+
+                Vector2 uv00 = new((float)i / (_N - 1),       (float)j / (_N - 1));
+                Vector2 uv10 = new((float)(i + 1) / (_N - 1), (float)j / (_N - 1));
+                Vector2 uv01 = new((float)i / (_N - 1),       (float)(j + 1) / (_N - 1));
+                Vector2 uv11 = new((float)(i + 1) / (_N - 1), (float)(j + 1) / (_N - 1));
+
+                bool flip = ((i + j) & 1) == 1; // checkerboard
+
+                if (!flip)
+                {
+                    st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                    st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                    st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+
+                    st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                    st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                    st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                }
+                else
+                {
+                    st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                    st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                    st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+
+                    st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                    st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                    st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                }
+            }
+        }
+
+        st.Index();
+        st.GenerateTangents();
+
+        var mesh = st.Commit();
+        _meshMI.Mesh = mesh;
+
+        // update collider
+        var faces = mesh.GetFaces();
+        var concave = new ConcavePolygonShape3D { Data = faces };
+        _colShape.Shape = concave;
+    }
 }
