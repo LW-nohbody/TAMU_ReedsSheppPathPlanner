@@ -45,7 +45,9 @@ public partial class TerrainDisk : Node3D
             if (_heatMapEnabled != value)
             {
                 _heatMapEnabled = value;
-                Rebuild();
+                // Only rebuild the mesh, don't regenerate heights from noise
+                // This preserves all digging modifications
+                RebuildMeshOnly();
             }
         }
     }
