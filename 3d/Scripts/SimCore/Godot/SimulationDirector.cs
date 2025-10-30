@@ -356,6 +356,10 @@ public partial class SimulationDirector : Node3D
                 _pathVisualizer.UpdatePath(i, currentPath);
             }
         }
+        
+        // Update remaining dirt display (once per frame for efficiency)
+        float remainingDirt = _terrain.GetRemainingDirtVolume();
+        _payloadUI.UpdateRemainingDirt(remainingDirt);
     }
 
     private void FollowChaseCamera(double delta)

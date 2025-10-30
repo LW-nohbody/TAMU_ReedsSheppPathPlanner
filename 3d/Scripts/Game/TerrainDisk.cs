@@ -374,6 +374,57 @@ public partial class TerrainDisk : Node3D
         return maxh == float.MinValue ? 0f : maxh;
     }
 
+    /// <summary>
+    /// Calculate total remaining dirt volume in the terrain
+    /// Assumes dirt = material above zero (flat ground level)
+    /// Volume = sum of (height * grid_cell_area)
+    /// </summary>
+    public float GetRemainingDirtVolume()
+    {
+        if (_heights == null || _norms == null) return 0f;
+        
+        float totalVolume = 0f;
+        float cellArea = _step * _step;
+        
+        for (int j = 0; j < _N; j++)
+        {
+            for (int i = 0; i < _N; i++)
+            {
+                if (!float.IsNaN(_heights[i, j]) && _heights[i, j] > 0.01f)
+                {
+                    // Volume contribution = height * cell area
+                    totalVolume += _heights[i, j] * cellArea;
+                }
+            }
+        }
+        
+        return totalVolume;
+    }
+
+    /// <summary>
+    /// Get original terrain height at grid cell before any modifications
+    /// This is used to estimate how much has been extracted
+    /// </summary>
+    public float GetOriginalHeightAt(int gridI, int gridJ)
+    {
+        // Original height was generated from noise
+        var noise = new FastNoiseLite
+        {
+            Seed = Seed,
+            NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex,
+            Frequency = Frequency
+        };
+        noise.FractalOctaves = Octaves;
+        noise.FractalLacunarity = Lacunarity;
+        noise.FractalGain = Gain;
+        
+        float x = -Radius + gridI * _step;
+        float z = -Radius + gridJ * _step;
+        
+        float n = noise.GetNoise2D(x, z);
+        return Amplitude * n;  // Simplified - actual original calculation in Rebuild()
+    }
+
     // Call this when terrain heights have been modified (e.g., during digging)
     // WITHOUT regenerating from noise (preserves modifications)
     public void RebuildMeshOnly()
