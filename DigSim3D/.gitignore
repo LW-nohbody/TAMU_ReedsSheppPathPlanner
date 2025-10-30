@@ -1,0 +1,15 @@
+# Godot
+.import/
+.godot/
+mono/
+*.mono
+# Build artifacts
+bin/
+obj/
+# Exported builds
+*.exe
+*.pck
+# OS/editor
+.DS_Store
+Thumbs.db
+*.uid

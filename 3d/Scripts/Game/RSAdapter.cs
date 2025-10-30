@@ -2,6 +2,7 @@ using Godot;
 using RSCore;
 using System;
 using System.Collections.Generic;
+using ThreeD.Debugging;
 
 public static class RSAdapter
 {
@@ -11,13 +12,13 @@ public static class RSAdapter
 
     public static (Vector3[] points, int[] gears) ComputePath3D(
         Vector3 startPos, double startYawRad,
-        Vector3 goalPos,  double goalYawRad,
+        Vector3 goalPos, double goalYawRad,
         double turnRadiusMeters,
         double sampleStepMeters = 0.25)
     {
         // 1) 3D → math
         var sM = ToMath3D(startPos, startYawRad);
-        var gM = ToMath3D(goalPos,  goalYawRad);
+        var gM = ToMath3D(goalPos, goalYawRad);
 
         // 2) Normalize by R for planning (x,y only)
         double R = turnRadiusMeters;
@@ -34,6 +35,15 @@ public static class RSAdapter
         var gears = new List<int>();
         RsSampler.SamplePolylineWithGears((0.0, 0.0, 0.0), best, 1.0, sampleStepMeters / R, pts2D, gears);
 
+        if (pts2D.Count > 0)
+        {
+            var pLast = pts2D[^1];
+            DebugPath.Check("3d.adapter", "sample_out_norm",
+                ("nPts", pts2D.Count),
+                ("last.x", pLast.X), ("last.y", pLast.Y));
+        }
+
+
         // 5) Transform back to world-math (scale, rotate by start θ, translate by start x,y)
         var list3 = new List<Vector3>(pts2D.Count);
         double c0 = Math.Cos(sM.th), s0 = Math.Sin(sM.th);
@@ -44,6 +54,14 @@ public static class RSAdapter
             double wy = sM.y + (sx * s0 + sy * c0);
             list3.Add(new Vector3((float)wx, 0f, (float)wy)); // (x, 0, z=y)
         }
+
+        if (list3.Count > 0)
+        {
+            var end = list3[^1];
+            // We don’t have goalPos here, so just echo last
+            DebugPath.Check("3d.adapter", "mapped_world", ("nPts", list3.Count), ("last", end));
+        }
+
         return (list3.ToArray(), gears.ToArray());
     }
 }

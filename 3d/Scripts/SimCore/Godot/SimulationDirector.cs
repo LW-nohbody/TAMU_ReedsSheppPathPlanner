@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using SimCore.Core;
 using SimCore.Services;
+using System.Runtime;
 
 public partial class SimulationDirector : Node3D
 {
@@ -11,6 +12,7 @@ public partial class SimulationDirector : Node3D
     [Export] public NodePath CameraTopPath;
     [Export] public NodePath CameraChasePath;
     [Export] public NodePath CameraFreePath;
+    [Export] public NodePath CameraOrbitPath;
 
     [Export] public NodePath TerrainPath;
 
@@ -29,7 +31,8 @@ public partial class SimulationDirector : Node3D
 
     // Cameras
     [Export] public float   MouseSensitivity     = 0.005f;
-    [Export] public float   TranslateSensitivity = 0.01f;
+    [Export] public float TranslateSensitivity = 0.01f;
+    [Export] public float ZoomSensitivity = 1.0f;
     [Export] public float   ChaseLerp            = 8.0f;
     [Export] public Vector3 ChaseOffset          = new(0, 2.5f, 5.5f);
 
@@ -39,11 +42,30 @@ public partial class SimulationDirector : Node3D
     private TerrainDisk _terrain;
     private Node3D _vehiclesRoot;
     private readonly List<VehicleAgent3D> _vehicles = new();
+    private readonly List<VehicleBrain> _brains = new();  // Add brains list
+    private readonly List<RobotTargetIndicator> _indicators = new();  // Visual indicators
+    public WorldState World;  // Add world state
+    private RobotCoordinator _coordinator;  // Coordination system
+    
+    // Path mesh management to prevent memory leaks
+    private readonly List<MeshInstance3D> _pathMeshes = new();
+    private const int MAX_PATH_MESHES = 30; // Limit displayed paths to prevent crash
 
-    private Camera3D _camTop, _camChase, _camFree;
+    // New visualization systems
+    private bool _heatMapEnabled = false;
+    private SimCore.Game.PathVisualizer _pathVisualizer;
+    private SimCore.Game.TerrainModifier _terrainModifier;
+    private SimCore.UI.RobotPayloadUI _payloadUI;
+
+    private Camera3D _camTop, _camChase, _camFree, _camOrbit;
     private bool _usingTop = true;
-    private bool _movingFreeCam = false, _rotatingFreeCam = false;
-    private float _pitch = 0f, _yaw = 0f;
+    private bool _movingFreeCam = false, _rotatingFreeCam = false, _rotatingOrbitCam = false;
+    private float _freePitch = 0f, _freeYaw = 0f, _orbitPitch = 0, _orbitYaw = 0, Distance = 15.0f;
+    private float MinPitchDeg = -5, MaxPitchDeg = 89, MinDist = 0.5f, MaxDist = 18f;
+
+    [Export] public NodePath ObstacleManagerPath;
+    private ObstacleManager _obstacleManager;
+
 
     public override void _Ready()
     {
@@ -51,12 +73,37 @@ public partial class SimulationDirector : Node3D
         _vehiclesRoot = GetNode<Node3D>(VehiclesRootPath);
         _camTop   = GetNode<Camera3D>(CameraTopPath);
         _camChase = GetNode<Camera3D>(CameraChasePath);
-        _camFree  = GetNode<Camera3D>(CameraFreePath);
+        _camFree = GetNode<Camera3D>(CameraFreePath);
+        _camOrbit = GetNode<Camera3D>(CameraOrbitPath);
 
         // Terrain (strict)
         _terrain = GetNodeOrNull<TerrainDisk>(TerrainPath);
         if (_terrain == null) { GD.PushError("SimulationDirector: TerrainPath not set to a TerrainDisk."); return; }
         GD.Print($"[Director] Terrain OK: {_terrain.Name}");
+
+        _obstacleManager = GetNodeOrNull<ObstacleManager>(ObstacleManagerPath);
+        if (_obstacleManager == null)
+        {
+            GD.PushError("SimulationDirector: ObstacleManagerPath not set or not found.");
+            return;
+        }
+
+        // Build global static navigation grid from obstacles BEFORE spawning vehicles
+        var obstacleList = _obstacleManager.GetObstacles();
+        GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 1.0f);
+
+        // Create coordinator for robot collision avoidance
+        _coordinator = new SimCore.Core.RobotCoordinator(minSeparationMeters: 3.0f);
+        
+        // Initialize visualization systems
+        _terrainModifier = new SimCore.Game.TerrainModifier();
+        _terrain.AddChild(_terrainModifier);
+        
+        _pathVisualizer = new SimCore.Game.PathVisualizer();
+        AddChild(_pathVisualizer);
+        
+        _payloadUI = new SimCore.UI.RobotPayloadUI();
+        AddChild(_payloadUI);
 
         // Spawn on ring
         int N = Math.Max(1, VehicleCount);
@@ -75,50 +122,154 @@ public partial class SimulationDirector : Node3D
             // Pose on terrain using FR/FL/RC (same as before)
             PlaceOnTerrain(car, outward);
 
-            car.Wheelbase  = VehicleLength;
+            car.Wheelbase = VehicleLength;
             car.TrackWidth = VehicleWidth;
 
-            // === Build a real RS path for THIS car (the “old working” way) ===
-            double startYaw = theta;                         // yaw is in XZ math space
-            var start = car.GlobalTransform.Origin;
-            var goal  = start + outward * GoalAdvance;       // go out 5m
-            double goalYaw = startYaw + Mathf.Pi / 2.0;      // then +90° right
-
-            var (pts, gears) = RSAdapter.ComputePath3D(start, startYaw, goal, goalYaw,
-                                                       TurnRadiusMeters, SampleStepMeters);
-
-            // Draw path projected to terrain
-            DrawPathProjectedToTerrain(pts, new Color(0.15f, 0.9f, 1.0f));
-            DrawMarkerProjected(start, new Color(0, 1, 0));
-            DrawMarkerProjected(goal,  new Color(0, 0, 1));
-
-            // Feed to car
-            car.SetPath(pts, gears);
-
+            // Create vehicle spec for dig system
+            var spec = new VehicleSpec($"Robot_{i+1}", KinematicType.ReedsShepp, VehicleLength, VehicleWidth, RideHeight, TurnRadiusMeters, 2.0f);
+            
+            // Create planner for Reeds-Shepp paths
+            var planner = new HybridReedsSheppPlanner();
+            
+            // Create brain for dig system with coordinator
+            float theta0 = i * (Mathf.Tau / N);
+            float theta1 = (i + 1) * (Mathf.Tau / N);
+            float digRadius = 7.0f;
+            var brain = new VehicleBrain(car, spec, planner, World, _terrain, _coordinator, i, theta0, theta1, digRadius, spawnXZ);
+            
+            _brains.Add(brain);
             _vehicles.Add(car);
+            
+            // Create robot color for visualization
+            float hue = (float)i / N;
+            Color robotColor = Color.FromHsv(hue, 0.8f, 0.9f);
+            
+            // Register with path visualizer
+            _pathVisualizer.RegisterRobotPath(i, robotColor);
+            
+            // Register with payload UI
+            _payloadUI.AddRobot(i, spec.Name, robotColor);
+            
+            // Create visual target indicator
+            var indicator = new RobotTargetIndicator();
+            indicator.Initialize(robotColor);
+            AddChild(indicator);
+            _indicators.Add(indicator);
 
-            GD.Print($"[Director] {car.Name} RS path: {pts.Length} samples");
+            // Give initial plan
+            brain.PlanAndGoOnce();
+
+            GD.Print($"[Director] {car.Name} spawned with dig sector {theta0:F2} to {theta1:F2} rad");
+
         }
 
-        _camTop.Current = true; _camChase.Current = false; _camFree.Current = false;
+        // Draw sector visualization lines (colored radial lines showing robot assignments)
+        DrawSectorLines();
+
+        _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
+    }
+
+    public override void _ExitTree()
+    {
+        // Clean up all path meshes to prevent memory leaks
+        foreach (var mesh in _pathMeshes)
+        {
+            if (IsInstanceValid(mesh))
+                mesh.QueueFree();
+        }
+        _pathMeshes.Clear();
     }
 
     // ---------- Input / camera (unchanged) ----------
     public override void _Input(InputEvent e)
     {
+        // Heat map toggle with 'H' key
+        if (e is InputEventKey keyEvent && keyEvent.Pressed && keyEvent.Keycode == Key.H)
+        {
+            if (_terrain != null)
+            {
+                _terrain.HeatMapEnabled = !_terrain.HeatMapEnabled;
+                _payloadUI.UpdateHeatMapStatus(_terrain.HeatMapEnabled);
+                GD.Print($"[Director] Heat Map: {(_terrain.HeatMapEnabled ? "ON" : "OFF")}");
+            }
+        }
+
         if (e is InputEventMouseMotion mm && _rotatingFreeCam)
         {
-            _yaw   += -mm.Relative.X * MouseSensitivity;
-            _pitch += -mm.Relative.Y * MouseSensitivity;
-            _camFree.Rotation = new Vector3(_pitch, _yaw, 0);
+            _freeYaw += -mm.Relative.X * MouseSensitivity;
+            _freePitch += -mm.Relative.Y * MouseSensitivity;
+            _camFree.Rotation = new Vector3(_freePitch, _freeYaw, 0);
         }
         else if (e is InputEventMouseMotion mm2 && _movingFreeCam)
         {
             Vector2 d = mm2.Relative;
             Vector3 right = _camFree.GlobalTransform.Basis.X;
-            Vector3 up    = _camFree.GlobalTransform.Basis.Y;
+            Vector3 up = _camFree.GlobalTransform.Basis.Y;
             Vector3 motion = (-right * d.X + up * d.Y) * TranslateSensitivity;
             _camFree.GlobalTranslate(motion);
+        }
+        else if (e is InputEventMouseButton mb && _camFree.Current)
+        {
+            if (mb.ButtonIndex == MouseButton.WheelUp)
+            {
+                // Get the forward direction (-Z axis in local space)
+                Vector3 forward = -_camFree.GlobalTransform.Basis.Z.Normalized();
+
+                // Calculate new position
+                Vector3 newPosition = _camFree.GlobalTransform.Origin + forward * -ZoomSensitivity;
+
+                _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPosition);
+
+            }
+            else if (mb.ButtonIndex == MouseButton.WheelDown)
+            {
+                // Get the forward direction (-Z axis in local space)
+                Vector3 forward = -_camFree.GlobalTransform.Basis.Z.Normalized();
+
+                // Calculate new position
+                Vector3 newPosition = _camFree.GlobalTransform.Origin + forward * ZoomSensitivity;
+
+                _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPosition);
+
+            }
+        }
+        else if (e is InputEventMouseMotion mm3 && _rotatingOrbitCam)
+        {
+            _orbitYaw -= mm3.Relative.X * MouseSensitivity;
+            _orbitPitch -= mm3.Relative.Y * MouseSensitivity;
+            _orbitPitch = Mathf.Clamp(_orbitPitch, Mathf.DegToRad(MinPitchDeg), Mathf.DegToRad(MaxPitchDeg));
+
+            Vector3 targetPosition = _terrain.GlobalTransform.Origin;
+
+            float x = Distance * Mathf.Cos(_orbitPitch) * Mathf.Sin(_orbitYaw);
+            float y = Distance * Mathf.Sin(_orbitPitch);
+            float z = Distance * Mathf.Cos(_orbitPitch) * Mathf.Cos(_orbitYaw);
+
+            Vector3 camOrbitPos = targetPosition + new Vector3(x, y, z);
+            _camOrbit.GlobalTransform = new Transform3D(_camOrbit.Basis, camOrbitPos);
+            _camOrbit.LookAt(targetPosition, Vector3.Up);
+        }
+        else if (e is InputEventMouseButton mb2 && _camOrbit.Current)
+        {
+            if (mb2.ButtonIndex == MouseButton.WheelUp)
+            {
+                Distance += ZoomSensitivity;
+            }
+            else if (mb2.ButtonIndex == MouseButton.WheelDown)
+            {
+                Distance -= ZoomSensitivity;
+            }
+            Distance = Mathf.Clamp(Distance, MinDist, MaxDist);
+
+            Vector3 targetPosition = _terrain.GlobalTransform.Origin;
+
+            float x = Distance * Mathf.Cos(_orbitPitch) * Mathf.Sin(_orbitYaw);
+            float y = Distance * Mathf.Sin(_orbitPitch);
+            float z = Distance * Mathf.Cos(_orbitPitch) * Mathf.Cos(_orbitYaw);
+
+            Vector3 camOrbitPos = targetPosition + new Vector3(x, y, z);
+            _camOrbit.GlobalTransform = new Transform3D(_camOrbit.Basis, camOrbitPos);
+            _camOrbit.LookAt(targetPosition, Vector3.Up);
         }
     }
 
@@ -129,8 +280,8 @@ public partial class SimulationDirector : Node3D
             _usingTop = !_usingTop;
             _camTop.Current = _usingTop;
             _camChase.Current = !_usingTop;
-            _camFree.Current = false;
-            _movingFreeCam = _rotatingFreeCam = false;
+            _camFree.Current = _camOrbit.Current = false;
+            _movingFreeCam = _rotatingFreeCam = _rotatingOrbitCam = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
         }
         if (!_usingTop) FollowChaseCamera(delta);
@@ -138,23 +289,64 @@ public partial class SimulationDirector : Node3D
         if (Input.IsActionJustPressed("select_free_camera"))
         {
             _camFree.Current = true;
-            _camTop.Current = _camChase.Current = false;
+            _camTop.Current = _camChase.Current = _camOrbit.Current = false;
         }
 
-        if (Input.IsActionPressed("translate_free_camera"))
+        if (Input.IsActionJustPressed("select_orbit_camera"))
         {
-            _movingFreeCam = true; _rotatingFreeCam = false;
+            _camOrbit.Current = true;
+            _camTop.Current = _camChase.Current = _camFree.Current = false;
+        }
+
+        if (Input.IsActionPressed("translate_free_camera") && _camFree.Current)
+        {
+            _movingFreeCam = true; _rotatingFreeCam = _rotatingOrbitCam = false;
             Input.MouseMode = Input.MouseModeEnum.Captured;
         }
-        else if (Input.IsActionPressed("rotate_free_camera"))
+        else if (Input.IsActionPressed("rotate_camera"))
         {
-            _movingFreeCam = false; _rotatingFreeCam = true;
+            _movingFreeCam = false;
+            _rotatingFreeCam = _camFree.Current; _rotatingOrbitCam = _camOrbit.Current;
             Input.MouseMode = Input.MouseModeEnum.Captured;
         }
         else
         {
-            _movingFreeCam = _rotatingFreeCam = false;
+            _movingFreeCam = _rotatingFreeCam = _rotatingOrbitCam = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
+        }
+    }
+
+    public override void _PhysicsProcess(double delta)
+    {
+        // Check each robot to see if it finished its path and needs to dig/dump
+        for (int i = 0; i < _brains.Count; i++)
+        {
+            var brain = _brains[i];
+            
+            // Get the controller from brain using reflection (since it's private)
+            var ctrlField = typeof(VehicleBrain).GetField("_ctrl", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var ctrl = ctrlField?.GetValue(brain) as VehicleAgent3D;
+            
+            if (ctrl != null)
+            {
+                // Check if robot is idle (path finished)
+                var doneField = typeof(VehicleAgent3D).GetField("_done", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (doneField != null && (bool)doneField.GetValue(ctrl))
+                {
+                    // Robot arrived - process dig/dump and plan next action
+                    brain.OnArrival();
+                    brain.PlanAndGoOnce();
+                }
+                
+                // Update payload UI with robot status
+                float capacity = SimpleDigLogic.ROBOT_CAPACITY;
+                float payloadPercent = (brain.Payload / capacity) * 100f;
+                _payloadUI.UpdatePayload(i, payloadPercent, brain.Status, brain.CurrentPosition);
+                
+                // Update path visualization
+                var currentPath = brain.GetCurrentPath();
+                _pathVisualizer.UpdatePath(i, currentPath);
+            }
         }
     }
 
@@ -238,10 +430,20 @@ public partial class SimulationDirector : Node3D
     {
         if (points == null || points.Length < 2) return;
 
+        // Clean up old meshes to prevent memory leak
+        while (_pathMeshes.Count >= MAX_PATH_MESHES)
+        {
+            var oldMesh = _pathMeshes[0];
+            _pathMeshes.RemoveAt(0);
+            if (IsInstanceValid(oldMesh))
+                oldMesh.QueueFree();
+        }
+
         var mi = new MeshInstance3D();
         var im = new ImmediateMesh();
         mi.Mesh = im;
         AddChild(mi);
+        _pathMeshes.Add(mi); // Track for cleanup
 
         im.SurfaceBegin(Mesh.PrimitiveType.LineStrip);
         for (int i = 0; i < points.Length; i++)
@@ -271,5 +473,60 @@ public partial class SimulationDirector : Node3D
         mat.NoDepthTest = DebugPathOnTop;
         m.SetSurfaceOverrideMaterial(0, mat);
         AddChild(m);
+    }
+
+    /// <summary>
+    /// Draw colored radial lines from origin to show robot sector assignments
+    /// </summary>
+    private void DrawSectorLines()
+    {
+        int N = VehicleCount;
+        float digRadius = 7.0f; // Match the dig radius used in spawning
+        
+        // Generate distinct colors for each robot sector
+        Color[] colors = new Color[N];
+        for (int i = 0; i < N; i++)
+        {
+            float hue = (float)i / N;
+            colors[i] = Color.FromHsv(hue, 0.8f, 0.9f);
+        }
+
+        // Draw each sector boundary line
+        for (int i = 0; i < N; i++)
+        {
+            float theta = i * (Mathf.Tau / N);
+            var direction = new Vector3(Mathf.Cos(theta), 0, Mathf.Sin(theta));
+            var endPoint = direction * digRadius;
+
+            // Create line mesh
+            var mi = new MeshInstance3D();
+            var im = new ImmediateMesh();
+            mi.Mesh = im;
+            AddChild(mi);
+
+            im.SurfaceBegin(Mesh.PrimitiveType.Lines);
+            
+            // Start at origin (slightly above ground)
+            float y0 = SampleSurfaceY(Vector3.Zero) + 0.05f;
+            im.SurfaceAddVertex(new Vector3(0, y0, 0));
+            
+            // End at sector boundary
+            float y1 = SampleSurfaceY(endPoint) + 0.05f;
+            im.SurfaceAddVertex(new Vector3(endPoint.X, y1, endPoint.Z));
+            
+            im.SurfaceEnd();
+
+            // Apply color material
+            var mat = new StandardMaterial3D 
+            { 
+                AlbedoColor = colors[i], 
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded 
+            };
+            mat.NoDepthTest = DebugPathOnTop;
+            if (mi.Mesh != null && mi.Mesh.GetSurfaceCount() > 0)
+                mi.SetSurfaceOverrideMaterial(0, mat);
+        }
+        
+        GD.Print($"[Director] Drew {N} sector boundary lines");
     }
 }

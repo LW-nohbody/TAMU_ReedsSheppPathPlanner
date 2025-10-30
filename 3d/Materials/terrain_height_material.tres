@@ -1,0 +1,17 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://Materials/terrain_height_shader.gdshader" id="1"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1")
+shader_parameter/height_max = 0.35
+shader_parameter/height_high = 0.2
+shader_parameter/height_mid = 0.12
+shader_parameter/height_low = 0.05
+shader_parameter/height_min = 0.0
+shader_parameter/color_peak = Color(1, 0.9, 0.2, 1)
+shader_parameter/color_high = Color(0.3, 0.8, 0.3, 1)
+shader_parameter/color_mid = Color(0.2, 0.5, 0.8, 1)
+shader_parameter/color_low = Color(0.4, 0.2, 0.6, 1)
+shader_parameter/color_flat = Color(0.3, 0.15, 0.5, 1)

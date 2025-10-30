@@ -1,0 +1,290 @@
+using System;
+using Godot;
+using SimCore.Core;
+using SimCore.Services;
+
+public sealed class VehicleBrain
+{
+  private readonly VehicleAgent3D _ctrl;
+  private readonly VehicleSpec     _spec;
+  private readonly IPathPlanner    _planner;
+  private readonly IScheduler      _sched;
+  private readonly WorldState      _world;
+
+  private bool _payloadFull;
+  private float _payload = 0f;
+  private ITask _currentTask;
+
+  // Enhanced stuck detection: track last positions and time
+  private Vector3 _lastPos = Vector3.Zero;
+  private int _stuckCounter = 0;
+  private const int MAX_STUCK_COUNT = 2; // Trigger sooner
+  private float _timeSinceLastGoodMove = 0f;
+  private const float MAX_STUCK_TIME = 3.0f; // Force escape if stuck for 3 seconds
+
+  public VehicleBrain(VehicleAgent3D ctrl, VehicleSpec spec, IPathPlanner planner,
+                      IScheduler sched, WorldState world)
+  {
+    _ctrl = ctrl; _spec = spec; _planner = planner; _sched = sched; _world = world;
+  }
+
+  public void PlanAndGoOnce()
+  {
+    // Derive current pose from the controller
+    var xf  = _ctrl.GlobalTransform;
+    var fwd = -xf.Basis.Z; // Godot forward
+    double yaw = Math.Atan2(fwd.Z, fwd.X); // 0 along +X, CCW to +Z
+    var cur = new Pose(xf.Origin.X, xf.Origin.Z, yaw);
+
+    // Enhanced stuck detection: if we're repeatedly at nearly the same position, force escape
+    var curPos = xf.Origin; curPos.Y = 0f;
+    float moveDist = curPos.DistanceTo(_lastPos);
+    
+    if (moveDist < 0.5f)
+    {
+      _stuckCounter++;
+      _timeSinceLastGoodMove += 0.1f; // Approximate time increment per planning call
+      
+      if (_stuckCounter >= MAX_STUCK_COUNT || _timeSinceLastGoodMove >= MAX_STUCK_TIME)
+      {
+        // Force a larger escape movement: back up more and turn
+        var backDir = (-xf.Basis.Z).WithY(0).Normalized();
+        var rightDir = xf.Basis.X.WithY(0).Normalized();
+        
+        // Try backing up 2m and moving to the side
+        var back1 = curPos - backDir * 1.5f;
+        var back2 = back1 + rightDir * 1.0f; // Move sideways
+        var back3 = back2 - backDir * 0.5f;  // Continue backing
+        
+        var escapePts = new Vector3[] { back1, back2, back3, curPos };
+        var escapeGears = new int[] { -1, -1, -1, +1 };
+        _ctrl.SetPath(escapePts, escapeGears);
+        
+        GD.Print($"[StuckRecovery] {_spec.Name} stuck at {curPos} (counter={_stuckCounter}, time={_timeSinceLastGoodMove:F1}s), forcing extended escape");
+        _stuckCounter = 0;
+        _timeSinceLastGoodMove = 0f;
+        _lastPos = curPos;
+        return;
+      }
+    }
+    else
+    {
+      // Good movement, reset counters
+      _stuckCounter = 0;
+      _timeSinceLastGoodMove = 0f;
+    }
+    _lastPos = curPos;
+
+    // Get task
+    var task = _sched.NextTask(_spec, _world, _payloadFull);
+
+    // If task is a DigTask, compute a clamped goal inside the vehicle's slice for planning
+    Vector3? clampedDigCenter = null;
+    if (task is DigTask taskDig)
+    {
+      if (_ctrl.TryGetSliceLimits(out float tmin, out float tmax, out float rmax))
+      {
+        var orig = taskDig.Site.Center;
+        float ang = Mathf.Atan2(orig.Z, orig.X); if (ang < 0) ang += Mathf.Tau;
+        float r = new Vector2(orig.X, orig.Z).Length();
+        // clamp radius
+        r = MathF.Min(r, rmax);
+        // clamp angle
+        bool between = (tmin <= tmax) ? (ang >= tmin && ang <= tmax) : (ang >= tmin || ang <= tmax);
+        if (!between)
+        {
+          // pick nearest boundary
+          float dmin = ang - tmin; while (dmin > Mathf.Pi) dmin -= Mathf.Tau; while (dmin < -Mathf.Pi) dmin += Mathf.Tau;
+          float dmax = ang - tmax; while (dmax > Mathf.Pi) dmax -= Mathf.Tau; while (dmax < -Mathf.Pi) dmax += Mathf.Tau;
+          float newAng = (MathF.Abs(dmin) < MathF.Abs(dmax)) ? tmin : tmax;
+          var newOrig = new Vector3(MathF.Cos(newAng) * r, 0f, MathF.Sin(newAng) * r);
+          clampedDigCenter = newOrig;
+        }
+        else
+        {
+          // inside sector, but still clamp radius
+          if (r < new Vector2(orig.X, orig.Z).Length())
+            clampedDigCenter = new Vector3(MathF.Cos(ang) * r, 0f, MathF.Sin(ang) * r);
+        }
+      }
+    }
+
+    // Debug: print the selected task and some context
+    string tdesc = task switch {
+      DigTask d => $"Dig(site={d.Site.Center}, toolR={d.ToolRadius:F3}, depth={d.Depth:F3})",
+      DumpTask d => $"Dump(point={d.DumpPoint})",
+      TransitTask t => $"Transit(goal={t.Goal})",
+      IdleTask _ => "Idle",
+      _ => task.GetType().Name
+    };
+
+    // Store current task for processing when we arrive
+    _currentTask = task;
+
+    // Convert task to a goal pose
+    Pose goal;
+    if (task is DigTask digTask) {
+      var center = clampedDigCenter ?? digTask.Site.Center;
+      goal = new Pose(center.X, center.Z, yaw);
+    } else if (task is DumpTask dumpTask) {
+      goal = new Pose(dumpTask.DumpPoint.X, dumpTask.DumpPoint.Z, yaw);
+    } else if (task is TransitTask transitTask) {
+      goal = transitTask.Goal;
+    } else {
+      goal = cur;
+    }
+
+    // Plan & send to controller
+    var planned = _planner.Plan(cur, goal, _spec, _world);
+    var pts = planned.Points.ToArray();
+    var gears = planned.Gears.ToArray();
+
+    // If plan is degenerate (empty or a single point very near current), treat as arrival so OnArrival runs
+    if (pts.Length == 0 || (pts.Length == 1 && xf.Origin.DistanceTo(pts[0]) < 0.3f))
+    {
+      _ctrl.SetPath(Array.Empty<Vector3>(), Array.Empty<int>());
+      OnArrival();
+      return;
+    }
+
+    _ctrl.SetPath(pts, gears);
+
+    // Do not modify site volumes or payload here — do that when the robot actually arrives at the target
+  }
+
+  // Called by SimulationDirector when the controller reports the robot finished its path
+  public void OnArrival()
+  {
+    // Debug: if OnArrival is called but no current task is set, log context for diagnosis
+    if (_currentTask == null) {
+      // Arrival debug retained but commented out to reduce noise
+      // GD.Print($"[ArrivalDbg] Robot {_spec.Name} OnArrival called but _currentTask is null. payload={_payload:F3}, payloadFull={_payloadFull}, world_sites={_world.DigSites.Count}, world_total={_world.TotalDirtExtracted:F3}");
+      return;
+    }
+    var xf = _ctrl.GlobalTransform;
+
+    if (_currentTask is DigTask dig) {
+      // Add detailed debug output to trace why digs may be skipped or succeed
+      var site = dig.Site;
+      float toolR = site.ToolRadius;
+      float depth = site.Depth;
+      float consumed = toolR * depth; // Example: volume per dig
+
+      // Ensure actual dig position is clamped to this vehicle's assigned slice
+      Vector3 digCenterOrig = site.Center;
+      Vector3 actualDigCenter = digCenterOrig;
+      if (_ctrl.TryGetSliceLimits(out float tmin, out float tmax, out float rmax))
+      {
+        float ang = Mathf.Atan2(digCenterOrig.Z, digCenterOrig.X); if (ang < 0) ang += Mathf.Tau;
+        float r = new Vector2(digCenterOrig.X, digCenterOrig.Z).Length();
+        r = MathF.Min(r, rmax);
+        bool between = (tmin <= tmax) ? (ang >= tmin && ang <= tmax) : (ang >= tmin || ang <= tmax);
+        if (!between)
+        {
+          float dmin = ang - tmin; while (dmin > Mathf.Pi) dmin -= Mathf.Tau; while (dmin < -Mathf.Pi) dmin += Mathf.Tau;
+          float dmax = ang - tmax; while (dmax > Mathf.Pi) dmax -= Mathf.Tau; while (dmax < -Mathf.Pi) dmax += Mathf.Tau;
+          float newAng = (MathF.Abs(dmin) < MathF.Abs(dmax)) ? tmin : tmax;
+          actualDigCenter = new Vector3(MathF.Cos(newAng) * r, 0f, MathF.Sin(newAng) * r);
+        }
+        else
+        {
+          if (r < new Vector2(digCenterOrig.X, digCenterOrig.Z).Length())
+            actualDigCenter = new Vector3(MathF.Cos(ang) * r, 0f, MathF.Sin(ang) * r);
+        }
+      }
+
+       // Verbose debug commented out to reduce log noise:
+       // GD.Print($"[DigDbg] Robot {_spec.Name} arrived at site {site.Center}. toolR={toolR:F3}, depth={depth:F3}, consumed={consumed:F3}, payload={_payload:F3}, capacity={SimulationDirector.RobotCapacity:F3}");
+
+       // --- START OF CHANGE: allow partial digs up to available capacity and remaining site volume ---
+       float availableCap = SimulationDirector.RobotCapacity - _payload;
+       float actualTaken = MathF.Min(consumed, MathF.Min(availableCap, site.RemainingVolume));
+       if (actualTaken <= 0f) {
+         // nothing can be taken (would overfill or no site volume)
+         if (availableCap <= 0f) {
+           _payloadFull = true;
+           GD.Print($"[Dig] Robot {_spec.Name} cannot take more (availableCap={availableCap:F3}), marking full.");
+         } else {
+           GD.Print($"[Dig] Robot {_spec.Name} cannot take any from site (site remaining={site.RemainingVolume:F3}).");
+         }
+       } else {
+        // Update payload/world totals
+        _payload += actualTaken;
+        _world.TotalDirtExtracted += actualTaken; // Accumulate dirt removed in world state
+        GD.Print($"[Dig] Robot {_spec.Name} picked up {actualTaken:F3} (requested {consumed:F3}), payload={_payload:F3}, world total={_world.TotalDirtExtracted:F3}");
+        // Visual: lower the terrain at the clamped location
+        try {
+          float area = MathF.PI * toolR * toolR;
+          float deltaH = (area > 1e-6f) ? (actualTaken / area) : 0f; // height change = volume / area
+          // Cap per-dig vertical lowering to avoid creating deep pits that can trap robots
+          deltaH = MathF.Min(deltaH, SimulationDirector.MaxDeltaPerDig);
+          if (deltaH > 0f) {
+            _ctrl.LowerTerrainAt(new Vector3(actualDigCenter.X, 0f, actualDigCenter.Z), toolR, deltaH);
+            GD.Print($"[DigVis] Lowered terrain at {actualDigCenter} radius={toolR:F3} dh={deltaH:F4}");
+          }
+        } catch (Exception) {
+          // ignore visual lowering failures
+        }
+        if (_payload >= SimulationDirector.RobotCapacity) _payloadFull = true;
+
+        // Reduce RemainingVolume on the best-matching world site (prefer original site record)
+        // Increase matching tolerance slightly and fall back to nearest-site within a larger radius
+        int idx = _world.DigSites.FindIndex(s => s.Center.DistanceTo(digCenterOrig) < 2.0f);
+        if (idx < 0) idx = _world.DigSites.FindIndex(s => s.Center.DistanceTo(actualDigCenter) < 2.0f);
+        if (idx < 0 && _world.DigSites.Count > 0)
+        {
+          float bestDist = float.MaxValue; int bestIdx = -1;
+          for (int i = 0; i < _world.DigSites.Count; ++i)
+          {
+            float d = _world.DigSites[i].Center.DistanceTo(actualDigCenter);
+            if (d < bestDist) { bestDist = d; bestIdx = i; }
+          }
+          if (bestIdx >= 0 && bestDist < 4.0f) idx = bestIdx; // accept nearest within 4m
+        }
+        if (idx >= 0)
+        {
+          var ws = _world.DigSites[idx];
+          float newVolume = ws.RemainingVolume - actualTaken;
+          if (newVolume <= 0f) {
+            _world.DigSites.RemoveAt(idx);
+            GD.Print($"[Dig] Site at {ws.Center} depleted and removed.");
+          } else {
+            _world.DigSites[idx] = ws with { RemainingVolume = newVolume };
+            GD.Print($"[Dig] Site at {ws.Center} now has {newVolume:F3} volume remaining.");
+          }
+        } else {
+          GD.Print($"[Dig] Warning: no matching world site found to decrement (orig={digCenterOrig}, actual={actualDigCenter}).");
+        }
+       }
+       // --- END OF CHANGE ---
+     }
+    else if (_currentTask is DumpTask dump) {
+      var dumpPos = dump.DumpPoint;
+      var dist = xf.Origin.DistanceTo(dumpPos);
+      if (dist < 0.5f) // within 0.5m of origin
+      {
+        _payload = 0f;
+        _payloadFull = false;
+        GD.Print($"[Dump] Robot {_spec.Name} dumped at {dumpPos}, payload reset. world total={_world.TotalDirtExtracted:F2}");
+      }
+      else
+      {
+        GD.Print($"[Dump] Robot {_spec.Name} not at dump point yet (dist={dist:F2}).");
+      }
+    }
+
+    // Clear current task after processing
+    _currentTask = null;
+  }
+
+  public float GetPayload() => _payload;
+
+  private static Pose ToPoseFacing(Pose start, Vector3 from, Vector3 target)
+  {
+    var dir = (target - from); dir.Y = 0;
+    if (dir.LengthSquared() < 1e-6f) return start;
+    dir = dir.Normalized();
+    double yaw = Math.Atan2(dir.Z, dir.X);
+    return new Pose(target.X, target.Z, yaw);
+  }
+}

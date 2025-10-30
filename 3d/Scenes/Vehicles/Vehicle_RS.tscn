@@ -31,6 +31,7 @@ height = 0.75
 
 [node name="Vehicle" type="CharacterBody3D"]
 script = ExtResource("1_andsp")
+SpeedMps = 1.0
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 mesh = SubResource("BoxMesh_272bh")
