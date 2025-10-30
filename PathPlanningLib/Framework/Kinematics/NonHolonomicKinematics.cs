@@ -1,7 +1,5 @@
 namespace PathPlanningLib.Framework.Kinematics;
 
-using System;
-using System.Collections.Generic;
 using PathPlanningLib.Algorithms;
 using PathPlanningLib.Algorithms.Geometry.PathElements;
 using PathPlanningLib.Algorithms.Geometry.Paths;
