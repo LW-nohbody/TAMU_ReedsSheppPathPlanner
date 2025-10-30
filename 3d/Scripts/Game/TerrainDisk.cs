@@ -33,6 +33,23 @@ public partial class TerrainDisk : Node3D
     private int    _N;
     private float  _step;         // world spacing between grid verts
 
+    private bool _heatMapEnabled = false;
+    private float _heatMapMinHeight = float.MaxValue;
+    private float _heatMapMaxHeight = float.MinValue;
+
+    public bool HeatMapEnabled
+    {
+        get => _heatMapEnabled;
+        set
+        {
+            if (_heatMapEnabled != value)
+            {
+                _heatMapEnabled = value;
+                Rebuild();
+            }
+        }
+    }
+
     public override void _Ready()
     {
         EnsureChildren();
@@ -119,6 +136,24 @@ public partial class TerrainDisk : Node3D
             }
         }
 
+        // Scan height bounds for heat map (if enabled)
+        if (_heatMapEnabled)
+        {
+            _heatMapMinHeight = float.MaxValue;
+            _heatMapMaxHeight = float.MinValue;
+            for (int j = 0; j < N; j++)
+            {
+                for (int i = 0; i < N; i++)
+                {
+                    if (!float.IsNaN(_heights[i, j]))
+                    {
+                        _heatMapMinHeight = Mathf.Min(_heatMapMinHeight, _heights[i, j]);
+                        _heatMapMaxHeight = Mathf.Max(_heatMapMaxHeight, _heights[i, j]);
+                    }
+                }
+            }
+        }
+
         // --- mesh build -------------------------------------------------------
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
@@ -151,23 +186,63 @@ public partial class TerrainDisk : Node3D
 
                 if (!flip)
                 {
-                    st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
-                    st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
-                    st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                    // Add vertex colors if heat map is enabled
+                    if (_heatMapEnabled)
+                    {
+                        st.SetColor(GetHeatMapColor(_heights[i, j]));
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j]));
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetColor(GetHeatMapColor(_heights[i, j + 1]));
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
 
-                    st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
-                    st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
-                    st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j]));
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j + 1]));
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetColor(GetHeatMapColor(_heights[i, j + 1]));
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                    }
+                    else
+                    {
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                    }
                 }
                 else
                 {
-                    st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
-                    st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
-                    st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                    // Add vertex colors if heat map is enabled
+                    if (_heatMapEnabled)
+                    {
+                        st.SetColor(GetHeatMapColor(_heights[i, j]));
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j + 1]));
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetColor(GetHeatMapColor(_heights[i, j + 1]));
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
 
-                    st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
-                    st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
-                    st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetColor(GetHeatMapColor(_heights[i, j]));
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j]));
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j + 1]));
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                    }
+                    else
+                    {
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                    }
                 }
             }
         }
@@ -178,18 +253,20 @@ public partial class TerrainDisk : Node3D
         var mesh = st.Commit();
         _meshMI.Mesh = mesh;
 
-        if (MaterialOverride != null)
+        // Apply material - always use a fresh one that respects heat map state
+        var mat = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.36f, 0.31f, 0.27f),
+            Roughness   = 1.0f,
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel,
+            VertexColorUseAsAlbedo = _heatMapEnabled  // Enable vertex colors for heat map
+        };
+        
+        // If we have a material override and heat map is NOT enabled, use it
+        if (MaterialOverride != null && !_heatMapEnabled)
             _meshMI.SetSurfaceOverrideMaterial(0, MaterialOverride);
         else
-        {
-            var mat = new StandardMaterial3D
-            {
-                AlbedoColor = new Color(0.36f, 0.31f, 0.27f),
-                Roughness   = 1.0f,
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel
-            };
             _meshMI.SetSurfaceOverrideMaterial(0, mat);
-        }
 
         // --- physics collider (trimesh) --------------------------------------
         var faces = mesh.GetFaces(); // PoolVector3Array of all triangle verts
@@ -281,8 +358,8 @@ public partial class TerrainDisk : Node3D
             }
         }
 
-        // Recompute normals and rebuild mesh
-        RecomputeNormalsAndMesh();
+        // Rebuild mesh ONLY - preserves the modified heights
+        RebuildMeshOnly();
     }
 
     public float GetMaxLocalHeight()
@@ -295,9 +372,13 @@ public partial class TerrainDisk : Node3D
         return maxh == float.MinValue ? 0f : maxh;
     }
 
-    private void RecomputeNormalsAndMesh()
+    // Call this when terrain heights have been modified (e.g., during digging)
+    // WITHOUT regenerating from noise (preserves modifications)
+    public void RebuildMeshOnly()
     {
-        // normals (central diff)
+        if (_heights == null || _norms == null) return;
+
+        // Recompute normals based on current heights
         for (int j = 0; j < _N; j++)
         {
             for (int i = 0; i < _N; i++)
@@ -315,27 +396,29 @@ public partial class TerrainDisk : Node3D
                 Vector3 dx = new Vector3(2f * _step, hR - hL, 0f);
                 Vector3 dz = new Vector3(0f, hU - hD, 2f * _step);
 
-                _norms[i, j] = dz.Cross(dx).Normalized(); // y-up
+                _norms[i, j] = dz.Cross(dx).Normalized();
             }
         }
 
-        // Find min/max heights for color mapping
-        float minH = float.MaxValue, maxH = float.MinValue;
-        for (int j = 0; j < _N; j++)
+        // Scan height bounds for heat map
+        if (_heatMapEnabled)
         {
-            for (int i = 0; i < _N; i++)
+            _heatMapMinHeight = float.MaxValue;
+            _heatMapMaxHeight = float.MinValue;
+            for (int j = 0; j < _N; j++)
             {
-                if (!float.IsNaN(_heights[i, j]))
+                for (int i = 0; i < _N; i++)
                 {
-                    if (_heights[i, j] < minH) minH = _heights[i, j];
-                    if (_heights[i, j] > maxH) maxH = _heights[i, j];
+                    if (!float.IsNaN(_heights[i, j]))
+                    {
+                        _heatMapMinHeight = Mathf.Min(_heatMapMinHeight, _heights[i, j]);
+                        _heatMapMaxHeight = Mathf.Max(_heatMapMaxHeight, _heights[i, j]);
+                    }
                 }
             }
         }
-        float heightRange = maxH - minH;
-        if (heightRange < 0.001f) heightRange = 0.001f; // avoid divide by zero
 
-        // rebuild mesh with vertex colors
+        // Rebuild mesh
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
 
@@ -358,37 +441,72 @@ public partial class TerrainDisk : Node3D
                 Vector3 v01 = new Vector3(x0, _heights[i, j + 1], z1);
                 Vector3 v11 = new Vector3(x1, _heights[i + 1, j + 1], z1);
 
-                // Compute colors based on height (yellow=high, green=mid, blue=low, purple=flat)
-                Color c00 = HeightToColor(_heights[i, j], minH, maxH, heightRange);
-                Color c10 = HeightToColor(_heights[i + 1, j], minH, maxH, heightRange);
-                Color c01 = HeightToColor(_heights[i, j + 1], minH, maxH, heightRange);
-                Color c11 = HeightToColor(_heights[i + 1, j + 1], minH, maxH, heightRange);
-
                 Vector2 uv00 = new((float)i / (_N - 1),       (float)j / (_N - 1));
                 Vector2 uv10 = new((float)(i + 1) / (_N - 1), (float)j / (_N - 1));
                 Vector2 uv01 = new((float)i / (_N - 1),       (float)(j + 1) / (_N - 1));
                 Vector2 uv11 = new((float)(i + 1) / (_N - 1), (float)(j + 1) / (_N - 1));
 
                 bool flip = ((i + j) & 1) == 1;
+
                 if (!flip)
                 {
-                    st.SetColor(c00); st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
-                    st.SetColor(c10); st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
-                    st.SetColor(c01); st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                    // Add vertex colors if heat map is enabled
+                    if (_heatMapEnabled)
+                    {
+                        st.SetColor(GetHeatMapColor(_heights[i, j]));
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j]));
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetColor(GetHeatMapColor(_heights[i, j + 1]));
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
 
-                    st.SetColor(c10); st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
-                    st.SetColor(c11); st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
-                    st.SetColor(c01); st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j]));
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j + 1]));
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetColor(GetHeatMapColor(_heights[i, j + 1]));
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                    }
+                    else
+                    {
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                    }
                 }
                 else
                 {
-                    st.SetColor(c00); st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
-                    st.SetColor(c11); st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
-                    st.SetColor(c01); st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                    // Add vertex colors if heat map is enabled
+                    if (_heatMapEnabled)
+                    {
+                        st.SetColor(GetHeatMapColor(_heights[i, j]));
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j + 1]));
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetColor(GetHeatMapColor(_heights[i, j + 1]));
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
 
-                    st.SetColor(c00); st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
-                    st.SetColor(c10); st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
-                    st.SetColor(c11); st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetColor(GetHeatMapColor(_heights[i, j]));
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j]));
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetColor(GetHeatMapColor(_heights[i + 1, j + 1]));
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                    }
+                    else
+                    {
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                    }
                 }
             }
         }
@@ -399,32 +517,70 @@ public partial class TerrainDisk : Node3D
         var mesh = st.Commit();
         _meshMI.Mesh = mesh;
 
-        if (MaterialOverride != null)
+        // Apply material - always use a fresh one that respects heat map state
+        var mat = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.36f, 0.31f, 0.27f),
+            Roughness   = 1.0f,
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel,
+            VertexColorUseAsAlbedo = _heatMapEnabled  // Enable vertex colors for heat map
+        };
+        
+        // If we have a material override and heat map is NOT enabled, use it
+        if (MaterialOverride != null && !_heatMapEnabled)
             _meshMI.SetSurfaceOverrideMaterial(0, MaterialOverride);
         else
-        {
-            var mat = new StandardMaterial3D
-            {
-                AlbedoColor = new Color(1f, 1f, 1f), // white base so vertex colors show through
-                Roughness   = 1.0f,
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel,
-                VertexColorUseAsAlbedo = true // USE VERTEX COLORS!
-            };
             _meshMI.SetSurfaceOverrideMaterial(0, mat);
-        }
 
-        // Update collider
+        // Update physics collider
         var faces = mesh.GetFaces();
         var concave = new ConcavePolygonShape3D { Data = faces };
         _colShape.Shape = concave;
+
+        _staticBody.CollisionLayer = ColliderLayer;
+        _staticBody.CollisionMask  = ColliderMask;
+        _colShape.Disabled = false;
     }
 
-    // -------------------------------------------------------------------------
-    // Internals
-    // -------------------------------------------------------------------------
-    
-    /// <summary>
-    /// Compute color for a height value, showing dig progress:
+    private Color GetHeatMapColor(float height)
+    {
+        if (!_heatMapEnabled || _heatMapMinHeight >= _heatMapMaxHeight)
+            return new Color(1f, 1f, 1f);
+
+        float range = _heatMapMaxHeight - _heatMapMinHeight;
+        if (range < 0.001f) return Color.FromHsv(0.5f, 0.5f, 0.8f); // gray for flat terrain
+
+        float t = (height - _heatMapMinHeight) / range;
+        t = Mathf.Clamp(t, 0f, 1f);
+
+        // Color gradient: purple (low) -> cyan -> green -> yellow -> red (high)
+        if (t > 0.75f)
+        {
+            // High: yellow to red
+            float lerp = (t - 0.75f) * 4f;
+            return new Color(1f, 1f - lerp, 0f); // yellow->red
+        }
+        else if (t > 0.5f)
+        {
+            // Medium-high: green to yellow
+            float lerp = (t - 0.5f) * 4f;
+            return new Color(lerp, 1f, 0f); // green->yellow
+        }
+        else if (t > 0.25f)
+        {
+            // Medium-low: cyan to green
+            float lerp = (t - 0.25f) * 4f;
+            return new Color(0f, 1f, 1f - lerp); // cyan->green
+        }
+        else
+        {
+            // Low terrain: purple to cyan
+            float lerp = t * 4f;
+            return new Color(0.6f - lerp * 0.6f, 0.3f + lerp * 0.7f, 0.8f + lerp * 0.2f); // purple->cyan
+        }
+    }
+
+    // ...
     /// - Yellow: high (needs digging)
     /// - Green: medium (partial progress)
     /// - Blue: low (near flat)

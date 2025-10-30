@@ -34,6 +34,29 @@ namespace DigSim3D.App
         private Vector3[,] _norms = null!;    // per-vertex normals (local space)
         private int _N;
         private float _step;         // world spacing between grid verts
+        
+        // Height bounds for coloring
+        private float _minHeight = float.MaxValue;
+        private float _maxHeight = float.MinValue;
+        
+        // Dirty flag for color update
+        private bool _colorsDirty = false;
+        
+        // Heat map toggle
+        private bool _heatMapEnabled = true;
+        public bool HeatMapEnabled
+        {
+            get => _heatMapEnabled;
+            set
+            {
+                if (_heatMapEnabled != value)
+                {
+                    _heatMapEnabled = value;
+                    _colorsDirty = true;
+                    CallDeferred(nameof(UpdateMeshFromHeights));
+                }
+            }
+        }
 
         public override void _Ready()
         {
@@ -81,6 +104,9 @@ namespace DigSim3D.App
             bool Inside(float x, float z) => (x * x + z * z) <= (Radius * Radius);
 
             // heights
+            _minHeight = float.MaxValue;
+            _maxHeight = float.MinValue;
+            
             for (int j = 0; j < N; j++)
             {
                 float z = -Radius + j * step;
@@ -91,6 +117,10 @@ namespace DigSim3D.App
                     {
                         float n = Smoothed(x, z, blurR);
                         _heights[i, j] = Amplitude * n;
+                        
+                        // Track height bounds
+                        _minHeight = Mathf.Min(_minHeight, _heights[i, j]);
+                        _maxHeight = Mathf.Max(_maxHeight, _heights[i, j]);
                     }
                     else
                     {
@@ -148,28 +178,34 @@ namespace DigSim3D.App
                     Vector2 uv10 = new((float)(i + 1) / (N - 1), (float)j / (N - 1));
                     Vector2 uv01 = new((float)i / (N - 1), (float)(j + 1) / (N - 1));
                     Vector2 uv11 = new((float)(i + 1) / (N - 1), (float)(j + 1) / (N - 1));
+                    
+                    // Get vertex colors based on height
+                    Color c00 = GetHeightColor(_heights[i, j]);
+                    Color c10 = GetHeightColor(_heights[i + 1, j]);
+                    Color c01 = GetHeightColor(_heights[i, j + 1]);
+                    Color c11 = GetHeightColor(_heights[i + 1, j + 1]);
 
                     bool flip = ((i + j) & 1) == 1; // checkerboard
 
                     if (!flip)
                     {
-                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
-                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
-                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
 
-                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
-                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
-                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
                     }
                     else
                     {
-                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
-                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
-                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
 
-                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
-                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
-                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
                     }
                 }
             }
@@ -186,8 +222,9 @@ namespace DigSim3D.App
             {
                 var mat = new StandardMaterial3D
                 {
-                    AlbedoColor = new Color(0.36f, 0.31f, 0.27f),
-                    Roughness = 1.0f,
+                    VertexColorUseAsAlbedo = true,
+                    AlbedoColor = new Color(0.6f, 0.55f, 0.5f), // Base dirt/sand color
+                    Roughness = 0.9f,
                     ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel
                 };
                 _meshMI.SetSurfaceOverrideMaterial(0, mat);
@@ -257,7 +294,188 @@ namespace DigSim3D.App
             normal = (GlobalTransform.Basis * n).Normalized();
             return true;
         }
+        
+        // -------------------------------------------------------------------------
+        // Modify terrain height at a location (for digging simulation)
+        // -------------------------------------------------------------------------
+        public void ModifyHeight(Vector3 worldXZ, float deltaHeight, float radius)
+        {
+            Vector3 local = ToLocal(worldXZ);
+            float x = local.X, z = local.Z;
+            
+            // Outside disk?
+            if ((x * x + z * z) > (Radius * Radius)) return;
+            
+            // Apply to nearby grid points with falloff
+            float fx = (x + Radius) / _step;
+            float fz = (z + Radius) / _step;
+            
+            int centerI = Mathf.RoundToInt(fx);
+            int centerJ = Mathf.RoundToInt(fz);
+            int affectRadius = Mathf.CeilToInt(radius / _step);
+            
+            for (int j = centerJ - affectRadius; j <= centerJ + affectRadius; j++)
+            {
+                if (j < 0 || j >= _N) continue;
+                
+                for (int i = centerI - affectRadius; i <= centerI + affectRadius; i++)
+                {
+                    if (i < 0 || i >= _N) continue;
+                    if (float.IsNaN(_heights[i, j])) continue;
+                    
+                    // Distance-based falloff
+                    float dist = Mathf.Sqrt((i - fx) * (i - fx) + (j - fz) * (j - fz)) * _step;
+                    if (dist > radius) continue;
+                    
+                    float falloff = 1f - (dist / radius);
+                    _heights[i, j] += deltaHeight * falloff;
+                    
+                    // Update height bounds
+                    _minHeight = Mathf.Min(_minHeight, _heights[i, j]);
+                    _maxHeight = Mathf.Max(_maxHeight, _heights[i, j]);
+                }
+            }
+            
+            _colorsDirty = true;
+            
+            // Rebuild mesh to reflect changes
+            CallDeferred(nameof(UpdateMeshFromHeights));
+        }
+        
+        // -------------------------------------------------------------------------
+        // Get vertex color based on height - Beautiful gradient heat map
+        // -------------------------------------------------------------------------
+        private Color GetHeightColor(float height)
+        {
+            // If heat map is disabled, return white (uses material's natural color/texture)
+            if (!_heatMapEnabled)
+            {
+                return Colors.White; // No color overlay - use material's base color
+            }
+            
+            if (_maxHeight <= _minHeight) return new Color(0.2f, 0.6f, 0.3f); // Default darker green
+            
+            float t = (_maxHeight - height) / (_maxHeight - _minHeight);
+            t = Mathf.Clamp(t, 0f, 1f);
+            
+            // Beautiful gradient: Deep Red (highest) -> Orange -> Yellow -> Green -> Teal -> Deep Blue (lowest)
+            if (t < 0.2f)
+            {
+                // Deep Red to Bright Orange (highest peaks)
+                float local = t / 0.2f;
+                return new Color(0.8f, 0.1f, 0.1f).Lerp(new Color(1.0f, 0.4f, 0.0f), local);
+            }
+            else if (t < 0.4f)
+            {
+                // Orange to Yellow (high areas)
+                float local = (t - 0.2f) / 0.2f;
+                return new Color(1.0f, 0.4f, 0.0f).Lerp(new Color(1.0f, 0.85f, 0.0f), local);
+            }
+            else if (t < 0.6f)
+            {
+                // Yellow to Light Green (mid-high)
+                float local = (t - 0.4f) / 0.2f;
+                return new Color(1.0f, 0.85f, 0.0f).Lerp(new Color(0.5f, 0.85f, 0.3f), local);
+            }
+            else if (t < 0.8f)
+            {
+                // Green to Teal (mid-low)
+                float local = (t - 0.6f) / 0.2f;
+                return new Color(0.5f, 0.85f, 0.3f).Lerp(new Color(0.2f, 0.7f, 0.6f), local);
+            }
+            else
+            {
+                // Teal to Deep Blue (lowest areas)
+                float local = (t - 0.8f) / 0.2f;
+                return new Color(0.2f, 0.7f, 0.6f).Lerp(new Color(0.1f, 0.3f, 0.7f), local);
+            }
+        }
+        
+        // -------------------------------------------------------------------------
+        // Update mesh from modified heights (called deferred after modifications)
+        // -------------------------------------------------------------------------
+        private void UpdateMeshFromHeights()
+        {
+            if (_meshMI == null || _meshMI.Mesh == null) return;
+            
+            var st = new SurfaceTool();
+            st.Begin(Mesh.PrimitiveType.Triangles);
+            
+            int N = _N;
+            
+            for (int j = 0; j < N - 1; j++)
+            {
+                float z0 = -Radius + j * _step;
+                float z1 = z0 + _step;
 
+                for (int i = 0; i < N - 1; i++)
+                {
+                    float x0 = -Radius + i * _step;
+                    float x1 = x0 + _step;
+
+                    if (float.IsNaN(_heights[i, j]) || float.IsNaN(_heights[i + 1, j]) ||
+                        float.IsNaN(_heights[i, j + 1]) || float.IsNaN(_heights[i + 1, j + 1]))
+                        continue;
+
+                    Vector3 v00 = new Vector3(x0, _heights[i, j], z0);
+                    Vector3 v10 = new Vector3(x1, _heights[i + 1, j], z0);
+                    Vector3 v01 = new Vector3(x0, _heights[i, j + 1], z1);
+                    Vector3 v11 = new Vector3(x1, _heights[i + 1, j + 1], z1);
+
+                    Vector2 uv00 = new((float)i / (N - 1), (float)j / (N - 1));
+                    Vector2 uv10 = new((float)(i + 1) / (N - 1), (float)j / (N - 1));
+                    Vector2 uv01 = new((float)i / (N - 1), (float)(j + 1) / (N - 1));
+                    Vector2 uv11 = new((float)(i + 1) / (N - 1), (float)(j + 1) / (N - 1));
+                    
+                    // Get vertex colors
+                    Color c00 = GetHeightColor(_heights[i, j]);
+                    Color c10 = GetHeightColor(_heights[i + 1, j]);
+                    Color c01 = GetHeightColor(_heights[i, j + 1]);
+                    Color c11 = GetHeightColor(_heights[i + 1, j + 1]);
+
+                    bool flip = ((i + j) & 1) == 1;
+
+                    if (!flip)
+                    {
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
+
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
+                    }
+                    else
+                    {
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
+
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
+                    }
+                }
+            }
+            
+            st.Index();
+            st.GenerateTangents();
+            
+            var mesh = st.Commit();
+            _meshMI.Mesh = mesh;
+            
+            // Update material to use vertex colors with base dirt color
+            var mat = new StandardMaterial3D
+            {
+                VertexColorUseAsAlbedo = true,
+                AlbedoColor = new Color(0.6f, 0.55f, 0.5f), // Base dirt/sand color
+                Roughness = 0.9f,
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel
+            };
+            _meshMI.SetSurfaceOverrideMaterial(0, mat);
+            
+            _colorsDirty = false;
+        }
         // -------------------------------------------------------------------------
         // Internals
         // -------------------------------------------------------------------------

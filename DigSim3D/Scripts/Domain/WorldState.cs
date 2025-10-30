@@ -15,5 +15,11 @@ namespace DigSim3D.Domain
 
         // Optional: give services access to terrain sampling
         public TerrainDisk? Terrain { get; set; }
+        
+        // Enhanced dig system tracking
+        public float TotalDirtExtracted { get; set; } = 0f;
+        
+        // Obstacles for path planning
+        public List<Obstacle3D> Obstacles { get; set; } = new();
     }
 }

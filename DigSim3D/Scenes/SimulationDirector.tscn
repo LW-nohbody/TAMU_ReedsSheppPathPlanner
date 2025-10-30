@@ -1,10 +1,10 @@
 [gd_scene load_steps=21 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
-[ext_resource type="Script" uid="uid://bjy5klmfh1o1x" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
+[ext_resource type="Script" uid="uid://bfglxgrxg7rc2" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
 [ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://Scenes/Vehicles/Vehicle_RS.tscn" id="2_q02dg"]
-[ext_resource type="Script" uid="uid://crlual7ri4lci" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
-[ext_resource type="Script" uid="uid://dijjqekvx8xfe" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
+[ext_resource type="Script" uid="uid://ctei1mufbr5ia" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
+[ext_resource type="Script" uid="uid://dvogxcl3icimb" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tjpb3"]
 sky_top_color = Color(0.361634, 0.42475, 0.999998, 1)
@@ -96,10 +96,9 @@ CameraChasePath = NodePath("Cameras/CameraChase")
 CameraFreePath = NodePath("Cameras/CameraFree")
 CameraOrbitPath = NodePath("Cameras/CameraOrbit")
 TerrainPath = NodePath("Terrain")
-VehicleCount = 20
+VehicleCount = 5
 VehicleLength = 0.75
 VehicleWidth = 0.5
-GoalAdvance = 10.0
 TurnRadiusMeters = 1.0
 SampleStepMeters = 0.15
 DebugPathOnTop = false
@@ -143,7 +142,7 @@ ScanRootPath = NodePath("../Obstacles")
 [node name="Obstacles" type="Node3D" parent="."]
 
 [node name="CylinderObs1" type="Node3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.19776, 0, -5.50917)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26.231, 0, -5.50917)
 script = ExtResource("4_cyl")
 
 [node name="EditorMesh" type="MeshInstance3D" parent="Obstacles/CylinderObs1"]
@@ -155,6 +154,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.39552, 0, 5.76878)
 script = ExtResource("4_cyl")
 
 [node name="EditorMesh" type="MeshInstance3D" parent="Obstacles/CylinderObs2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.7356, 0, 0)
 material_override = SubResource("StandardMaterial3D_xklxq")
 mesh = SubResource("CylinderMesh_nl4sy")
 
@@ -163,6 +163,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.35526, 0, 5.76878)
 script = ExtResource("4_cyl")
 
 [node name="EditorMesh" type="MeshInstance3D" parent="Obstacles/CylinderObs3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 18.3496)
 material_override = SubResource("StandardMaterial3D_hk6n0")
 mesh = SubResource("CylinderMesh_xcytq")
 
@@ -171,6 +172,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.58439, 0, 7.975)
 script = ExtResource("4_cyl")
 
 [node name="EditorMesh" type="MeshInstance3D" parent="Obstacles/CylinderObs4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 16.1235)
 material_override = SubResource("StandardMaterial3D_paq1p")
 mesh = SubResource("CylinderMesh_5352s")
 
@@ -179,6 +181,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.77531, 0, -1.60339)
 script = ExtResource("4_cyl")
 
 [node name="EditorMesh" type="MeshInstance3D" parent="Obstacles/CylinderObs5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -144.523)
 material_override = SubResource("StandardMaterial3D_4ksok")
 mesh = SubResource("CylinderMesh_ayuat")
 
@@ -187,5 +190,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.00206, 0, -3.32226)
 script = ExtResource("4_cyl")
 
 [node name="EditorMesh" type="MeshInstance3D" parent="Obstacles/CylinderObs6"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.8443, 0, 0)
 material_override = SubResource("StandardMaterial3D_qfrvw")
 mesh = SubResource("CylinderMesh_sin3t")

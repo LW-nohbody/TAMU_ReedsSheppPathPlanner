@@ -46,11 +46,16 @@ public partial class SimulationDirector : Node3D
     private readonly List<RobotTargetIndicator> _indicators = new();  // Visual indicators
     public WorldState World;  // Add world state
     private RobotCoordinator _coordinator;  // Coordination system
-    private RobotStatsUI _statsUI;  // Statistics UI
     
     // Path mesh management to prevent memory leaks
     private readonly List<MeshInstance3D> _pathMeshes = new();
     private const int MAX_PATH_MESHES = 30; // Limit displayed paths to prevent crash
+
+    // New visualization systems
+    private bool _heatMapEnabled = false;
+    private SimCore.Game.PathVisualizer _pathVisualizer;
+    private SimCore.Game.TerrainModifier _terrainModifier;
+    private SimCore.UI.RobotPayloadUI _payloadUI;
 
     private Camera3D _camTop, _camChase, _camFree, _camOrbit;
     private bool _usingTop = true;
@@ -90,9 +95,15 @@ public partial class SimulationDirector : Node3D
         // Create coordinator for robot collision avoidance
         _coordinator = new SimCore.Core.RobotCoordinator(minSeparationMeters: 3.0f);
         
-        // Create stats UI
-        _statsUI = new RobotStatsUI();
-        AddChild(_statsUI);
+        // Initialize visualization systems
+        _terrainModifier = new SimCore.Game.TerrainModifier();
+        _terrain.AddChild(_terrainModifier);
+        
+        _pathVisualizer = new SimCore.Game.PathVisualizer();
+        AddChild(_pathVisualizer);
+        
+        _payloadUI = new SimCore.UI.RobotPayloadUI();
+        AddChild(_payloadUI);
 
         // Spawn on ring
         int N = Math.Max(1, VehicleCount);
@@ -129,12 +140,17 @@ public partial class SimulationDirector : Node3D
             _brains.Add(brain);
             _vehicles.Add(car);
             
-            // Register with stats UI
-            _statsUI.RegisterRobot(i, spec.Name);
-            
-            // Create visual target indicator
+            // Create robot color for visualization
             float hue = (float)i / N;
             Color robotColor = Color.FromHsv(hue, 0.8f, 0.9f);
+            
+            // Register with path visualizer
+            _pathVisualizer.RegisterRobotPath(i, robotColor);
+            
+            // Register with payload UI
+            _payloadUI.AddRobot(i, spec.Name, robotColor);
+            
+            // Create visual target indicator
             var indicator = new RobotTargetIndicator();
             indicator.Initialize(robotColor);
             AddChild(indicator);
@@ -167,6 +183,17 @@ public partial class SimulationDirector : Node3D
     // ---------- Input / camera (unchanged) ----------
     public override void _Input(InputEvent e)
     {
+        // Heat map toggle with 'H' key
+        if (e is InputEventKey keyEvent && keyEvent.Pressed && keyEvent.Keycode == Key.H)
+        {
+            if (_terrain != null)
+            {
+                _terrain.HeatMapEnabled = !_terrain.HeatMapEnabled;
+                _payloadUI.UpdateHeatMapStatus(_terrain.HeatMapEnabled);
+                GD.Print($"[Director] Heat Map: {(_terrain.HeatMapEnabled ? "ON" : "OFF")}");
+            }
+        }
+
         if (e is InputEventMouseMotion mm && _rotatingFreeCam)
         {
             _freeYaw += -mm.Relative.X * MouseSensitivity;
@@ -292,8 +319,10 @@ public partial class SimulationDirector : Node3D
     public override void _PhysicsProcess(double delta)
     {
         // Check each robot to see if it finished its path and needs to dig/dump
-        foreach (var brain in _brains)
+        for (int i = 0; i < _brains.Count; i++)
         {
+            var brain = _brains[i];
+            
             // Get the controller from brain using reflection (since it's private)
             var ctrlField = typeof(VehicleBrain).GetField("_ctrl", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             var ctrl = ctrlField?.GetValue(brain) as VehicleAgent3D;
@@ -308,6 +337,15 @@ public partial class SimulationDirector : Node3D
                     brain.OnArrival();
                     brain.PlanAndGoOnce();
                 }
+                
+                // Update payload UI with robot status
+                float capacity = SimpleDigLogic.ROBOT_CAPACITY;
+                float payloadPercent = (brain.Payload / capacity) * 100f;
+                _payloadUI.UpdatePayload(i, payloadPercent, brain.Status, brain.CurrentPosition);
+                
+                // Update path visualization
+                var currentPath = brain.GetCurrentPath();
+                _pathVisualizer.UpdatePath(i, currentPath);
             }
         }
     }

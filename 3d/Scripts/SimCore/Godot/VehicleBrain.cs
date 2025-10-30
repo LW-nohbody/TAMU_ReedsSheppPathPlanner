@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 using SimCore.Core;
 using SimCore.Services;
@@ -183,4 +184,25 @@ public sealed class VehicleBrain
   }
 
   public float GetPayload() => _payload;
+
+  /// <summary>
+  /// Get the current planned path for visualization
+  /// </summary>
+  public List<Vector3> GetCurrentPath()
+  {
+    var path = new List<Vector3>();
+    
+    // Get path from the controller using reflection
+    var pathField = typeof(VehicleAgent3D).GetField("_path", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+    if (pathField != null)
+    {
+      var pathArray = pathField.GetValue(_ctrl) as Vector3[];
+      if (pathArray != null)
+      {
+        path.AddRange(pathArray);
+      }
+    }
+    
+    return path;
+  }
 }
