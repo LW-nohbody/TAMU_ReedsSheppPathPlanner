@@ -44,10 +44,8 @@ public static class DAdapter
 			if (ValidatePath(startPos, startYawRad, path, turnRadiusMeters, sampleStepMeters, fieldRadius))
 			{
 				best = path;
-				GD.Print($"[DAdapter] Selected Path {path[0].Param}: {path[0].Steering}, {path[1].Param}: {path[1].Steering}, {path[2].Param}: {path[2].Steering}");
 				break;
 			}
-			GD.Print($"[DAdapter] Discarded Path {path[0].Param}: {path[0].Steering}, {path[1].Param}: {path[1].Steering}, {path[2].Param}: {path[2].Steering}");			
 		}
 		if(best == null)
 		{
