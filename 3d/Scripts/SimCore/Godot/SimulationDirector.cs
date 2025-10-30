@@ -42,6 +42,15 @@ public partial class SimulationDirector : Node3D
     private TerrainDisk _terrain;
     private Node3D _vehiclesRoot;
     private readonly List<VehicleAgent3D> _vehicles = new();
+    private readonly List<VehicleBrain> _brains = new();  // Add brains list
+    private readonly List<RobotTargetIndicator> _indicators = new();  // Visual indicators
+    public WorldState World;  // Add world state
+    private RobotCoordinator _coordinator;  // Coordination system
+    private RobotStatsUI _statsUI;  // Statistics UI
+    
+    // Path mesh management to prevent memory leaks
+    private readonly List<MeshInstance3D> _pathMeshes = new();
+    private const int MAX_PATH_MESHES = 30; // Limit displayed paths to prevent crash
 
     private Camera3D _camTop, _camChase, _camFree, _camOrbit;
     private bool _usingTop = true;
@@ -78,6 +87,13 @@ public partial class SimulationDirector : Node3D
         var obstacleList = _obstacleManager.GetObstacles();
         GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 1.0f);
 
+        // Create coordinator for robot collision avoidance
+        _coordinator = new SimCore.Core.RobotCoordinator(minSeparationMeters: 3.0f);
+        
+        // Create stats UI
+        _statsUI = new RobotStatsUI();
+        AddChild(_statsUI);
+
         // Spawn on ring
         int N = Math.Max(1, VehicleCount);
         for (int i = 0; i < N; i++)
@@ -98,48 +114,54 @@ public partial class SimulationDirector : Node3D
             car.Wheelbase = VehicleLength;
             car.TrackWidth = VehicleWidth;
 
-            // === Build a real RS path for THIS car (the “old working” way) ===
-            double startYaw = theta;                         // yaw is in XZ math space
-            var start = car.GlobalTransform.Origin;
-            var goal = start + outward * GoalAdvance;        // go out 5m
-            double goalYaw = startYaw + Mathf.Pi / 2.0;      // then +90° right
-
-            // === Build a real path for THIS car using the new Hybrid planner ===
-
-            // Build start/goal poses
-            var startPose = new Pose(start.X, start.Z, startYaw);
-            var goalPose = new Pose(goal.X, goal.Z, goalYaw);
-
-            // Grab vehicle spec (you may already have this stored per car)
-            VehicleSpec spec = car.Spec; // adjust this if spec is retrieved differently
-            WorldState world = new WorldState
-            {
-                Obstacles = obstacleList,
-                Terrain = _terrain
-            };
-
+            // Create vehicle spec for dig system
+            var spec = new VehicleSpec($"Robot_{i+1}", KinematicType.ReedsShepp, VehicleLength, VehicleWidth, RideHeight, TurnRadiusMeters, 2.0f);
             
+            // Create planner for Reeds-Shepp paths
+            var planner = new HybridReedsSheppPlanner();
             
-
-
-            // Get path using hybrid planner
-            var hybridPlanner = new HybridReedsSheppPlanner();
-            PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, world);
-
-            // Draw and feed to vehicle
-            DrawPathProjectedToTerrain(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
-            DrawMarkerProjected(start, new Color(0, 1, 0));
-            DrawMarkerProjected(goal, new Color(0, 0, 1));
-
-            car.SetPath(path.Points.ToArray(), path.Gears.ToArray());
-
+            // Create brain for dig system with coordinator
+            float theta0 = i * (Mathf.Tau / N);
+            float theta1 = (i + 1) * (Mathf.Tau / N);
+            float digRadius = 7.0f;
+            var brain = new VehicleBrain(car, spec, planner, World, _terrain, _coordinator, i, theta0, theta1, digRadius, spawnXZ);
+            
+            _brains.Add(brain);
             _vehicles.Add(car);
+            
+            // Register with stats UI
+            _statsUI.RegisterRobot(i, spec.Name);
+            
+            // Create visual target indicator
+            float hue = (float)i / N;
+            Color robotColor = Color.FromHsv(hue, 0.8f, 0.9f);
+            var indicator = new RobotTargetIndicator();
+            indicator.Initialize(robotColor);
+            AddChild(indicator);
+            _indicators.Add(indicator);
 
-            GD.Print($"[Director] {car.Name} RS path: {path.Points.Count} samples");
+            // Give initial plan
+            brain.PlanAndGoOnce();
+
+            GD.Print($"[Director] {car.Name} spawned with dig sector {theta0:F2} to {theta1:F2} rad");
 
         }
 
+        // Draw sector visualization lines (colored radial lines showing robot assignments)
+        DrawSectorLines();
+
         _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
+    }
+
+    public override void _ExitTree()
+    {
+        // Clean up all path meshes to prevent memory leaks
+        foreach (var mesh in _pathMeshes)
+        {
+            if (IsInstanceValid(mesh))
+                mesh.QueueFree();
+        }
+        _pathMeshes.Clear();
     }
 
     // ---------- Input / camera (unchanged) ----------
@@ -267,6 +289,29 @@ public partial class SimulationDirector : Node3D
         }
     }
 
+    public override void _PhysicsProcess(double delta)
+    {
+        // Check each robot to see if it finished its path and needs to dig/dump
+        foreach (var brain in _brains)
+        {
+            // Get the controller from brain using reflection (since it's private)
+            var ctrlField = typeof(VehicleBrain).GetField("_ctrl", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var ctrl = ctrlField?.GetValue(brain) as VehicleAgent3D;
+            
+            if (ctrl != null)
+            {
+                // Check if robot is idle (path finished)
+                var doneField = typeof(VehicleAgent3D).GetField("_done", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (doneField != null && (bool)doneField.GetValue(ctrl))
+                {
+                    // Robot arrived - process dig/dump and plan next action
+                    brain.OnArrival();
+                    brain.PlanAndGoOnce();
+                }
+            }
+        }
+    }
+
     private void FollowChaseCamera(double delta)
     {
         if (_vehicles.Count == 0) return;
@@ -347,10 +392,20 @@ public partial class SimulationDirector : Node3D
     {
         if (points == null || points.Length < 2) return;
 
+        // Clean up old meshes to prevent memory leak
+        while (_pathMeshes.Count >= MAX_PATH_MESHES)
+        {
+            var oldMesh = _pathMeshes[0];
+            _pathMeshes.RemoveAt(0);
+            if (IsInstanceValid(oldMesh))
+                oldMesh.QueueFree();
+        }
+
         var mi = new MeshInstance3D();
         var im = new ImmediateMesh();
         mi.Mesh = im;
         AddChild(mi);
+        _pathMeshes.Add(mi); // Track for cleanup
 
         im.SurfaceBegin(Mesh.PrimitiveType.LineStrip);
         for (int i = 0; i < points.Length; i++)
@@ -380,5 +435,60 @@ public partial class SimulationDirector : Node3D
         mat.NoDepthTest = DebugPathOnTop;
         m.SetSurfaceOverrideMaterial(0, mat);
         AddChild(m);
+    }
+
+    /// <summary>
+    /// Draw colored radial lines from origin to show robot sector assignments
+    /// </summary>
+    private void DrawSectorLines()
+    {
+        int N = VehicleCount;
+        float digRadius = 7.0f; // Match the dig radius used in spawning
+        
+        // Generate distinct colors for each robot sector
+        Color[] colors = new Color[N];
+        for (int i = 0; i < N; i++)
+        {
+            float hue = (float)i / N;
+            colors[i] = Color.FromHsv(hue, 0.8f, 0.9f);
+        }
+
+        // Draw each sector boundary line
+        for (int i = 0; i < N; i++)
+        {
+            float theta = i * (Mathf.Tau / N);
+            var direction = new Vector3(Mathf.Cos(theta), 0, Mathf.Sin(theta));
+            var endPoint = direction * digRadius;
+
+            // Create line mesh
+            var mi = new MeshInstance3D();
+            var im = new ImmediateMesh();
+            mi.Mesh = im;
+            AddChild(mi);
+
+            im.SurfaceBegin(Mesh.PrimitiveType.Lines);
+            
+            // Start at origin (slightly above ground)
+            float y0 = SampleSurfaceY(Vector3.Zero) + 0.05f;
+            im.SurfaceAddVertex(new Vector3(0, y0, 0));
+            
+            // End at sector boundary
+            float y1 = SampleSurfaceY(endPoint) + 0.05f;
+            im.SurfaceAddVertex(new Vector3(endPoint.X, y1, endPoint.Z));
+            
+            im.SurfaceEnd();
+
+            // Apply color material
+            var mat = new StandardMaterial3D 
+            { 
+                AlbedoColor = colors[i], 
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded 
+            };
+            mat.NoDepthTest = DebugPathOnTop;
+            if (mi.Mesh != null && mi.Mesh.GetSurfaceCount() > 0)
+                mi.SetSurfaceOverrideMaterial(0, mat);
+        }
+        
+        GD.Print($"[Director] Drew {N} sector boundary lines");
     }
 }

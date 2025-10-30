@@ -1,4 +1,4 @@
-# Stuck Robot Fixes - Summary
+can # Stuck Robot Fixes - Summary
 
 ## Important: Reeds-Shepp Path Integrity
 **This project demonstrates Reeds-Shepp path planning algorithms. The robots MUST follow the planned Reeds-Shepp paths exactly as computed by the algorithm. We do NOT modify or reject paths based on terrain - that would defeat the purpose of the demonstration.**

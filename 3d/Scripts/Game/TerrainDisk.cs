@@ -257,33 +257,8 @@ public partial class TerrainDisk : Node3D
     }
 
     // -------------------------------------------------------------------------
-    // Internals
+    // Dig / Modify Terrain
     // -------------------------------------------------------------------------
-    private void EnsureChildren()
-    {
-        _meshMI = GetNodeOrNull<MeshInstance3D>("Mesh");
-        if (_meshMI == null)
-        {
-            _meshMI = new MeshInstance3D { Name = "Mesh" };
-            AddChild(_meshMI);
-        }
-
-        _staticBody = GetNodeOrNull<StaticBody3D>("Collider");
-        if (_staticBody == null)
-        {
-            _staticBody = new StaticBody3D { Name = "Collider" };
-            AddChild(_staticBody);
-        }
-
-        _colShape = _staticBody.GetNodeOrNull<CollisionShape3D>("Shape");
-        if (_colShape == null)
-        {
-            _colShape = new CollisionShape3D { Name = "Shape" };
-            _staticBody.AddChild(_colShape);
-        }
-    }
-
-    // Lower a circular area (world XZ) by deltaHeight (positive lowers).
     public void LowerArea(Vector3 worldXZ, float radius, float deltaHeight)
     {
         // Convert to local coordinates used by _heights
@@ -306,11 +281,10 @@ public partial class TerrainDisk : Node3D
             }
         }
 
-        // Recompute normals and mesh after modifying heights
+        // Recompute normals and rebuild mesh
         RecomputeNormalsAndMesh();
     }
 
-    // Return the maximum local height value (before transform into world space).
     public float GetMaxLocalHeight()
     {
         float maxh = float.MinValue;
@@ -345,7 +319,23 @@ public partial class TerrainDisk : Node3D
             }
         }
 
-        // --- mesh build -------------------------------------------------------
+        // Find min/max heights for color mapping
+        float minH = float.MaxValue, maxH = float.MinValue;
+        for (int j = 0; j < _N; j++)
+        {
+            for (int i = 0; i < _N; i++)
+            {
+                if (!float.IsNaN(_heights[i, j]))
+                {
+                    if (_heights[i, j] < minH) minH = _heights[i, j];
+                    if (_heights[i, j] > maxH) maxH = _heights[i, j];
+                }
+            }
+        }
+        float heightRange = maxH - minH;
+        if (heightRange < 0.001f) heightRange = 0.001f; // avoid divide by zero
+
+        // rebuild mesh with vertex colors
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
 
@@ -368,32 +358,37 @@ public partial class TerrainDisk : Node3D
                 Vector3 v01 = new Vector3(x0, _heights[i, j + 1], z1);
                 Vector3 v11 = new Vector3(x1, _heights[i + 1, j + 1], z1);
 
+                // Compute colors based on height (yellow=high, green=mid, blue=low, purple=flat)
+                Color c00 = HeightToColor(_heights[i, j], minH, maxH, heightRange);
+                Color c10 = HeightToColor(_heights[i + 1, j], minH, maxH, heightRange);
+                Color c01 = HeightToColor(_heights[i, j + 1], minH, maxH, heightRange);
+                Color c11 = HeightToColor(_heights[i + 1, j + 1], minH, maxH, heightRange);
+
                 Vector2 uv00 = new((float)i / (_N - 1),       (float)j / (_N - 1));
                 Vector2 uv10 = new((float)(i + 1) / (_N - 1), (float)j / (_N - 1));
                 Vector2 uv01 = new((float)i / (_N - 1),       (float)(j + 1) / (_N - 1));
                 Vector2 uv11 = new((float)(i + 1) / (_N - 1), (float)(j + 1) / (_N - 1));
 
-                bool flip = ((i + j) & 1) == 1; // checkerboard
-
+                bool flip = ((i + j) & 1) == 1;
                 if (!flip)
                 {
-                    st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
-                    st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
-                    st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                    st.SetColor(c00); st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                    st.SetColor(c10); st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                    st.SetColor(c01); st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
 
-                    st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
-                    st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
-                    st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                    st.SetColor(c10); st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                    st.SetColor(c11); st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                    st.SetColor(c01); st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
                 }
                 else
                 {
-                    st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
-                    st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
-                    st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
+                    st.SetColor(c00); st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                    st.SetColor(c11); st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                    st.SetColor(c01); st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]);     st.AddVertex(v01);
 
-                    st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
-                    st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
-                    st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                    st.SetColor(c00); st.SetUV(uv00); st.SetNormal(_norms[i, j]);         st.AddVertex(v00);
+                    st.SetColor(c10); st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]);     st.AddVertex(v10);
+                    st.SetColor(c11); st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
                 }
             }
         }
@@ -404,9 +399,94 @@ public partial class TerrainDisk : Node3D
         var mesh = st.Commit();
         _meshMI.Mesh = mesh;
 
-        // update collider
+        if (MaterialOverride != null)
+            _meshMI.SetSurfaceOverrideMaterial(0, MaterialOverride);
+        else
+        {
+            var mat = new StandardMaterial3D
+            {
+                AlbedoColor = new Color(1f, 1f, 1f), // white base so vertex colors show through
+                Roughness   = 1.0f,
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel,
+                VertexColorUseAsAlbedo = true // USE VERTEX COLORS!
+            };
+            _meshMI.SetSurfaceOverrideMaterial(0, mat);
+        }
+
+        // Update collider
         var faces = mesh.GetFaces();
         var concave = new ConcavePolygonShape3D { Data = faces };
         _colShape.Shape = concave;
+    }
+
+    // -------------------------------------------------------------------------
+    // Internals
+    // -------------------------------------------------------------------------
+    
+    /// <summary>
+    /// Compute color for a height value, showing dig progress:
+    /// - Yellow: high (needs digging)
+    /// - Green: medium (partial progress)
+    /// - Blue: low (near flat)
+    /// - Purple: completely flat (done)
+    /// </summary>
+    private Color HeightToColor(float h, float minH, float maxH, float range)
+    {
+        // Normalized height [0..1] where 0=lowest, 1=highest
+        float t = (h - minH) / range;
+        
+        // If very flat (low range), everything is purple
+        if (range < 0.05f)
+            return new Color(0.6f, 0.3f, 0.8f); // purple
+        
+        // Color gradient: high->yellow, mid->green, low->blue, flat->purple
+        if (t > 0.75f)
+        {
+            // High terrain: yellow to orange
+            float lerp = (t - 0.75f) * 4f;
+            return new Color(1f, 1f - lerp * 0.3f, 0f); // yellow->orange
+        }
+        else if (t > 0.5f)
+        {
+            // Medium-high: green to yellow
+            float lerp = (t - 0.5f) * 4f;
+            return new Color(lerp, 1f, 0f); // green->yellow
+        }
+        else if (t > 0.25f)
+        {
+            // Medium-low: cyan to green
+            float lerp = (t - 0.25f) * 4f;
+            return new Color(0f, 1f, 1f - lerp); // cyan->green
+        }
+        else
+        {
+            // Low terrain: purple to cyan (approaching flat)
+            float lerp = t * 4f;
+            return new Color(0.6f - lerp * 0.6f, 0.3f + lerp * 0.7f, 0.8f + lerp * 0.2f); // purple->cyan
+        }
+    }
+
+    private void EnsureChildren()
+    {
+        _meshMI = GetNodeOrNull<MeshInstance3D>("Mesh");
+        if (_meshMI == null)
+        {
+            _meshMI = new MeshInstance3D { Name = "Mesh" };
+            AddChild(_meshMI);
+        }
+
+        _staticBody = GetNodeOrNull<StaticBody3D>("Collider");
+        if (_staticBody == null)
+        {
+            _staticBody = new StaticBody3D { Name = "Collider" };
+            AddChild(_staticBody);
+        }
+
+        _colShape = _staticBody.GetNodeOrNull<CollisionShape3D>("Shape");
+        if (_colShape == null)
+        {
+            _colShape = new CollisionShape3D { Name = "Shape" };
+            _staticBody.AddChild(_colShape);
+        }
     }
 }
