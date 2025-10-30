@@ -111,7 +111,6 @@ public partial class VehicleAgent3D : CharacterBody3D
 
         if (curXZ.DistanceTo(tgt) < 0.12f)
         {
-            // GD.Print($"[{Name}] Reached wp[{_i}] @ {_path[_i]}");
             //GD.Print($"[{Name}] Reached wp[{_i}] @ {_path[_i]}");
             _i++;
             if (_i >= _path.Length)
