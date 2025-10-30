@@ -56,6 +56,10 @@ public partial class SimulationDirector : Node3D
     private SimCore.Game.PathVisualizer _pathVisualizer;
     private SimCore.Game.TerrainModifier _terrainModifier;
     private SimCore.UI.RobotPayloadUI _payloadUI;
+    
+    // Sector tracking for visual feedback
+    private readonly List<MeshInstance3D> _sectorLines = new();
+    private readonly HashSet<int> _completedSectors = new();
 
     private Camera3D _camTop, _camChase, _camFree, _camOrbit;
     private bool _usingTop = true;
@@ -137,6 +141,9 @@ public partial class SimulationDirector : Node3D
             float theta1 = (i + 1) * (Mathf.Tau / N);
             float digRadius = 10.0f;  // INCREASED sector radius for more area per robot
             var brain = new VehicleBrain(car, spec, planner, World, _terrain, _coordinator, i, theta0, theta1, digRadius, spawnXZ);
+            
+            // Register callback for sector completion
+            brain.SetSectorCompleteCallback(MarkSectorComplete);
             
             _brains.Add(brain);
             _vehicles.Add(car);
@@ -482,7 +489,7 @@ public partial class SimulationDirector : Node3D
     private void DrawSectorLines()
     {
         int N = VehicleCount;
-        float digRadius = 10.0f; // INCREASED to match robot sector radius
+        float digRadius = 10.0f;
         
         // Generate distinct colors for each robot sector
         Color[] colors = new Color[N];
@@ -499,35 +506,74 @@ public partial class SimulationDirector : Node3D
             var direction = new Vector3(Mathf.Cos(theta), 0, Mathf.Sin(theta));
             var endPoint = direction * digRadius;
 
-            // Create line mesh
+            // Create line mesh with thick width for visibility
             var mi = new MeshInstance3D();
             var im = new ImmediateMesh();
             mi.Mesh = im;
             AddChild(mi);
-
-            im.SurfaceBegin(Mesh.PrimitiveType.Lines);
             
-            // Start at origin (slightly above ground)
-            float y0 = SampleSurfaceY(Vector3.Zero) + 0.05f;
+            // Store the mesh instance for later updates
+            _sectorLines.Add(mi);
+
+            im.SurfaceBegin(Mesh.PrimitiveType.LineStrip);
+            
+            // Start at origin (above ground for visibility)
+            float y0 = SampleSurfaceY(Vector3.Zero) + 0.5f;
             im.SurfaceAddVertex(new Vector3(0, y0, 0));
             
             // End at sector boundary
-            float y1 = SampleSurfaceY(endPoint) + 0.05f;
+            float y1 = SampleSurfaceY(endPoint) + 0.5f;
             im.SurfaceAddVertex(new Vector3(endPoint.X, y1, endPoint.Z));
             
             im.SurfaceEnd();
 
-            // Apply color material
+            // Apply color material - BRIGHTER, thicker, and more visible
             var mat = new StandardMaterial3D 
             { 
-                AlbedoColor = colors[i], 
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded 
+                AlbedoColor = colors[i],
+                Roughness = 0.0f,
+                Metallic = 0.9f,
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                VertexColorUseAsAlbedo = false
             };
-            mat.NoDepthTest = DebugPathOnTop;
+            mat.NoDepthTest = true;
+            mat.DisableReceiveShadows = true;
+            
             if (mi.Mesh != null && mi.Mesh.GetSurfaceCount() > 0)
                 mi.SetSurfaceOverrideMaterial(0, mat);
         }
         
         GD.Print($"[Director] Drew {N} sector boundary lines");
+    }
+    
+    /// <summary>
+    /// Mark a sector as complete and change its color to black
+    /// </summary>
+    public void MarkSectorComplete(int sectorId)
+    {
+        if (_completedSectors.Contains(sectorId)) return;
+        
+        _completedSectors.Add(sectorId);
+        
+        // Change the sector line color to black (completely dark)
+        if (sectorId >= 0 && sectorId < _sectorLines.Count)
+        {
+            var mi = _sectorLines[sectorId];
+            if (mi != null && mi.Mesh != null && mi.Mesh.GetSurfaceCount() > 0)
+            {
+                var completedMat = new StandardMaterial3D
+                {
+                    AlbedoColor = new Color(0.1f, 0.1f, 0.1f, 1),  // Very dark gray/black
+                    Roughness = 0.0f,
+                    Metallic = 0.0f,
+                    ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded
+                };
+                completedMat.NoDepthTest = true;
+                completedMat.DisableReceiveShadows = true;
+                mi.SetSurfaceOverrideMaterial(0, completedMat);
+                
+                GD.Print($"[Director] Sector {sectorId} marked COMPLETE (changed to BLACK)");
+            }
+        }
     }
 }

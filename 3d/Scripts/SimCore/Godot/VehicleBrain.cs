@@ -26,6 +26,9 @@ public sealed class VehicleBrain
   private readonly float _thetaMin, _thetaMax, _maxRadius;
   private readonly Vector3 _homePosition;
   
+  // Callback when sector is complete
+  private System.Action<int> _onSectorComplete = null;
+  
   // Robot state
   private float _payload = 0f;
   private bool _returningHome = false;
@@ -33,6 +36,7 @@ public sealed class VehicleBrain
   private float _totalDug = 0f;
   private Vector3 _currentTarget = Vector3.Zero;
   private string _currentStatus = "Initializing";
+  private bool _sectorCompleted = false;
 
   // Public properties for UI/stats
   public int RobotId => _robotId;
@@ -67,6 +71,14 @@ public sealed class VehicleBrain
     _thetaMax = thetaMax;
     _maxRadius = maxRadius;
     _homePosition = homePosition;
+  }
+
+  /// <summary>
+  /// Set callback for when this sector is complete
+  /// </summary>
+  public void SetSectorCompleteCallback(System.Action<int> callback)
+  {
+    _onSectorComplete = callback;
   }
 
   public void PlanAndGoOnce()
@@ -118,6 +130,14 @@ public sealed class VehicleBrain
       // Check if sector is already flat enough
       if (!SimpleDigLogic.HasWorkRemaining(_terrain, _thetaMin, _thetaMax, _maxRadius))
       {
+        // Sector complete! Notify director and idle
+        if (!_sectorCompleted)
+        {
+          _sectorCompleted = true;
+          _onSectorComplete?.Invoke(_robotId);
+          GD.Print($"[{_spec.Name}] Sector {_robotId} COMPLETE - calling callback");
+        }
+        
         // Done! Just idle at home
         targetPos = _homePosition;
         _currentStatus = "Sector Complete - Idling";

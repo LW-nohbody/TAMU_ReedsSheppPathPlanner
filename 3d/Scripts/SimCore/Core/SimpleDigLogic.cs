@@ -104,7 +104,7 @@ namespace SimCore.Core
             float thetaMin,
             float thetaMax,
             float maxRadius,
-            float flatThreshold = 0.05f)
+            float flatThreshold = 0.15f)  // REDUCED from 0.2f to allow more continuous digging
         {
             Vector3 highest = FindHighestInSector(terrain, thetaMin, thetaMax, maxRadius);
             
