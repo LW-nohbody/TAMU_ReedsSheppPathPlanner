@@ -93,7 +93,8 @@ public partial class SimulationDirector : Node3D
         GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 1.0f);
 
         // Create coordinator for robot collision avoidance
-        _coordinator = new SimCore.Core.RobotCoordinator(minSeparationMeters: 3.0f);
+        // REDUCED separation to allow robots to work closer together in their sectors
+        _coordinator = new SimCore.Core.RobotCoordinator(minSeparationMeters: 1.5f);
         
         // Initialize visualization systems
         _terrainModifier = new SimCore.Game.TerrainModifier();
@@ -134,7 +135,7 @@ public partial class SimulationDirector : Node3D
             // Create brain for dig system with coordinator
             float theta0 = i * (Mathf.Tau / N);
             float theta1 = (i + 1) * (Mathf.Tau / N);
-            float digRadius = 7.0f;
+            float digRadius = 10.0f;  // INCREASED sector radius for more area per robot
             var brain = new VehicleBrain(car, spec, planner, World, _terrain, _coordinator, i, theta0, theta1, digRadius, spawnXZ);
             
             _brains.Add(brain);
@@ -481,7 +482,7 @@ public partial class SimulationDirector : Node3D
     private void DrawSectorLines()
     {
         int N = VehicleCount;
-        float digRadius = 7.0f; // Match the dig radius used in spawning
+        float digRadius = 10.0f; // INCREASED to match robot sector radius
         
         // Generate distinct colors for each robot sector
         Color[] colors = new Color[N];
