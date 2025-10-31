@@ -4,16 +4,22 @@ using DigSim3D.App;
 
 namespace DigSim3D.Domain
 {
-    /// Snapshot the scheduler/planner can read.
     public sealed class WorldState
     {
-        // Where material is dumped (you can move/update this at runtime)
-        public Vector3 DumpCenter { get; set; } = Vector3.Zero;
+        // Points of interest (for mission logic)
+        public readonly List<Vector3> DigSites = new();
+        public Vector3 DumpCenter;
 
-        // Candidate dig spots (seed these from terrain or your grid)
-        public List<Vector3> DigSites { get; } = new();
+        // Terrain reference
+        public TerrainDisk Terrain = null!;
 
-        // Optional: give services access to terrain sampling
-        public TerrainDisk? Terrain { get; set; }
+        // Obstacles in the world
+        public List<Obstacle3D> Obstacles = new();
+
+        // World size (meters)
+        public float Extent = 50f;
+
+        // Utility
+        public bool HasTerrain => Terrain != null;
     }
 }

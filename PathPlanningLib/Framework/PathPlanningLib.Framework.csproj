@@ -1,9 +1,13 @@
-<Project Sdk="Godot.NET.Sdk/4.4.1">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Algorithms\PathPlanningLib.Algorithms.csproj" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <EnableDynamicLoading>true</EnableDynamicLoading>
-    <RootNamespace>DigSim3D</RootNamespace>
   </PropertyGroup>
+
 </Project>

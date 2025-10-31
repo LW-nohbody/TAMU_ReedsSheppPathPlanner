@@ -2,8 +2,8 @@
 using System;
 using System.Collections.Generic;
 using Godot;
-using DigSim3D.Domain;
 using DigSim3D.App;
+using DigSim3D.Domain;
 
 namespace DigSim3D.Services
 {
@@ -102,10 +102,6 @@ namespace DigSim3D.Services
                             if ((hit - reserved[m]).Length() < keepoutR) { tooClose = true; break; }
                         }
                         if (tooClose) continue;
-
-                        // Obstacle keepout – reject any candidate inside inflated obstacle
-                        if (obstacles.Count > 0 && !ObstacleClearance.IsSiteValid(hit, obstacles, inflation))
-                            continue;
 
                         // Score (unchanged: height only)
                         float score = cfg.WHeight * hit.Y;
