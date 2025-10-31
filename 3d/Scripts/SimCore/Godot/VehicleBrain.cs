@@ -142,16 +142,17 @@ public sealed class VehicleBrain
     {
       // Go home to dump
       targetPos = _homePosition;
-      _currentStatus = "Returning Home";
       
       // If very close to home, try to dump NOW before planning another path
       float distToHome = curPos.DistanceTo(_homePosition);
-      if (distToHome < 3.0f)
+      _currentStatus = $"Returning Home ({distToHome:F1}m)";
+      
+      if (distToHome < 5.0f)  // Very lenient - try to dump when reasonably close
       {
-        GD.Print($"[{_spec.Name}] Close to home ({distToHome:F2}m), attempting dump...");
-        OnArrival();  // Force arrival check
+        GD.Print($"[{_spec.Name}] Close to home ({distToHome:F2}m), attempting dump in PlanAndGoOnce...");
+        OnArrival();  // Try to dump
         
-        // If we dumped, stop here and replan next cycle
+        // If we dumped, mark it
         if (!_returningHome)  // If _returningHome was set to false, we dumped
         {
           GD.Print($"[{_spec.Name}] Successfully dumped! Replanning for dig.");
@@ -210,7 +211,14 @@ public sealed class VehicleBrain
         if (!_sectorCompleted)
         {
           _sectorCompleted = true;
-          _onSectorComplete?.Invoke(_robotId);
+          try
+          {
+            _onSectorComplete?.Invoke(_robotId);
+          }
+          catch (System.Exception ex)
+          {
+            GD.PrintErr($"[{_spec.Name}] Error in sector complete callback: {ex.Message}");
+          }
           GD.Print($"[{_spec.Name}] Sector {_robotId} COMPLETE - calling callback");
         }
         
@@ -257,99 +265,88 @@ public sealed class VehicleBrain
       
       if (_returningHome)
       {
-        // At home - dump payload (VERY lenient tolerance to ensure dump happens)
+        // At home - dump payload
+        // Be VERY lenient with distance since robots might be stuck at origin
         float distToHome = curPos.DistanceTo(_homePosition);
-        if (distToHome < 3.0f)  // Increased to 3.0f for safety
+        
+        GD.Print($"[{_spec.Name}] OnArrival (returning home): distToHome={distToHome:F2}m, payload={_payload:F3}m³");
+        
+        // If close to home OR if we haven't moved and have full payload, dump it
+        if (distToHome < 5.0f || (distToHome < 1.0f && _payload > 0.1f))
         {
-          if (_payload > 0.001f)  // Only dump if we have something to dump
+          if (_payload > 0.001f)
           {
-            GD.Print($"[{_spec.Name}] DUMPING at distance {distToHome:F2}m from home. Payload: {_payload:F3}m³");
+            GD.Print($"[{_spec.Name}] *** DUMPING {_payload:F3}m³ ***");
             _world.TotalDirtExtracted += _payload;
             
-            // Safely get remaining dirt (with null check)
-            float remainingDirt = 0f;
+            // Try to log remaining dirt
+            float remainingDirt = -1f;
             if (_terrain != null)
             {
               try
               {
                 remainingDirt = _terrain.GetRemainingDirtVolume();
               }
-              catch
+              catch (System.Exception ex)
               {
-                remainingDirt = -1f;  // Use -1 to indicate error
+                GD.PrintErr($"Error getting remaining dirt: {ex.Message}");
               }
             }
             
             if (remainingDirt >= 0f)
-              GD.Print($"[{_spec.Name}] Dumped {_payload:F3}m³ at home. World total: {_world.TotalDirtExtracted:F2}m³. Remaining dirt: {remainingDirt:F2}m³");
+              GD.Print($"[{_spec.Name}] Dumped {_payload:F3}m³ at home. World total: {_world.TotalDirtExtracted:F2}m³. Remaining: {remainingDirt:F2}m³");
             else
               GD.Print($"[{_spec.Name}] Dumped {_payload:F3}m³ at home. World total: {_world.TotalDirtExtracted:F2}m³");
             
             _payload = 0f;
             _returningHome = false;
             _currentStatus = "Dumped - Ready";
-          }
-          else
-          {
-            // Empty, just go back to digging
-            _returningHome = false;
-            _currentStatus = "Dump Complete - Returning to Dig";
+            return;  // Exit early after dumping
           }
         }
-        else
-        {
-          // Still trying to get home
-          _currentStatus = $"Going Home ({distToHome:F1}m away)";
-        }
+        
+        // Still trying to get home
+        _currentStatus = $"Going Home ({distToHome:F1}m away)";
+        return;
       }
-      else
+      
+      // NOT returning home - try to dig
+      if (_terrain != null)
       {
-        // At dig site - perform dig
-        if (_terrain != null)
+        Vector3 digTarget = _coordinator.GetBestDigPoint(
+          _robotId, _terrain, _thetaMin, _thetaMax, _maxRadius);
+        
+        float dist = curPos.DistanceTo(digTarget);
+        
+        // Very lenient dig distance
+        if (dist < 3.0f)
         {
-          Vector3 digTarget = _coordinator.GetBestDigPoint(
-            _robotId, _terrain, _thetaMin, _thetaMax, _maxRadius);
+          float digRadius = SimpleDigLogic.GetDigRadius(_spec.Width);
+          float dug = SimpleDigLogic.PerformDig(_terrain, digTarget, _payload, SimpleDigLogic.ROBOT_CAPACITY, digRadius);
           
-          if (curPos.DistanceTo(digTarget) < 2.5f)  // Slightly increased tolerance
+          if (dug > 0.00001f)
           {
-            // Dig radius based on robot width (covers robot footprint)
-            float digRadius = SimpleDigLogic.GetDigRadius(_spec.Width);
-            float dug = SimpleDigLogic.PerformDig(_terrain, digTarget, _payload, SimpleDigLogic.ROBOT_CAPACITY, digRadius);
+            _payload += dug;
+            _totalDug += dug;
+            _digsCompleted++;
+            _currentStatus = $"Dug! ({_digsCompleted} digs)";
             
-            if (dug > 0.0001f)  // Only count if we actually dug something
+            float remainingDirt = -1f;
+            try
             {
-              _payload += dug;
-              _totalDug += dug;
-              _digsCompleted++;
-              _currentStatus = $"Dug! ({_digsCompleted} digs)";
-              
-              // Safely get remaining dirt
-              float remainingDirt = 0f;
-              try
-              {
-                remainingDirt = _terrain.GetRemainingDirtVolume();
-              }
-              catch
-              {
-                remainingDirt = -1f;
-              }
-              
-              if (remainingDirt >= 0f)
-                GD.Print($"[{_spec.Name}] Dug {dug:F4}m³ at {digTarget} (radius={digRadius:F2}m). Payload: {_payload:F3}m³ / Remaining: {remainingDirt:F2}m³");
-              else
-                GD.Print($"[{_spec.Name}] Dug {dug:F4}m³ at {digTarget} (radius={digRadius:F2}m). Payload: {_payload:F3}m³");
+              remainingDirt = _terrain.GetRemainingDirtVolume();
             }
+            catch { }
+            
+            if (remainingDirt >= 0f)
+              GD.Print($"[{_spec.Name}] Dug {dug:F4}m³. Payload: {_payload:F3}/{SimpleDigLogic.ROBOT_CAPACITY:F3}m³. Remaining: {remainingDirt:F2}m³");
           }
-        }
-        else
-        {
-          GD.PrintErr($"[{_spec.Name}] Terrain is null in OnArrival!");
         }
       }
     }
     catch (System.Exception ex)
     {
-      GD.PrintErr($"[{_spec.Name}] Exception in OnArrival: {ex.Message}");
+      GD.PrintErr($"[{_spec.Name}] CRITICAL Exception in OnArrival: {ex}");
     }
   }
 
