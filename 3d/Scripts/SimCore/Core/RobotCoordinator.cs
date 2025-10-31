@@ -109,12 +109,12 @@ namespace SimCore.Core
                 return best.pos;
             }
 
-            // Fallback: return center of sector (should rarely happen)
+            // Fallback: return outer edge of sector (further out, more likely to have terrain)
             float midTheta = (thetaMin + thetaMax) / 2f;
             return new Vector3(
-                Mathf.Cos(midTheta) * maxRadius * 0.5f,
+                Mathf.Cos(midTheta) * maxRadius * 0.8f,  // 80% of max radius (was 50%)
                 0,
-                Mathf.Sin(midTheta) * maxRadius * 0.5f
+                Mathf.Sin(midTheta) * maxRadius * 0.8f
             );
         }
 
