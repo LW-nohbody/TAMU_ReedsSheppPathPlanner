@@ -157,7 +157,7 @@ public static class DubinsPaths
         (double x, double y, double theta) end)
     {
         var local = Utils.ChangeOfBasis(start, end);      // radians in, radians out
-        double x = local.x, y = local.y, phi = Utils.M(local.theta); // ensure [0,2π)
+        double x = local.x, y = -local.y, phi = Utils.M(local.theta); // ensure [0,2π)
 
         var candidates = new List<List<PathElement>>
     {
