@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3 uid="uid://cc5m8lpvnpnfv"]
+[gd_scene load_steps=34 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
 [ext_resource type="Script" uid="uid://bjy5klmfh1o1x" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
@@ -32,6 +32,17 @@ top_radius = 1.0
 bottom_radius = 1.0
 radial_segments = 32
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hk6n0"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_xcytq"]
+top_radius = 1.0
+bottom_radius = 1.0
+radial_segments = 32
+
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_nl4sy"]
 transparency = 1
 cull_mode = 2
@@ -48,6 +59,17 @@ shading_mode = 0
 albedo_color = Color(1, 0, 0, 0.3)
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_paq1p"]
+top_radius = 1.0
+bottom_radius = 1.0
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4ksok"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_ayuat"]
 top_radius = 1.0
 bottom_radius = 1.0
 radial_segments = 32
@@ -72,6 +94,17 @@ top_radius = 1.0
 bottom_radius = 1.0
 radial_segments = 32
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qocqs"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_rpxaf"]
+top_radius = 1.0
+bottom_radius = 1.0
+radial_segments = 32
+
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sin3t"]
 transparency = 1
 cull_mode = 2
@@ -83,6 +116,17 @@ top_radius = 1.0
 bottom_radius = 1.0
 radial_segments = 32
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tq1l4"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_4xuc1"]
+top_radius = 1.0
+bottom_radius = 1.0
+radial_segments = 32
+
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rpxaf"]
 transparency = 1
 cull_mode = 2
@@ -90,6 +134,17 @@ shading_mode = 0
 albedo_color = Color(1, 0, 0, 0.3)
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_51jab"]
+top_radius = 1.0
+bottom_radius = 1.0
+radial_segments = 32
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_uwqmp"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.3)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_m8lpa"]
 top_radius = 1.0
 bottom_radius = 1.0
 radial_segments = 32
@@ -164,16 +219,20 @@ script = ExtResource("3_obmgr")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.70673, 0, 8.06038)
 script = ExtResource("4_cyl")
 
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs1"]
+[node name="EditorMesh1" type="MeshInstance3D" parent="ObstacleManager/CylinderObs1"]
 material_override = SubResource("StandardMaterial3D_qfmbg")
 mesh = SubResource("CylinderMesh_xklxq")
+
+[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs1"]
+material_override = SubResource("StandardMaterial3D_hk6n0")
+mesh = SubResource("CylinderMesh_xcytq")
 
 [node name="CylinderObs2" type="Node3D" parent="ObstacleManager"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.39552, 0, 7.95329)
 script = ExtResource("4_cyl")
 Radius = 0.5
 
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs2"]
+[node name="EditorMesh2" type="MeshInstance3D" parent="ObstacleManager/CylinderObs2"]
 material_override = SubResource("StandardMaterial3D_nl4sy")
 mesh = SubResource("CylinderMesh_hk6n0")
 
@@ -181,16 +240,20 @@ mesh = SubResource("CylinderMesh_hk6n0")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.46807, 0, 6.99281)
 script = ExtResource("4_cyl")
 
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs3"]
+[node name="EditorMesh3" type="MeshInstance3D" parent="ObstacleManager/CylinderObs3"]
 material_override = SubResource("StandardMaterial3D_xcytq")
 mesh = SubResource("CylinderMesh_paq1p")
+
+[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs3"]
+material_override = SubResource("StandardMaterial3D_4ksok")
+mesh = SubResource("CylinderMesh_ayuat")
 
 [node name="CylinderObs4" type="Node3D" parent="ObstacleManager"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.07247, 0, 7.975)
 script = ExtResource("4_cyl")
 Radius = 0.5
 
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs4"]
+[node name="EditorMesh4" type="MeshInstance3D" parent="ObstacleManager/CylinderObs4"]
 material_override = SubResource("StandardMaterial3D_5352s")
 mesh = SubResource("CylinderMesh_4ksok")
 
@@ -198,22 +261,34 @@ mesh = SubResource("CylinderMesh_4ksok")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.00736, 0, 6.15293)
 script = ExtResource("4_cyl")
 
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs5"]
+[node name="EditorMesh5" type="MeshInstance3D" parent="ObstacleManager/CylinderObs5"]
 material_override = SubResource("StandardMaterial3D_ayuat")
 mesh = SubResource("CylinderMesh_qfrvw")
+
+[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs5"]
+material_override = SubResource("StandardMaterial3D_qocqs")
+mesh = SubResource("CylinderMesh_rpxaf")
 
 [node name="CylinderObs6" type="Node3D" parent="ObstacleManager"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.88215, 0, 7.79384)
 script = ExtResource("4_cyl")
 
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs6"]
+[node name="EditorMesh6" type="MeshInstance3D" parent="ObstacleManager/CylinderObs6"]
 material_override = SubResource("StandardMaterial3D_sin3t")
 mesh = SubResource("CylinderMesh_qocqs")
+
+[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs6"]
+material_override = SubResource("StandardMaterial3D_tq1l4")
+mesh = SubResource("CylinderMesh_4xuc1")
 
 [node name="CylinderObs7" type="Node3D" parent="ObstacleManager"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.311696, 0, -7.46309)
 script = ExtResource("4_cyl")
 
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs7"]
+[node name="EditorMesh7" type="MeshInstance3D" parent="ObstacleManager/CylinderObs7"]
 material_override = SubResource("StandardMaterial3D_rpxaf")
 mesh = SubResource("CylinderMesh_51jab")
+
+[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs7"]
+material_override = SubResource("StandardMaterial3D_uwqmp")
+mesh = SubResource("CylinderMesh_m8lpa")

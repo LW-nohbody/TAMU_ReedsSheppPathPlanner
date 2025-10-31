@@ -32,10 +32,14 @@ namespace DigSim3D.App
         private bool _done = true;
 
         // End yaw align
-        private bool _aligning = false;
-        private Vector3 _finalAim = Vector3.Zero; // unit XZ
-        private bool _holdYaw = false;          // lock azimuth when done
-        private Vector3 _holdAimXZ = Vector3.Zero;
+        // Final pose cache (XZ + facing) for smooth landing
+        private Vector3 _finalPosXZ = Vector3.Zero;  // last waypoint XZ
+        private Vector3 _finalAimXZ = Vector3.Zero;  // unit XZ forward to settle to
+
+        // Landing
+        [Export] public float EndPosSmoothing = 12.0f;   // higher = faster settle to final point
+        [Export] public float EndYawSmoothing = 10.0f;   // higher = faster settle to final heading
+        [Export] public float EndStopPosEps = 0.01f;     // meters to consider “arrived”
 
         // External terrain sampler
         private TerrainDisk _terrain = null!;
@@ -47,8 +51,9 @@ namespace DigSim3D.App
             _gears = gears ?? Array.Empty<int>();
             _i = 0;
             _done = _path.Length == 0;
-            _aligning = false;
-            _finalAim = Vector3.Zero;
+            // Smooth landing setup
+            _finalPosXZ = (_path.Length > 0) ? _path[^1].WithY(0) : Vector3.Zero;
+            _finalAimXZ = Vector3.Zero;
 
             //GD.Print($"[{Name}] SetPath: len={_path.Length}, gears={_gears.Length}, done={_done}");
             //for (int k = 0; k < _path.Length; ++k)
@@ -75,35 +80,26 @@ namespace DigSim3D.App
         {
             float dt = (float)delta;
 
-            if (_aligning)
-            {
-                var xz = GlobalTransform.Origin; xz.Y = 0f;
-
-                // Let the tilt/ground-follow logic build the target basis using the FINAL AIM.
-                GroundFollowAt(xz, _finalAim, dt);
-
-                // Check yaw error in XZ vs the final aim
-                var fwdNow = (-GlobalTransform.Basis.Z).WithY(0).Normalized();
-                float yawErrDeg = Mathf.RadToDeg(Mathf.Acos(Mathf.Clamp(fwdNow.Dot(_finalAim), -1f, 1f)));
-
-                if (yawErrDeg <= YawStopEpsDeg)
-                {
-                    _aligning = false;
-                    _done = true;
-                    _holdYaw = true;       // lock the azimuth going forward
-                    _holdAimXZ = _finalAim;
-                    //GD.Print($"[{Name}] Final align complete.");
-                }
-                return;
-            }
-
             if (_done)
             {
-                var xz = GlobalTransform.Origin; xz.Y = 0f;
+                // --- Smooth “landing” to final pose ---
+                var curXZDone = GlobalTransform.Origin; curXZDone.Y = 0f;
 
-                // If we’ve finished, preserve the cached azimuth and SNAP each frame.
-                var fwd = _holdYaw ? _holdAimXZ : (-GlobalTransform.Basis.Z).WithY(0).Normalized();
-                GroundFollowAt(xz, fwd, dt);
+                // Exponential blend for position toward the exact final XZ
+                float ap = 1f - Mathf.Exp(-EndPosSmoothing * dt);
+                var landXZ = curXZDone.Lerp(_finalPosXZ, ap);
+
+                // Exponential blend for facing toward cached final tangent (if known)
+                var fwdNow = (-GlobalTransform.Basis.Z).WithY(0).Normalized();
+                Vector3 aimTarget = (_finalAimXZ.LengthSquared() > 1e-9f) ? _finalAimXZ : fwdNow;
+                float ay = 1f - Mathf.Exp(-EndYawSmoothing * dt);
+                var fwdBlend = (fwdNow * (1f - ay) + aimTarget * ay).Normalized();
+
+                // Build pose at blended XZ and blended facing (GroundFollowAt handles tilt & height)
+                GroundFollowAt(landXZ, fwdBlend, dt);
+
+                // Stop conditions...
+                var posErr = landXZ.DistanceTo(_finalPosXZ);
                 return;
             }
 
@@ -129,10 +125,15 @@ namespace DigSim3D.App
                     }
                     if (finalTan.LengthSquared() < 1e-9f) finalTan = (-GlobalTransform.Basis.Z).WithY(0).Normalized();
 
+                    // Determine final facing ...
                     int lastGear = (_gears.Length > 0) ? _gears[^1] : +1;
-                    _finalAim = (lastGear >= 0) ? finalTan : -finalTan;
+                    _finalAimXZ = (lastGear >= 0) ? finalTan : -finalTan;
 
-                    _aligning = true;
+                    // Ensure final XZ is the true last point (defensive)
+                    _finalPosXZ = _path[^1].WithY(0);
+
+                    // Enter smooth landing next frame
+                    _done = true;
                     return;
                 }
                 tgt = _path[_i];
