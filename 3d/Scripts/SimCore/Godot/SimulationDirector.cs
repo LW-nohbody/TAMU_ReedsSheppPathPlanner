@@ -17,24 +17,24 @@ public partial class SimulationDirector : Node3D
     [Export] public NodePath TerrainPath;
 
     // Spawn / geometry
-    [Export] public int   VehicleCount  = 8;
-    [Export] public float SpawnRadius   = 2.0f;
+    [Export] public int VehicleCount = 8;
+    [Export] public float SpawnRadius = 2.0f;
     [Export] public float VehicleLength = 2.0f;
-    [Export] public float VehicleWidth  = 1.2f;
-    [Export] public float RideHeight    = 0.25f;
-    [Export] public float NormalBlend   = 0.2f;
+    [Export] public float VehicleWidth = 1.2f;
+    [Export] public float RideHeight = 0.25f;
+    [Export] public float NormalBlend = 0.2f;
 
     // RS params and “go 5m forward then +90° right”
-    [Export] public float GoalAdvance      = 5.0f;
+    [Export] public float GoalAdvance = 5.0f;
     [Export] public float TurnRadiusMeters = 2.0f;
     [Export] public float SampleStepMeters = 0.25f;
 
     // Cameras
-    [Export] public float   MouseSensitivity     = 0.005f;
+    [Export] public float MouseSensitivity = 0.005f;
     [Export] public float TranslateSensitivity = 0.01f;
     [Export] public float ZoomSensitivity = 1.0f;
-    [Export] public float   ChaseLerp            = 8.0f;
-    [Export] public Vector3 ChaseOffset          = new(0, 2.5f, 5.5f);
+    [Export] public float ChaseLerp = 8.0f;
+    [Export] public Vector3 ChaseOffset = new(0, 2.5f, 5.5f);
 
     // Debug
     [Export] public bool DebugPathOnTop = true;
@@ -57,7 +57,7 @@ public partial class SimulationDirector : Node3D
     {
         // Nodes
         _vehiclesRoot = GetNode<Node3D>(VehiclesRootPath);
-        _camTop   = GetNode<Camera3D>(CameraTopPath);
+        _camTop = GetNode<Camera3D>(CameraTopPath);
         _camChase = GetNode<Camera3D>(CameraChasePath);
         _camFree = GetNode<Camera3D>(CameraFreePath);
         _camOrbit = GetNode<Camera3D>(CameraOrbitPath);
@@ -86,57 +86,70 @@ public partial class SimulationDirector : Node3D
             var outward = new Vector3(Mathf.Cos(theta), 0, Mathf.Sin(theta)).Normalized();
             var spawnXZ = outward * SpawnRadius;
 
-            // Initial flat pose; PlaceOnTerrain will tilt & raise
             var car = VehicleScene.Instantiate<VehicleAgent3D>();
             _vehiclesRoot.AddChild(car);
             car.SetTerrain(_terrain);
             car.GlobalTransform = new Transform3D(Basis.Identity, spawnXZ);
 
-            // Pose on terrain using FR/FL/RC (same as before)
             PlaceOnTerrain(car, outward);
 
             car.Wheelbase = VehicleLength;
             car.TrackWidth = VehicleWidth;
 
-            // === Build a real RS path for THIS car (the “old working” way) ===
-            double startYaw = theta;                         // yaw is in XZ math space
+            _vehicles.Add(car);                    // <-- put this back
+        }
+
+        // === PLAN FIRST DIG TARGETS (after all cars exist) ===
+        var scheduler = new SimCore.Services.RadialScheduler();
+        var brains = new List<SimCore.Core.VehicleBrain>(_vehicles.Count);
+        foreach (var v in _vehicles)
+        {
+            var brain = new SimCore.Core.VehicleBrain();
+            v.AddChild(brain);
+            brains.Add(brain);
+        }
+
+        var digTargets = scheduler.PlanFirstDigTargets(
+            brains, _terrain, Vector3.Zero, SimCore.Core.DigScoring.Default);
+
+        if (obstacleList.Count > 0)
+        {
+            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.5f, gridExtent: 40);
+        }
+
+        // === Build paths to the assigned dig targets (scheduler-driven) ===
+        for (int k = 0; k < _vehicles.Count; k++)
+        {
+            var car = _vehicles[k];
+            var (digPos, approachYaw) = digTargets[k];
+
+            // current forward yaw in XZ (Godot forward is -Z)
+            var fwd = -car.GlobalTransform.Basis.Z;
+            double startYaw = MathF.Atan2(fwd.Z, fwd.X);
             var start = car.GlobalTransform.Origin;
-            var goal = start + outward * GoalAdvance;        // go out 5m
-            double goalYaw = startYaw + Mathf.Pi / 2.0;      // then +90° right
 
-            // === Build a real path for THIS car using the new Hybrid planner ===
-
-            // Build start/goal poses
+            // Planner poses use X/Z + yaw
             var startPose = new Pose(start.X, start.Z, startYaw);
-            var goalPose = new Pose(goal.X, goal.Z, goalYaw);
+            var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
 
-            // Grab vehicle spec (you may already have this stored per car)
-            VehicleSpec spec = car.Spec; // adjust this if spec is retrieved differently
-            WorldState world = new WorldState
+            // Vehicle + world (note: Obstacles is List<Obstacle3D>)
+            VehicleSpec spec = car.Spec;
+            var world = new WorldState
             {
-                Obstacles = obstacleList,
+                Obstacles = obstacleList,   // <— List<Obstacle3D>
                 Terrain = _terrain
             };
 
-            
-            
-
-
-            // Get path using hybrid planner
             var hybridPlanner = new HybridReedsSheppPlanner();
             PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, world);
 
-            // Draw and feed to vehicle
             DrawPathProjectedToTerrain(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
             DrawMarkerProjected(start, new Color(0, 1, 0));
-            DrawMarkerProjected(goal, new Color(0, 0, 1));
+            DrawMarkerProjected(digPos, new Color(0, 0, 1));
 
             car.SetPath(path.Points.ToArray(), path.Gears.ToArray());
 
-            _vehicles.Add(car);
-
-            GD.Print($"[Director] {car.Name} RS path: {path.Points.Count} samples");
-
+            GD.Print($"[Director] {car.Name} path: {path.Points.Count} samples");
         }
 
         _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
@@ -292,10 +305,10 @@ public partial class SimulationDirector : Node3D
     {
         var yawBasis = Basis.LookingAt(outward, Vector3.Up);
         float halfL = VehicleLength * 0.5f;
-        float halfW = VehicleWidth  * 0.5f;
+        float halfW = VehicleWidth * 0.5f;
 
         Vector3 f = -yawBasis.Z;      // Godot forward is -Z
-        Vector3 r =  yawBasis.X;
+        Vector3 r = yawBasis.X;
 
         Vector3 centerXZ = car.GlobalTransform.Origin; centerXZ.Y = 0;
 
@@ -303,10 +316,10 @@ public partial class SimulationDirector : Node3D
         Vector3 pFR = centerXZ + f * halfL - r * halfW;
         Vector3 pRC = centerXZ - f * halfL;
 
-        _terrain.SampleHeightNormal(centerXZ, out var hC,  out var nC);
-        _terrain.SampleHeightNormal(pFL,      out var hFL, out var _);
-        _terrain.SampleHeightNormal(pFR,      out var hFR, out var _);
-        _terrain.SampleHeightNormal(pRC,      out var hRC, out var _);
+        _terrain.SampleHeightNormal(centerXZ, out var hC, out var nC);
+        _terrain.SampleHeightNormal(pFL, out var hFL, out var _);
+        _terrain.SampleHeightNormal(pFR, out var hFR, out var _);
+        _terrain.SampleHeightNormal(pRC, out var hRC, out var _);
 
         Vector3 n = (hFR - hFL).Cross(hRC - hFL);
         if (n.LengthSquared() < 1e-6f) n = nC;
@@ -315,7 +328,7 @@ public partial class SimulationDirector : Node3D
         if (NormalBlend > 0f) n = n.Lerp(nC, Mathf.Clamp(NormalBlend, 0f, 1f)).Normalized();
 
         Vector3 yawFwd = new Vector3(outward.X, 0, outward.Z).Normalized();
-        Vector3 fProj  = (yawFwd - n * yawFwd.Dot(n)); if (fProj.LengthSquared() < 1e-6f) fProj = yawFwd; fProj = fProj.Normalized();
+        Vector3 fProj = (yawFwd - n * yawFwd.Dot(n)); if (fProj.LengthSquared() < 1e-6f) fProj = yawFwd; fProj = fProj.Normalized();
 
         Vector3 right = n.Cross(fProj).Normalized(); // build RH frame with -Z as forward
         Vector3 zAxis = -fProj;
@@ -336,7 +349,7 @@ public partial class SimulationDirector : Node3D
         // fallback simple ray if terrain not present; should not happen in this setup
         var space = GetWorld3D().DirectSpaceState;
         var from = xz + new Vector3(0, 100f, 0);
-        var to   = xz + new Vector3(0,-1000f, 0);
+        var to = xz + new Vector3(0, -1000f, 0);
         var q = PhysicsRayQueryParameters3D.Create(from, to);
         var hitDict = space.IntersectRay(q);
         if (hitDict.Count > 0) return ((Vector3)hitDict["position"]).Y;
