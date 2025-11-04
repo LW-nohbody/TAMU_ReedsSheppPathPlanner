@@ -334,17 +334,13 @@ public partial class SimulationDirector : Node3D
         // Check each robot to see if it finished its path and needs to dig/dump
         for (int i = 0; i < _brains.Count; i++)
         {
-            var brain = _brains[i];
-            
-            // Get the controller from brain using reflection (since it's private)
-            var ctrlField = typeof(VehicleBrain).GetField("_ctrl", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var ctrl = ctrlField?.GetValue(brain) as VehicleAgent3D;
-            
-            if (ctrl != null)
+            try
             {
-                // Check if robot is idle (path finished)
-                var doneField = typeof(VehicleAgent3D).GetField("_done", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (doneField != null && (bool)doneField.GetValue(ctrl))
+                var brain = _brains[i];
+                if (brain == null) continue;
+
+                // Check if robot is idle (path finished) using public accessor
+                if (brain.IsPathComplete())
                 {
                     // Robot arrived - process dig/dump and plan next action
                     brain.OnArrival();
@@ -356,15 +352,34 @@ public partial class SimulationDirector : Node3D
                 float payloadPercent = (brain.Payload / capacity) * 100f;
                 _payloadUI.UpdatePayload(i, payloadPercent, brain.Status, brain.CurrentPosition);
                 
-                // Update path visualization
+                // Update path visualization using public method
                 var currentPath = brain.GetCurrentPath();
                 _pathVisualizer.UpdatePath(i, currentPath);
+            }
+            catch (System.Exception ex)
+            {
+                // Silently catch Handle errors and other exceptions to prevent crash spam
+                // This can happen when objects are freed or handles become invalid
+                GD.PrintErr($"[Director] Error updating robot {i}: {ex.Message}");
             }
         }
         
         // Update remaining dirt display (once per frame for efficiency)
-        float remainingDirt = _terrain.GetRemainingDirtVolume();
-        _payloadUI.UpdateRemainingDirt(remainingDirt);
+        try
+        {
+            if (_terrain != null)
+            {
+                float remainingDirt = _terrain.GetRemainingDirtVolume();
+                if (_payloadUI != null)
+                {
+                    _payloadUI.UpdateRemainingDirt(remainingDirt);
+                }
+            }
+        }
+        catch
+        {
+            // Silently ignore terrain errors
+        }
     }
 
     private void FollowChaseCamera(double delta)

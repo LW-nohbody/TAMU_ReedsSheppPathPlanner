@@ -369,6 +369,61 @@ public partial class VehicleAgent3D : CharacterBody3D
         while (d < -Mathf.Pi) d += Mathf.Tau;
         return d;
     }
+
+    // Public accessors to avoid reflection (for SimulationDirector)
+    public bool IsDone 
+    { 
+        get 
+        { 
+            try 
+            { 
+                return GodotObject.IsInstanceValid(this) && _done; 
+            } 
+            catch 
+            { 
+                return false; 
+            } 
+        } 
+    }
+    
+    public Vector3[] GetCurrentPath() 
+    { 
+        try 
+        { 
+            if (!GodotObject.IsInstanceValid(this)) return Array.Empty<Vector3>();
+            return _path ?? Array.Empty<Vector3>(); 
+        } 
+        catch 
+        { 
+            return Array.Empty<Vector3>(); 
+        } 
+    }
+    
+    public int GetCurrentPathIndex() 
+    { 
+        try 
+        { 
+            if (!GodotObject.IsInstanceValid(this)) return 0;
+            return _i; 
+        } 
+        catch 
+        { 
+            return 0; 
+        } 
+    }
+    
+    public int[] GetCurrentGears() 
+    { 
+        try 
+        { 
+            if (!GodotObject.IsInstanceValid(this)) return Array.Empty<int>();
+            return _gears ?? Array.Empty<int>(); 
+        } 
+        catch 
+        { 
+            return Array.Empty<int>(); 
+        } 
+    }
 }
 
 static class Vec3Ext

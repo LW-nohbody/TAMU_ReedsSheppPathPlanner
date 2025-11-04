@@ -126,6 +126,14 @@ public sealed class VehicleBrain
   {
     try
     {
+      // Validate controller is still valid before attempting to use it
+      if (_ctrl == null || !GodotObject.IsInstanceValid(_ctrl))
+      {
+        _currentStatus = "ERROR: Controller invalid";
+        GD.PrintErr($"[{_spec.Name}] Controller is no longer valid!");
+        return;
+      }
+
       // Get current pose
       var xf = _ctrl.GlobalTransform;
       var fwd = -xf.Basis.Z;
@@ -241,10 +249,10 @@ public sealed class VehicleBrain
   {
     try
     {
-      // FIRST: Validate all critical objects are not null
-      if (_ctrl == null)
+      // FIRST: Validate all critical objects are not null AND valid
+      if (_ctrl == null || !GodotObject.IsInstanceValid(_ctrl))
       {
-        GD.PrintErr("OnArrival: _ctrl is null!");
+        GD.PrintErr("OnArrival: _ctrl is null or invalid!");
         return;
       }
 
@@ -391,17 +399,37 @@ public sealed class VehicleBrain
   {
     var path = new List<Vector3>();
     
-    // Get path from the controller using reflection
-    var pathField = typeof(VehicleAgent3D).GetField("_path", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-    if (pathField != null)
+    // Use public accessor instead of reflection
+    try
     {
-      var pathArray = pathField.GetValue(_ctrl) as Vector3[];
-      if (pathArray != null)
+      var pathArray = _ctrl.GetCurrentPath();
+      if (pathArray != null && pathArray.Length > 0)
       {
         path.AddRange(pathArray);
       }
     }
+    catch
+    {
+      // Silently fail if controller is no longer valid
+    }
     
     return path;
+  }
+
+  /// <summary>
+  /// Check if the robot has finished its current path
+  /// </summary>
+  public bool IsPathComplete()
+  {
+    try
+    {
+      if (_ctrl == null) return false;
+      // Check if the handle is still valid
+      return GodotObject.IsInstanceValid(_ctrl) && _ctrl.IsDone;
+    }
+    catch
+    {
+      return false;
+    }
   }
 }
