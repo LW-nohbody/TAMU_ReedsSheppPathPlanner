@@ -264,7 +264,7 @@ public partial class VehicleAgent3D : CharacterBody3D
         // Adaptive speed: slow down when close to waypoint to avoid overshooting
         float distToWaypoint = curXZ.DistanceTo(tgt);
         float speedMult = Mathf.Clamp(distToWaypoint / 0.5f, 0.3f, 1.0f); // Slow to 30% within 0.5m
-        float effectiveSpeed = SpeedMps * speedMult * GlobalSpeedMultiplier;  // Apply global speed multiplier
+        float effectiveSpeed = SpeedMps * speedMult * GlobalSpeedMultiplier;
 
         // Manual integration (no physics!)
         var nextXZ = curXZ + dir * effectiveSpeed * dt;
