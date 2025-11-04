@@ -226,7 +226,8 @@ namespace DigSim3D.App
             }
 
             // Draw sector boundary lines (optional)
-            if (DrawSectorLines)
+            // DISABLED: Robots were getting stuck on sector boundary lines
+            if (false && DrawSectorLines)
             {
                 DrawSectorBoundaries(N, MaxDigRadius);
             }
