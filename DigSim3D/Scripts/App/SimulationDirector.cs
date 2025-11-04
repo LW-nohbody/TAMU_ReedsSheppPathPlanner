@@ -55,10 +55,16 @@ namespace DigSim3D.App
 
         [Export] public NodePath ObstacleManagerPath = null!;
         private ObstacleManager _obstacleManager = null!;
+        private SimulationSettingsUI _settingsUI = null!;
 
 
         public override void _Ready()
         {
+            // Initialize settings UI first
+            _settingsUI = new SimulationSettingsUI();
+            AddChild(_settingsUI);
+            GD.Print("[Director] ✅ Simulation Settings UI initialized");
+
             // Nodes
             _vehiclesRoot = GetNode<Node3D>(VehiclesRootPath);
             _camTop = GetNode<Camera3D>(CameraTopPath);
