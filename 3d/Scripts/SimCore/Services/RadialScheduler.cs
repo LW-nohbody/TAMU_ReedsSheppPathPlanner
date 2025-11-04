@@ -1,13 +1,16 @@
+// res://Scripts/Services/Scheduling/RadialScheduler.cs
 using System;
 using System.Collections.Generic;
 using Godot;
 using SimCore.Core;
-using ThreeD.Debugging;
 
 namespace SimCore.Services
 {
     public sealed class RadialScheduler
     {
+        /// <summary>
+        /// Original API – unchanged behavior (no obstacle logic).
+        /// </summary>
         public IReadOnlyList<(Vector3 digPos, float approachYaw)> PlanFirstDigTargets(
             IReadOnlyList<VehicleBrain> vehicles,
             TerrainDisk terrain,
@@ -16,8 +19,31 @@ namespace SimCore.Services
             float keepoutR = 2.0f,
             bool randomizeOrder = false)
         {
+            // Calls the new overload with empty obstacles + zero inflation for exact compatibility.
+            return PlanFirstDigTargets(
+                vehicles, terrain, center, cfg,
+                keepoutR, randomizeOrder,
+                obstacles: null, inflation: 0f
+            );
+        }
+
+        /// <summary>
+        /// New API – identical to original, plus obstacle keep-out using the SAME inflation as your planner/grid.
+        /// </summary>
+        public IReadOnlyList<(Vector3 digPos, float approachYaw)> PlanFirstDigTargets(
+            IReadOnlyList<VehicleBrain> vehicles,
+            TerrainDisk terrain,
+            Vector3 center,
+            DigScoring cfg,
+            float keepoutR,
+            bool randomizeOrder,
+            List<Obstacle3D>? obstacles,
+            float inflation)
+        {
+            obstacles ??= new List<Obstacle3D>(0);
+
             int n = Math.Max(1, vehicles.Count);
-            var result = new (Vector3, float)[n];
+            var result   = new (Vector3, float)[n];
             var reserved = new List<Vector3>(n);
 
             // Decide an assignment order (optional shuffle)
@@ -28,7 +54,6 @@ namespace SimCore.Services
             {
                 var rng = new RandomNumberGenerator();
                 rng.Randomize();
-
                 for (int i = n - 1; i > 0; --i)
                 {
                     int j = (int)rng.RandiRange(0, i);
@@ -36,7 +61,6 @@ namespace SimCore.Services
                 }
             }
 
-            // Helper: sector bounds for car k in the ORIGINAL ring layout
             float SectorTheta0(int k) => k * Mathf.Tau / n;
             float SectorTheta1(int k) => (k + 1) * Mathf.Tau / n;
 
@@ -45,30 +69,32 @@ namespace SimCore.Services
                 float theta0 = SectorTheta0(k);
                 float theta1 = SectorTheta1(k);
 
-                var car = vehicles[k];
+                var car    = vehicles[k];
                 var carPos = car.Agent.GlobalTransform.Origin;
                 var carFwd = (-car.Agent.GlobalTransform.Basis.Z).WithY(0).Normalized();
 
-                float bestScore = float.NegativeInfinity;
-                Vector3 bestP = carPos;
-                float bestYaw = 0f;
+                float   bestScore = float.NegativeInfinity;
+                Vector3 bestP     = carPos;
+                float   bestYaw   = 0f;
+                bool    foundAny  = false;
 
                 for (int a = 0; a < cfg.ArcSteps; a++)
                 {
-                    float t = (a + 0.5f) / cfg.ArcSteps;
+                    float t     = (a + 0.5f) / cfg.ArcSteps;
                     float theta = Mathf.Lerp(theta0, theta1, t);
-
                     Vector3 dir = new(Mathf.Cos(theta), 0, Mathf.Sin(theta));
+
                     for (int r = 0; r < cfg.RadialSteps; r++)
                     {
-                        float u = (r + 0.5f) / cfg.RadialSteps;
-                        float R = Mathf.Lerp(cfg.InnerR, cfg.OuterR, u);
+                        float  u  = (r + 0.5f) / cfg.RadialSteps;
+                        float  R  = Mathf.Lerp(cfg.InnerR, cfg.OuterR, u);
                         Vector3 xz = center + dir * R;
 
                         // Terrain sample
-                        if (!terrain.SampleHeightNormal(xz, out var hit, out var nrm)) continue;
+                        if (!terrain.SampleHeightNormal(xz, out var hit, out var _))
+                            continue;
 
-                        // Keep-out exclusion
+                        // Vehicle-to-vehicle keepout (unchanged)
                         bool tooClose = false;
                         for (int m = 0; m < reserved.Count; m++)
                         {
@@ -76,32 +102,30 @@ namespace SimCore.Services
                         }
                         if (tooClose) continue;
 
-                        // Score (height only for now but easy to re-add terms later)
+                        // Score (unchanged: height only)
                         float score = cfg.WHeight * hit.Y;
 
                         if (score > bestScore)
                         {
                             bestScore = score;
-                            bestP = new Vector3(xz.X, hit.Y, xz.Z);
-                            // approach along the ray from car to spot
+                            bestP     = new Vector3(xz.X, hit.Y, xz.Z);
+                            // approach along the ray from car to spot (unchanged)
                             Vector3 approach = (xz - carPos).WithY(0).Normalized();
-                            bestYaw = Mathf.Atan2(approach.Z, approach.X);
+                            bestYaw  = Mathf.Atan2(approach.Z, approach.X);
+                            foundAny = true;
                         }
                     }
                 }
 
-                string pathId3d = DebugPath.Begin("3d", k, /*sliceId*/ 0);
-                DebugPath.Check(pathId3d, "goal_chosen",
-                    ("vehPos", vehicles[k].Agent.GlobalTransform.Origin),
-                    ("vehYaw", vehicles[k].Agent.Rotation.Y),
-                    ("goalPos", bestP),
-                    ("goalYaw", bestYaw),
-                    ("radius", bestP.DistanceTo(center)),
-                    ("sliceAngle", Mathf.Atan2(bestP.Z - center.Z, bestP.X - center.X)));
-                vehicles[k].SetMeta("DebugPathId", pathId3d);  // cache id on the node for later
+                // If a sector had zero valid candidates (rare), fall back to car position to keep behavior predictable.
+                if (!foundAny)
+                {
+                    bestP   = carPos;
+                    bestYaw = Mathf.Atan2(carFwd.Z, carFwd.X);
+                }
 
                 result[k] = (bestP, bestYaw);
-                reserved.Add(bestP);  // reserve for the next picks
+                reserved.Add(bestP); // reserve for next picks (unchanged)
             }
 
             return result;

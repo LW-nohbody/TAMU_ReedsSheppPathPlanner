@@ -17,6 +17,8 @@ namespace DigSim3D.App
         [Export] public float Gain = 0.4f;
         [Export] public int Seed = 1337;
         [Export(PropertyHint.Range, "0,1,0.01")] public float Smooth = 0.6f;
+        [Export] public float FloorY = 0.0f;
+        [Export] public NodePath FloorNodePath = null!;
 
         [Export] public Material MaterialOverride = null!;
 
@@ -39,6 +41,7 @@ namespace DigSim3D.App
         {
             EnsureChildren();
             Rebuild();
+            FloorYFromNode();
             if (Engine.IsEditorHint()) SetProcess(false);
         }
 
@@ -255,6 +258,14 @@ namespace DigSim3D.App
             Vector3 localHit = new Vector3(x, h, z);
             hitPos = ToGlobal(localHit);
             normal = (GlobalTransform.Basis * n).Normalized();
+
+            // Check if concrete floor
+            if (hitPos.Y < FloorY)
+            {
+                hitPos.Y = FloorY;
+                normal = Vector3.Up;   // flat slab
+            }
+
             return true;
         }
 
@@ -283,6 +294,15 @@ namespace DigSim3D.App
                 _colShape = new CollisionShape3D { Name = "Shape" };
                 _staticBody.AddChild(_colShape);
             }
+        }
+        private void FloorYFromNode()
+        {
+            var cyl = GetNodeOrNull<CsgCylinder3D>(FloorNodePath);
+            if (cyl == null) return;
+
+            // top cap world Y = centerY + (height/2) * worldScaleY
+            float scaleY = cyl.GlobalTransform.Basis.Y.Length();
+            FloorY = cyl.GlobalTransform.Origin.Y + 0.5f * cyl.Height * scaleY;
         }
     }
 }
