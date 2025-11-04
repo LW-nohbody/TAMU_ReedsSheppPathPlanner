@@ -57,9 +57,9 @@ namespace DigSim3D.Services
                 //GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
 #if DEBUG
                 //GD.Print("[HybridReedsSheppPlanner] (Debug) Forcing grid visualization even for clear RS path.");
-                DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, 
-                                   new List<Vector3> { startPos, goalPos }, 
-                                   _gridSize, _gridExtent);
+                // DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, 
+                //                    new List<Vector3> { startPos, goalPos }, 
+                //                    _gridSize, _gridExtent);
 #endif
                 return BuildPath(rsPts, rsGears.ToList());
             }
@@ -69,7 +69,7 @@ namespace DigSim3D.Services
             var gridPath = GridPlannerPersistent.Plan2DPath(startPos, goalPos);
 
             // Always show grid visualization for debugging
-            DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, gridPath, _gridSize, _gridExtent);
+            // DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, gridPath, _gridSize, _gridExtent);
 
             if (gridPath == null || gridPath.Count < 3)
             {

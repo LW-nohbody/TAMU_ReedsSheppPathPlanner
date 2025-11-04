@@ -134,7 +134,7 @@ sides = 48
 material = ExtResource("3_qfmbg")
 
 [node name="Tank_Floor" type="CSGCylinder3D" parent="Tank_Outer"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.65, 0)
 radius = 15.3
 height = 0.3
 sides = 48
@@ -146,6 +146,7 @@ Radius = 15.2
 Frequency = 0.15
 Octaves = 2
 Smooth = 0.9
+FloorY = -0.492442
 FloorNodePath = NodePath("../Tank_Outer/Tank_Floor")
 
 [node name="ObstacleManager" type="Node3D" parent="."]

@@ -51,6 +51,7 @@ namespace DigSim3D.App
         private bool _movingFreeCam = false, _rotatingFreeCam = false, _rotatingOrbitCam = false;
         private float _freePitch = 0f, _freeYaw = 0f, _orbitPitch = 0, _orbitYaw = 0, Distance = 15.0f;
         private float MinPitchDeg = -5, MaxPitchDeg = 89, MinDist = 0.5f, MaxDist = 18f;
+        private float lift = 0.04f;
 
         [Export] public NodePath ObstacleManagerPath = null!;
         private ObstacleManager _obstacleManager = null!;
@@ -367,7 +368,7 @@ namespace DigSim3D.App
             for (int i = 0; i < points.Length; i++)
             {
                 var p = points[i];
-                var y = SampleSurfaceY(p);
+                var y = SampleSurfaceY(p) + lift;
                 im.SurfaceAddVertex(new Vector3(p.X, y + 0.02f, p.Z));
             }
             im.SurfaceEnd();
@@ -384,7 +385,7 @@ namespace DigSim3D.App
             {
                 Mesh = new CylinderMesh { TopRadius = 0.07f, BottomRadius = 0.07f, Height = 0.01f, RadialSegments = 16 }
             };
-            var y = SampleSurfaceY(pos);
+            var y = SampleSurfaceY(pos) + lift;
             m.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(pos.X, y + 0.01f, pos.Z));
 
             var mat = new StandardMaterial3D { AlbedoColor = col, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
