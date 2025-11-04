@@ -89,6 +89,12 @@ namespace DigSim3D.App
 
                 Vector3 curPos = new Vector3(_ctrl.GlobalTransform.Origin.X, 0, _ctrl.GlobalTransform.Origin.Z);
 
+                // Check if robot has completed current path
+                if (IsPathComplete() && _currentTarget != Vector3.Zero && !_returningHome)
+                {
+                    OnArrival();
+                }
+
                 // Decide what to do
                 if (_returningHome)
                 {

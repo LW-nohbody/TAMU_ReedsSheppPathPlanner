@@ -45,6 +45,7 @@ namespace DigSim3D.App
         private TerrainDisk _terrain = null!;
         private Node3D _vehiclesRoot = null!;
         private readonly List<VehicleVisualizer> _vehicles = new();
+        private readonly List<VehicleBrain> _robotBrains = new();  // Store brains for updates
 
         private Camera3D _camTop = null!, _camChase = null!, _camFree = null!, _camOrbit = null!;
         private bool _usingTop = true;
@@ -56,11 +57,17 @@ namespace DigSim3D.App
         [Export] public NodePath ObstacleManagerPath = null!;
         private ObstacleManager _obstacleManager = null!;
         private SimulationSettingsUI _settingsUI = null!;
+        private SimulationHUD _hud = null!;
 
 
         public override void _Ready()
         {
-            // Initialize settings UI first
+            // Initialize HUD first
+            _hud = new SimulationHUD();
+            AddChild(_hud);
+            GD.Print("[Director] ✅ Simulation HUD initialized");
+
+            // Initialize settings UI
             _settingsUI = new SimulationSettingsUI();
             AddChild(_settingsUI);
             GD.Print("[Director] ✅ Simulation Settings UI initialized");
@@ -106,13 +113,10 @@ namespace DigSim3D.App
                 car.Wheelbase = VehicleLength;
                 car.TrackWidth = VehicleWidth;
 
-                _vehicles.Add(car);                    // <-- put this back
+                _vehicles.Add(car);
             }
 
             // === Initialize VehicleBrain for each robot (Simplified Reactive Swarm Logic) ===
-            // NOTE: With the simplified reactive swarm approach, robots don't need pre-planned targets.
-            // They discover and dig terrain reactively. Initialize minimal state.
-            var brains = new List<VehicleBrain>(_vehicles.Count);
             var hybridRSPlanner = new HybridReedsSheppPlanner();
             var world = new WorldState
             {
@@ -136,7 +140,7 @@ namespace DigSim3D.App
                     hybridRSPlanner,
                     world,
                     _terrain,
-                    new RobotCoordinator(),  // Simple coordinator (will improve later)
+                    new RobotCoordinator(),  // Simple coordinator
                     i,
                     theta0,
                     theta1,
@@ -144,11 +148,10 @@ namespace DigSim3D.App
                     Vector3.Zero  // Home position at origin
                 );
                 
-                brains.Add(brain);
+                _robotBrains.Add(brain);  // Store for updates
                 GD.Print($"[Director] Robot {i} initialized with simplified swarm logic");
             }
             
-            // All robots ready! They'll start finding and digging targets reactively.
             GD.Print($"[Director] All {_vehicles.Count} robots ready for reactive terrain discovery");
 
             _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
@@ -238,6 +241,27 @@ namespace DigSim3D.App
 
         public override void _Process(double delta)
         {
+            // === Update robot brains ===
+            foreach (var brain in _robotBrains)
+            {
+                if (brain != null)
+                {
+                    brain.PlanAndGoOnce();
+                }
+            }
+
+            // === Update HUD stats ===
+            if (_hud != null)
+            {
+                float totalDirt = 0f;
+                foreach (var brain in _robotBrains)
+                {
+                    totalDirt += brain.TotalDug;
+                }
+                _hud.UpdateStats(_vehicles.Count, totalDirt, false, false, false);
+            }
+
+            // === Camera controls ===
             if (Input.IsActionJustPressed("toggle_camera"))
             {
                 _usingTop = !_usingTop;
