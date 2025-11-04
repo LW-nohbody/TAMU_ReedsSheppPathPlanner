@@ -62,13 +62,101 @@ namespace DigSim3D.Services
             float maxRadius,
             int samples = 32)
         {
+            var candidates = GetSortedCandidates(robotId, terrain, thetaMin, thetaMax, maxRadius, samples);
+            
+            // Return highest safe point
+            if (candidates.Count > 0)
+            {
+                return candidates[0].pos;
+            }
+
+            // No safe candidates? Return center of inner sector as fallback
+            float boundaryBuffer = 0.15f;
+            float thetaMinInner = thetaMin + boundaryBuffer;
+            float thetaMaxInner = thetaMax - boundaryBuffer;
+            if (thetaMinInner >= thetaMaxInner)
+            {
+                thetaMinInner = (thetaMin + thetaMax) / 2f - boundaryBuffer * 0.5f;
+                thetaMaxInner = (thetaMin + thetaMax) / 2f + boundaryBuffer * 0.5f;
+            }
+            
+            float midTheta = (thetaMinInner + thetaMaxInner) / 2f;
+            return new Vector3(
+                Mathf.Cos(midTheta) * maxRadius * 0.5f,
+                0,
+                Mathf.Sin(midTheta) * maxRadius * 0.5f
+            );
+        }
+
+        /// <summary>
+        /// Get alternative dig point excluding a specific point (for recovery)
+        /// </summary>
+        public Vector3 GetSafeAlternative(
+            int robotId,
+            TerrainDisk terrain,
+            float thetaMin,
+            float thetaMax,
+            float maxRadius,
+            Vector3 excludePoint,
+            int samples = 32)
+        {
+            var candidates = GetSortedCandidates(robotId, terrain, thetaMin, thetaMax, maxRadius, samples);
+            
+            // Filter out excluded point and nearby points
+            foreach (var candidate in candidates)
+            {
+                if (candidate.pos.DistanceTo(excludePoint) > 0.5f)
+                {
+                    return candidate.pos;
+                }
+            }
+
+            // If all candidates are near excluded point, return best anyway (fallback)
+            if (candidates.Count > 0)
+            {
+                return candidates[0].pos;
+            }
+
+            // No safe candidates? Return center of sector as fallback
+            float midTheta = (thetaMin + thetaMax) / 2f;
+            return new Vector3(
+                Mathf.Cos(midTheta) * maxRadius * 0.5f,
+                0,
+                Mathf.Sin(midTheta) * maxRadius * 0.5f
+            );
+        }
+
+        /// <summary>
+        /// Helper: Get sorted list of dig candidates
+        /// </summary>
+        private List<(Vector3 pos, float height)> GetSortedCandidates(
+            int robotId,
+            TerrainDisk terrain,
+            float thetaMin,
+            float thetaMax,
+            float maxRadius,
+            int samples)
+        {
             var candidates = new List<(Vector3 pos, float height)>();
 
-            // Sample points in sector
+            // Shrink the sector slightly to avoid boundary lines
+            // This prevents robots from getting stuck on the sector boundary geometry
+            float boundaryBuffer = 0.15f; // radians (~8.6 degrees)
+            float thetaMinInner = thetaMin + boundaryBuffer;
+            float thetaMaxInner = thetaMax - boundaryBuffer;
+            
+            // Make sure we don't invert the range
+            if (thetaMinInner >= thetaMaxInner)
+            {
+                thetaMinInner = (thetaMin + thetaMax) / 2f - boundaryBuffer * 0.5f;
+                thetaMaxInner = (thetaMin + thetaMax) / 2f + boundaryBuffer * 0.5f;
+            }
+
+            // Sample points in sector (avoiding exact boundaries)
             for (int a = 0; a < samples; a++)
             {
-                float t = (float)a / (samples - 1);
-                float theta = Mathf.Lerp(thetaMin, thetaMax, t);
+                float t = samples > 1 ? (float)a / (samples - 1) : 0.5f;
+                float theta = Mathf.Lerp(thetaMinInner, thetaMaxInner, t);
 
                 for (int r = 1; r <= 5; r++)
                 {
@@ -103,20 +191,9 @@ namespace DigSim3D.Services
                 }
             }
 
-            // No safe candidates? Return center of sector as fallback
-            if (candidates.Count == 0)
-            {
-                float midTheta = (thetaMin + thetaMax) / 2f;
-                return new Vector3(
-                    Mathf.Cos(midTheta) * maxRadius * 0.5f,
-                    0,
-                    Mathf.Sin(midTheta) * maxRadius * 0.5f
-                );
-            }
-
-            // Return highest safe point
+            // Sort by height (highest first)
             candidates.Sort((a, b) => b.height.CompareTo(a.height));
-            return candidates[0].pos;
+            return candidates;
         }
 
         /// <summary>

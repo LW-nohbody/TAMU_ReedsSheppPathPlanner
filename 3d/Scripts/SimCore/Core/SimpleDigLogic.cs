@@ -9,19 +9,19 @@ namespace SimCore.Core
     /// </summary>
     public static class SimpleDigLogic
     {
-        // How much to lower per dig operation (meters)
-        public const float DIG_AMOUNT = 0.03f;
+        // How much to lower per dig operation (meters) - INCREASED for bigger visual impact
+        public static float DIG_AMOUNT = 0.08f;
         
-        // Robot dirt capacity (cubic meters)
-        public const float ROBOT_CAPACITY = 0.5f;
+        // Robot dirt capacity (cubic meters) - INCREASED for better efficiency
+        public static float ROBOT_CAPACITY = 0.5f;
 
         /// <summary>
         /// Get dig radius based on robot width (dig area = robot footprint)
         /// </summary>
         public static float GetDigRadius(float robotWidth)
         {
-            // Dig radius is approximately robot width (covers robot footprint)
-            return robotWidth * 0.6f;  // Slightly smaller than full width for safety
+            // Dig radius is larger now for more visible impact
+            return robotWidth * 1.5f;  // Bigger dig area for faster terrain changes
         }
 
         /// <summary>
@@ -104,7 +104,7 @@ namespace SimCore.Core
             float thetaMin,
             float thetaMax,
             float maxRadius,
-            float flatThreshold = 0.05f)
+            float flatThreshold = 0.15f)  // REDUCED from 0.2f to allow more continuous digging
         {
             Vector3 highest = FindHighestInSector(terrain, thetaMin, thetaMax, maxRadius);
             

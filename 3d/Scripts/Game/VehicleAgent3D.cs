@@ -5,6 +5,9 @@ using SimCore.Core;
 
 public partial class VehicleAgent3D : CharacterBody3D
 {
+    // Global speed multiplier (configurable from UI)
+    public static float GlobalSpeedMultiplier = 1.0f;
+
     [Export] public float SpeedMps = 0.6f;
     [Export] public float ArenaRadius = 15.0f;
     [Export] public float TurnSmoothing = 8.0f;   // yaw smoothing
@@ -261,7 +264,7 @@ public partial class VehicleAgent3D : CharacterBody3D
         // Adaptive speed: slow down when close to waypoint to avoid overshooting
         float distToWaypoint = curXZ.DistanceTo(tgt);
         float speedMult = Mathf.Clamp(distToWaypoint / 0.5f, 0.3f, 1.0f); // Slow to 30% within 0.5m
-        float effectiveSpeed = SpeedMps * speedMult;
+        float effectiveSpeed = SpeedMps * speedMult * GlobalSpeedMultiplier;
 
         // Manual integration (no physics!)
         var nextXZ = curXZ + dir * effectiveSpeed * dt;
@@ -368,6 +371,61 @@ public partial class VehicleAgent3D : CharacterBody3D
         while (d > Mathf.Pi) d -= Mathf.Tau;
         while (d < -Mathf.Pi) d += Mathf.Tau;
         return d;
+    }
+
+    // Public accessors to avoid reflection (for SimulationDirector)
+    public bool IsDone 
+    { 
+        get 
+        { 
+            try 
+            { 
+                return GodotObject.IsInstanceValid(this) && _done; 
+            } 
+            catch 
+            { 
+                return false; 
+            } 
+        } 
+    }
+    
+    public Vector3[] GetCurrentPath() 
+    { 
+        try 
+        { 
+            if (!GodotObject.IsInstanceValid(this)) return Array.Empty<Vector3>();
+            return _path ?? Array.Empty<Vector3>(); 
+        } 
+        catch 
+        { 
+            return Array.Empty<Vector3>(); 
+        } 
+    }
+    
+    public int GetCurrentPathIndex() 
+    { 
+        try 
+        { 
+            if (!GodotObject.IsInstanceValid(this)) return 0;
+            return _i; 
+        } 
+        catch 
+        { 
+            return 0; 
+        } 
+    }
+    
+    public int[] GetCurrentGears() 
+    { 
+        try 
+        { 
+            if (!GodotObject.IsInstanceValid(this)) return Array.Empty<int>();
+            return _gears ?? Array.Empty<int>(); 
+        } 
+        catch 
+        { 
+            return Array.Empty<int>(); 
+        } 
     }
 }
 

@@ -11,6 +11,7 @@ namespace SimCore.UI
         private VBoxContainer _container = null!;
         private Dictionary<int, RobotPayloadPanel> _panels = new();
         private Label _heatMapStatusLabel = null!;
+        private Label _remainingDirtLabel = null!;
 
         public override void _Ready()
         {
@@ -31,6 +32,14 @@ namespace SimCore.UI
             };
             panel.AddChild(_container);
 
+            // Create remaining dirt label
+            _remainingDirtLabel = new Label
+            {
+                Text = "Remaining Dirt: 0.00 m³",
+                CustomMinimumSize = new Vector2(280, 30)
+            };
+            _container.AddChild(_remainingDirtLabel);
+
             // Create heat map status label
             _heatMapStatusLabel = new Label
             {
@@ -42,6 +51,14 @@ namespace SimCore.UI
             // Add separator
             var separator = new HSeparator();
             _container.AddChild(separator);
+        }
+
+        /// <summary>
+        /// Update remaining dirt display
+        /// </summary>
+        public void UpdateRemainingDirt(float remainingVolume)
+        {
+            _remainingDirtLabel.Text = $"Remaining Dirt: {remainingVolume:F2} m³";
         }
 
         /// <summary>

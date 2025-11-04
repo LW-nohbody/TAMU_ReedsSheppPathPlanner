@@ -51,7 +51,7 @@ namespace SimCore.Core
         }
 
         /// <summary>
-        /// Get best dig point avoiding other robots' claims
+        /// Get best dig point avoiding other robots' claims and sector boundaries
         /// </summary>
         public Vector3 GetBestDigPoint(
             int robotId,
@@ -63,11 +63,24 @@ namespace SimCore.Core
         {
             var candidates = new List<(Vector3 pos, float height)>();
 
-            // Sample points in sector
+            // Shrink the sector slightly to avoid boundary lines
+            // This prevents robots from getting stuck on the sector boundary geometry
+            float boundaryBuffer = 0.15f; // radians (~8.6 degrees)
+            float thetaMinInner = thetaMin + boundaryBuffer;
+            float thetaMaxInner = thetaMax - boundaryBuffer;
+            
+            // Make sure we don't invert the range
+            if (thetaMinInner >= thetaMaxInner)
+            {
+                thetaMinInner = (thetaMin + thetaMax) / 2f - boundaryBuffer * 0.5f;
+                thetaMaxInner = (thetaMin + thetaMax) / 2f + boundaryBuffer * 0.5f;
+            }
+
+            // Sample points in sector (avoiding exact boundaries)
             for (int a = 0; a < samples; a++)
             {
-                float t = (float)a / (samples - 1);
-                float theta = Mathf.Lerp(thetaMin, thetaMax, t);
+                float t = samples > 1 ? (float)a / (samples - 1) : 0.5f;
+                float theta = Mathf.Lerp(thetaMinInner, thetaMaxInner, t);
 
                 for (int r = 1; r <= 5; r++)
                 {
@@ -87,7 +100,8 @@ namespace SimCore.Core
                             if (claim.RobotId == robotId) continue;
                             
                             float dist = pt.DistanceTo(claim.Position);
-                            if (dist < _minSeparation + claim.Radius)
+                            // Increased separation distance to avoid collision clusters
+                            if (dist < _minSeparation + claim.Radius + 0.5f)
                             {
                                 tooClose = true;
                                 break;
@@ -109,12 +123,19 @@ namespace SimCore.Core
                 return best.pos;
             }
 
-            // Fallback: return center of sector (should rarely happen)
-            float midTheta = (thetaMin + thetaMax) / 2f;
+            // Fallback: return various positions in sector if no good spot found
+            // This gives multiple options instead of always the same fallback
+            float fallbackRadius = maxRadius * 0.6f;  // Reduced from 0.8f to be safer
+            float midTheta = (thetaMinInner + thetaMaxInner) / 2f;
+            
+            // Try offset angles to vary fallback location, staying within inner sector
+            float offsetTheta = midTheta + (Mathf.Sin(Godot.GD.Randf() * Mathf.Tau) * 0.1f);
+            offsetTheta = Mathf.Clamp(offsetTheta, thetaMinInner, thetaMaxInner);
+            
             return new Vector3(
-                Mathf.Cos(midTheta) * maxRadius * 0.5f,
+                Mathf.Cos(offsetTheta) * fallbackRadius,
                 0,
-                Mathf.Sin(midTheta) * maxRadius * 0.5f
+                Mathf.Sin(offsetTheta) * fallbackRadius
             );
         }
 

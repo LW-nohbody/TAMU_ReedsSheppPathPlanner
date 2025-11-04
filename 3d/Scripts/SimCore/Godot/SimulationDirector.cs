@@ -56,6 +56,10 @@ public partial class SimulationDirector : Node3D
     private SimCore.Game.PathVisualizer _pathVisualizer;
     private SimCore.Game.TerrainModifier _terrainModifier;
     private SimCore.UI.RobotPayloadUI _payloadUI;
+    
+    // Sector tracking for visual feedback
+    private readonly List<MeshInstance3D> _sectorLines = new();
+    private readonly HashSet<int> _completedSectors = new();
 
     private Camera3D _camTop, _camChase, _camFree, _camOrbit;
     private bool _usingTop = true;
@@ -93,7 +97,13 @@ public partial class SimulationDirector : Node3D
         GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 1.0f);
 
         // Create coordinator for robot collision avoidance
-        _coordinator = new SimCore.Core.RobotCoordinator(minSeparationMeters: 3.0f);
+        // REDUCED separation to allow robots to work closer together in their sectors
+        _coordinator = new SimCore.Core.RobotCoordinator(minSeparationMeters: 0.8f);
+        
+        // Initialize world state
+        World = new WorldState();
+        World.Terrain = _terrain;
+        World.DumpCenter = Vector3.Zero;
         
         // Initialize visualization systems
         _terrainModifier = new SimCore.Game.TerrainModifier();
@@ -104,6 +114,12 @@ public partial class SimulationDirector : Node3D
         
         _payloadUI = new SimCore.UI.RobotPayloadUI();
         AddChild(_payloadUI);
+
+        // Add settings panel UI inside a CanvasLayer
+        var uiLayer = new CanvasLayer { Layer = 100 };
+        AddChild(uiLayer);
+        var settingsPanel = new SimCore.UI.SimulationSettingsPanel();
+        uiLayer.AddChild(settingsPanel);
 
         // Spawn on ring
         int N = Math.Max(1, VehicleCount);
@@ -134,8 +150,11 @@ public partial class SimulationDirector : Node3D
             // Create brain for dig system with coordinator
             float theta0 = i * (Mathf.Tau / N);
             float theta1 = (i + 1) * (Mathf.Tau / N);
-            float digRadius = 7.0f;
+            float digRadius = 10.0f;  // INCREASED sector radius for more area per robot
             var brain = new VehicleBrain(car, spec, planner, World, _terrain, _coordinator, i, theta0, theta1, digRadius, spawnXZ);
+            
+            // Register callback for sector completion
+            brain.SetSectorCompleteCallback(MarkSectorComplete);
             
             _brains.Add(brain);
             _vehicles.Add(car);
@@ -321,17 +340,13 @@ public partial class SimulationDirector : Node3D
         // Check each robot to see if it finished its path and needs to dig/dump
         for (int i = 0; i < _brains.Count; i++)
         {
-            var brain = _brains[i];
-            
-            // Get the controller from brain using reflection (since it's private)
-            var ctrlField = typeof(VehicleBrain).GetField("_ctrl", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var ctrl = ctrlField?.GetValue(brain) as VehicleAgent3D;
-            
-            if (ctrl != null)
+            try
             {
-                // Check if robot is idle (path finished)
-                var doneField = typeof(VehicleAgent3D).GetField("_done", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (doneField != null && (bool)doneField.GetValue(ctrl))
+                var brain = _brains[i];
+                if (brain == null) continue;
+
+                // Check if robot is idle (path finished) using public accessor
+                if (brain.IsPathComplete())
                 {
                     // Robot arrived - process dig/dump and plan next action
                     brain.OnArrival();
@@ -343,10 +358,33 @@ public partial class SimulationDirector : Node3D
                 float payloadPercent = (brain.Payload / capacity) * 100f;
                 _payloadUI.UpdatePayload(i, payloadPercent, brain.Status, brain.CurrentPosition);
                 
-                // Update path visualization
+                // Update path visualization using public method
                 var currentPath = brain.GetCurrentPath();
                 _pathVisualizer.UpdatePath(i, currentPath);
             }
+            catch (System.Exception ex)
+            {
+                // Silently catch Handle errors and other exceptions to prevent crash spam
+                // This can happen when objects are freed or handles become invalid
+                GD.PrintErr($"[Director] Error updating robot {i}: {ex.Message}");
+            }
+        }
+        
+        // Update remaining dirt display (once per frame for efficiency)
+        try
+        {
+            if (_terrain != null)
+            {
+                float remainingDirt = _terrain.GetRemainingDirtVolume();
+                if (_payloadUI != null)
+                {
+                    _payloadUI.UpdateRemainingDirt(remainingDirt);
+                }
+            }
+        }
+        catch
+        {
+            // Silently ignore terrain errors
         }
     }
 
@@ -481,7 +519,7 @@ public partial class SimulationDirector : Node3D
     private void DrawSectorLines()
     {
         int N = VehicleCount;
-        float digRadius = 7.0f; // Match the dig radius used in spawning
+        float digRadius = 10.0f;
         
         // Generate distinct colors for each robot sector
         Color[] colors = new Color[N];
@@ -498,35 +536,74 @@ public partial class SimulationDirector : Node3D
             var direction = new Vector3(Mathf.Cos(theta), 0, Mathf.Sin(theta));
             var endPoint = direction * digRadius;
 
-            // Create line mesh
+            // Create line mesh with thick width for visibility
             var mi = new MeshInstance3D();
             var im = new ImmediateMesh();
             mi.Mesh = im;
             AddChild(mi);
-
-            im.SurfaceBegin(Mesh.PrimitiveType.Lines);
             
-            // Start at origin (slightly above ground)
-            float y0 = SampleSurfaceY(Vector3.Zero) + 0.05f;
+            // Store the mesh instance for later updates
+            _sectorLines.Add(mi);
+
+            im.SurfaceBegin(Mesh.PrimitiveType.LineStrip);
+            
+            // Start at origin (above ground for visibility)
+            float y0 = SampleSurfaceY(Vector3.Zero) + 0.5f;
             im.SurfaceAddVertex(new Vector3(0, y0, 0));
             
             // End at sector boundary
-            float y1 = SampleSurfaceY(endPoint) + 0.05f;
+            float y1 = SampleSurfaceY(endPoint) + 0.5f;
             im.SurfaceAddVertex(new Vector3(endPoint.X, y1, endPoint.Z));
             
             im.SurfaceEnd();
 
-            // Apply color material
+            // Apply color material - BRIGHTER, thicker, and more visible
             var mat = new StandardMaterial3D 
             { 
-                AlbedoColor = colors[i], 
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded 
+                AlbedoColor = colors[i],
+                Roughness = 0.0f,
+                Metallic = 0.9f,
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                VertexColorUseAsAlbedo = false
             };
-            mat.NoDepthTest = DebugPathOnTop;
+            mat.NoDepthTest = true;
+            mat.DisableReceiveShadows = true;
+            
             if (mi.Mesh != null && mi.Mesh.GetSurfaceCount() > 0)
                 mi.SetSurfaceOverrideMaterial(0, mat);
         }
         
         GD.Print($"[Director] Drew {N} sector boundary lines");
+    }
+    
+    /// <summary>
+    /// Mark a sector as complete and change its color to black
+    /// </summary>
+    public void MarkSectorComplete(int sectorId)
+    {
+        if (_completedSectors.Contains(sectorId)) return;
+        
+        _completedSectors.Add(sectorId);
+        
+        // Change the sector line color to black (completely dark)
+        if (sectorId >= 0 && sectorId < _sectorLines.Count)
+        {
+            var mi = _sectorLines[sectorId];
+            if (mi != null && mi.Mesh != null && mi.Mesh.GetSurfaceCount() > 0)
+            {
+                var completedMat = new StandardMaterial3D
+                {
+                    AlbedoColor = new Color(0.1f, 0.1f, 0.1f, 1),  // Very dark gray/black
+                    Roughness = 0.0f,
+                    Metallic = 0.0f,
+                    ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded
+                };
+                completedMat.NoDepthTest = true;
+                completedMat.DisableReceiveShadows = true;
+                mi.SetSurfaceOverrideMaterial(0, completedMat);
+                
+                GD.Print($"[Director] Sector {sectorId} marked COMPLETE (changed to BLACK)");
+            }
+        }
     }
 }

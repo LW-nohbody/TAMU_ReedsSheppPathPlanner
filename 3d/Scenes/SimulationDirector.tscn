@@ -104,7 +104,6 @@ CameraChasePath = NodePath("Cameras/CameraChase")
 CameraFreePath = NodePath("Cameras/CameraFree")
 CameraOrbitPath = NodePath("Cameras/CameraOrbit")
 TerrainPath = NodePath("Terrain")
-VehicleCount = 10
 VehicleLength = 0.75
 VehicleWidth = 0.5
 GoalAdvance = 10.0
