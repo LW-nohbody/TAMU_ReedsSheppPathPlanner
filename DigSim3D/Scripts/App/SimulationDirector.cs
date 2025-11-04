@@ -58,6 +58,7 @@ namespace DigSim3D.App
         private ObstacleManager _obstacleManager = null!;
         private SimulationSettingsUI _settingsUI = null!;
         private SimulationHUD _hud = null!;
+        private RobotStatusPanel _robotStatusPanel = null!;
         
         // UI toggles
         private bool _heatMapEnabled = true;
@@ -76,6 +77,11 @@ namespace DigSim3D.App
             _settingsUI = new SimulationSettingsUI();
             AddChild(_settingsUI);
             GD.Print("[Director] ✅ Simulation Settings UI initialized");
+
+            // Initialize robot status panel
+            _robotStatusPanel = new RobotStatusPanel();
+            AddChild(_robotStatusPanel);
+            GD.Print("[Director] ✅ Robot Status Panel initialized");
 
             // Nodes
             _vehiclesRoot = GetNode<Node3D>(VehiclesRootPath);
@@ -290,6 +296,23 @@ namespace DigSim3D.App
                     totalDirt += brain.TotalDug;
                 }
                 _hud.UpdateStats(_vehicles.Count, totalDirt, _heatMapEnabled, _showTraveledPaths, _showPlannedPaths);
+            }
+
+            // === Update robot status panel ===
+            if (_robotStatusPanel != null)
+            {
+                for (int i = 0; i < _robotBrains.Count; i++)
+                {
+                    var brain = _robotBrains[i];
+                    _robotStatusPanel.UpdateRobotStatus(
+                        brain.RobotId,
+                        brain.Status,
+                        brain.Payload,
+                        brain.DigsCompleted,
+                        brain.CurrentPosition,
+                        brain.TotalDug
+                    );
+                }
             }
 
             // === Camera controls ===
