@@ -9,8 +9,8 @@ namespace SimCore.Core
     /// </summary>
     public static class SimpleDigLogic
     {
-        // How much to lower per dig operation (meters) - INCREASED for bigger visual impact
-        public const float DIG_AMOUNT = 0.08f;
+        // How much to lower per dig operation (meters) - configurable from UI
+        public static float DIG_AMOUNT = 0.08f;
         
         // Robot dirt capacity (cubic meters) - REDUCED to force more frequent dumps
         public const float ROBOT_CAPACITY = 0.2f;

@@ -114,6 +114,10 @@ public partial class SimulationDirector : Node3D
         
         _payloadUI = new SimCore.UI.RobotPayloadUI();
         AddChild(_payloadUI);
+        
+        // Add simulation settings UI
+        var settingsUI = new SimCore.UI.SimulationSettingsUI();
+        AddChild(settingsUI);
 
         // Spawn on ring
         int N = Math.Max(1, VehicleCount);
