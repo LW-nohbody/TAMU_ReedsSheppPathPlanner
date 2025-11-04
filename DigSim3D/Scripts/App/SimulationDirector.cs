@@ -58,6 +58,11 @@ namespace DigSim3D.App
         private ObstacleManager _obstacleManager = null!;
         private SimulationSettingsUI _settingsUI = null!;
         private SimulationHUD _hud = null!;
+        
+        // UI toggles
+        private bool _heatMapEnabled = true;
+        private bool _showTraveledPaths = false;
+        private bool _showPlannedPaths = false;
 
 
         public override void _Ready()
@@ -241,6 +246,32 @@ namespace DigSim3D.App
 
         public override void _Process(double delta)
         {
+            // === Handle keyboard input for toggles ===
+            if (Input.IsActionJustPressed("ui_h") || Input.IsKeyPressed(Key.H))
+            {
+                _heatMapEnabled = !_heatMapEnabled;
+                _terrain.HeatMapEnabled = _heatMapEnabled;
+                GD.Print($"[Director] Heat Map: {(_heatMapEnabled ? "ON" : "OFF")}");
+            }
+
+            if (Input.IsActionJustPressed("ui_p") || Input.IsKeyPressed(Key.P))
+            {
+                _showTraveledPaths = !_showTraveledPaths;
+                GD.Print($"[Director] Traveled Paths: {(_showTraveledPaths ? "ON" : "OFF")}");
+            }
+
+            if (Input.IsActionJustPressed("ui_l") || Input.IsKeyPressed(Key.L))
+            {
+                _showPlannedPaths = !_showPlannedPaths;
+                GD.Print($"[Director] Planned Paths: {(_showPlannedPaths ? "ON" : "OFF")}");
+            }
+
+            if (Input.IsActionJustPressed("ui_c") || Input.IsKeyPressed(Key.C))
+            {
+                GD.Print($"[Director] Clear Traveled Paths");
+                // Clear paths from PathVisualizer if available
+            }
+
             // === Update robot brains ===
             foreach (var brain in _robotBrains)
             {
@@ -258,7 +289,7 @@ namespace DigSim3D.App
                 {
                     totalDirt += brain.TotalDug;
                 }
-                _hud.UpdateStats(_vehicles.Count, totalDirt, false, false, false);
+                _hud.UpdateStats(_vehicles.Count, totalDirt, _heatMapEnabled, _showTraveledPaths, _showPlannedPaths);
             }
 
             // === Camera controls ===
