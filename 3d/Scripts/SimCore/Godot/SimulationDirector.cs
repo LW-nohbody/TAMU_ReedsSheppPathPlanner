@@ -98,7 +98,7 @@ public partial class SimulationDirector : Node3D
 
         // Create coordinator for robot collision avoidance
         // REDUCED separation to allow robots to work closer together in their sectors
-        _coordinator = new SimCore.Core.RobotCoordinator(minSeparationMeters: 1.5f);
+        _coordinator = new SimCore.Core.RobotCoordinator(minSeparationMeters: 0.8f);
         
         // Initialize world state
         World = new WorldState();

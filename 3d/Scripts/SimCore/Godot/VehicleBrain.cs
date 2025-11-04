@@ -103,10 +103,14 @@ public sealed class VehicleBrain
     // Not moved much - increment counter
     _stuckCycleCount++;
     
-    // Longer threshold to avoid false positives (60 frames = 1 second at 60fps)
-    if (_stuckCycleCount > 60)
+    // INCREASED threshold - 120 frames (2 seconds at 60fps) to allow more time for path planning
+    if (_stuckCycleCount > 120)
     {
-      GD.PrintErr($"[{_spec.Name}] STUCK for {_stuckCycleCount} cycles at {currentPos}. Recovering...");
+      // Only log once per recovery, not every frame
+      if (_stuckCycleCount == 121)
+      {
+        GD.PrintErr($"[{_spec.Name}] STUCK for {_stuckCycleCount} cycles at {currentPos}. Recovering...");
+      }
       
       // Recovery: release claim and reset
       _coordinator.ReleaseClaim(_robotId);
@@ -134,6 +138,9 @@ public sealed class VehicleBrain
       if (isStuck)
       {
         _currentStatus = "STUCK - Recovering";
+        // Clear current target to force new path planning
+        _currentTarget = Vector3.Zero;
+        _returningHome = false;  // Reset state
       }
 
       // Decide what to do
