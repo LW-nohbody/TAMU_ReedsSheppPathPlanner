@@ -100,6 +100,11 @@ public partial class SimulationDirector : Node3D
         // REDUCED separation to allow robots to work closer together in their sectors
         _coordinator = new SimCore.Core.RobotCoordinator(minSeparationMeters: 1.5f);
         
+        // Initialize world state
+        World = new WorldState();
+        World.Terrain = _terrain;
+        World.DumpCenter = Vector3.Zero;
+        
         // Initialize visualization systems
         _terrainModifier = new SimCore.Game.TerrainModifier();
         _terrain.AddChild(_terrainModifier);
