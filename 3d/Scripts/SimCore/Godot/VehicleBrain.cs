@@ -43,6 +43,10 @@ public sealed class VehicleBrain
   private int _stuckCycleCount = 0;
   private int _recoveryAttempts = 0;
   private int _consecutiveStuckRecoveries = 0;
+  
+  // Blacklist of dig sites that caused repeated stuck events (prevents circular patterns)
+  private readonly List<Vector3> _blacklistedSites = new();
+  private int _blacklistDecayCounter = 0;
 
   // Public properties for UI/stats
   public int RobotId => _robotId;
@@ -117,15 +121,45 @@ public sealed class VehicleBrain
         _recoveryAttempts++;
       }
       
-      // If we've recovered too many times in a row, do aggressive recovery
-      if (_consecutiveStuckRecoveries >= 2)
+      // Progressive recovery strategy to avoid circular movement:
+      // Level 1: On first stuck, release claim and try alternative
+      // Level 2: On second stuck, force return home to break the cycle
+      // Level 3+: Stay home until sector state changes
+      
+      if (_consecutiveStuckRecoveries == 0)
       {
-        _returningHome = true;  // Force going home to reset
-        GD.PrintErr($"[{_spec.Name}] AGGRESSIVE RECOVERY: Multiple stuck recoveries, returning home!");
+        // First recovery: Release claim and try alternative target
+        GD.PrintErr($"[{_spec.Name}] LEVEL 1 RECOVERY: Releasing claim and trying alternative target");
+        _coordinator.ReleaseClaim(_robotId);
+      }
+      else if (_consecutiveStuckRecoveries == 1)
+      {
+        // Second recovery: Force return home to break circular pattern
+        GD.PrintErr($"[{_spec.Name}] LEVEL 2 RECOVERY: Forcing return home to break circular pattern!");
+        _returningHome = true;
+        _coordinator.ReleaseClaim(_robotId);
+      }
+      else if (_consecutiveStuckRecoveries >= 2)
+      {
+        // Third+ recovery: Aggressive home return and blacklist the location
+        GD.PrintErr($"[{_spec.Name}] LEVEL 3+ RECOVERY (attempt #{_consecutiveStuckRecoveries}): BLACKLISTING and forcing immediate home!");
+        _returningHome = true;
+        _coordinator.ReleaseClaim(_robotId);
+        
+        // Blacklist this location to prevent return
+        if (_blacklistedSites.Count == 0 || !_blacklistedSites.Exists(s => s.DistanceTo(currentPos) < 0.5f))
+        {
+          _blacklistedSites.Add(currentPos);
+        }
+        
+        // After 3+ attempts, reset recovery counter to prevent infinite escalation
+        if (_consecutiveStuckRecoveries > 5)
+        {
+          GD.PrintErr($"[{_spec.Name}] EMERGENCY: 6+ stuck recoveries! Forcing full reset and immediate dump.");
+          _consecutiveStuckRecoveries = 0;
+        }
       }
       
-      // Recovery: release claim, reset state, and pick new target
-      _coordinator.ReleaseClaim(_robotId);
       _stuckCycleCount = 0;
       _lastKnownGoodPos = currentPos;
       _consecutiveStuckRecoveries++;
@@ -161,7 +195,27 @@ public sealed class VehicleBrain
         _currentStatus = "STUCK - Recovering";
         // Clear current target to force new path planning
         _currentTarget = Vector3.Zero;
-        _returningHome = false;  // Reset state
+        
+        // If we're stuck at the same location multiple times, blacklist it
+        if (_consecutiveStuckRecoveries > 0 && _currentTarget.DistanceTo(curPos) < 1.0f)
+        {
+          GD.PrintErr($"[{_spec.Name}] BLACKLISTING site {curPos} - repeated stuck events!");
+          _blacklistedSites.Add(curPos);
+          _returningHome = true;  // Force home immediately
+        }
+        else if (_consecutiveStuckRecoveries > 1)
+        {
+          _returningHome = true;  // Force home after multiple stuck events
+        }
+      }
+      
+      // Decay blacklist every 300 frames (5 seconds at 60fps)
+      _blacklistDecayCounter++;
+      if (_blacklistDecayCounter > 300 && _blacklistedSites.Count > 0)
+      {
+        GD.Print($"[{_spec.Name}] Clearing blacklist - {_blacklistedSites.Count} sites removed");
+        _blacklistedSites.Clear();
+        _blacklistDecayCounter = 0;
       }
 
       // Decide what to do
@@ -181,6 +235,7 @@ public sealed class VehicleBrain
           GD.Print($"[{_spec.Name}] *** DUMPED {_payload:F3}m³ *** Total: {_world.TotalDirtExtracted:F2}m³");
           _payload = 0f;
           _returningHome = false;
+          _consecutiveStuckRecoveries = 0;  // Reset recovery counter after successful dump
           _currentStatus = "Dumped - Ready";
           _ctrl.SetPath(Array.Empty<Vector3>(), Array.Empty<int>());
           return;
@@ -197,19 +252,46 @@ public sealed class VehicleBrain
       }
       else
       {
-        // Find dig target
+        // Find dig target - avoid blacklisted sites and re-planning to same stuck target
         targetPos = _coordinator.GetBestDigPoint(_robotId, _terrain, _thetaMin, _thetaMax, _maxRadius);
         
-        float digRadius = SimpleDigLogic.GetDigRadius(_spec.Width);
-        if (targetPos != Vector3.Zero && _coordinator.ClaimDigSite(_robotId, targetPos, digRadius))
+        // Check if target is blacklisted
+        bool targetIsBlacklisted = false;
+        foreach (var blacklistedSite in _blacklistedSites)
         {
-          _currentStatus = "Digging";
+          if (targetPos.DistanceTo(blacklistedSite) < 0.5f)
+          {
+            targetIsBlacklisted = true;
+            GD.Print($"[{_spec.Name}] Target {targetPos} is blacklisted - going home instead");
+            break;
+          }
+        }
+        
+        // If this is the same target as before and we just got stuck, skip it
+        if (isStuck && _currentTarget != Vector3.Zero && targetPos.DistanceTo(_currentTarget) < 0.5f)
+        {
+          GD.Print($"[{_spec.Name}] Skipping same stuck target, trying alternative or going home");
+          _returningHome = true;  // Force home to break the cycle
+          targetPos = _homePosition;
+        }
+        else if (targetIsBlacklisted)
+        {
+          _returningHome = true;  // Force home if target is blacklisted
+          targetPos = _homePosition;
         }
         else
         {
-          _currentStatus = "Waiting (collision)";
-          if (_currentTarget != Vector3.Zero)
-            targetPos = _currentTarget;
+          float digRadius = SimpleDigLogic.GetDigRadius(_spec.Width);
+          if (targetPos != Vector3.Zero && _coordinator.ClaimDigSite(_robotId, targetPos, digRadius))
+          {
+            _currentStatus = "Digging";
+          }
+          else
+          {
+            _currentStatus = "Waiting (collision)";
+            if (_currentTarget != Vector3.Zero)
+              targetPos = _currentTarget;
+          }
         }
         
         // Check if sector is done
@@ -319,6 +401,7 @@ public sealed class VehicleBrain
           
           _payload = 0f;
           _returningHome = false;
+          _consecutiveStuckRecoveries = 0;  // Reset recovery counter after successful dump
           _currentStatus = "Dumped - Ready";
           return;
         }

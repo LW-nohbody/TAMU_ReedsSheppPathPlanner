@@ -12,8 +12,8 @@ namespace SimCore.Core
         // How much to lower per dig operation (meters) - INCREASED for bigger visual impact
         public static float DIG_AMOUNT = 0.08f;
         
-        // Robot dirt capacity (cubic meters) - REDUCED to force more frequent dumps
-        public static float ROBOT_CAPACITY = 0.2f;
+        // Robot dirt capacity (cubic meters) - INCREASED for better efficiency
+        public static float ROBOT_CAPACITY = 0.5f;
 
         /// <summary>
         /// Get dig radius based on robot width (dig area = robot footprint)
