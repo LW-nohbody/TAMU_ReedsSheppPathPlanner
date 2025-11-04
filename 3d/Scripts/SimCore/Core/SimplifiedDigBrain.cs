@@ -41,7 +41,7 @@ namespace SimCore.Core
         
         // Payload tracking
         public float Payload { get; private set; } = 0f;
-        public float MaxPayload { get; private set; } = 0.5f;
+        public float MaxPayload => SimulationConfig.RobotLoadCapacity;
         public float PayloadPercent => (Payload / MaxPayload) * 100f;
         
         // Statistics
@@ -76,11 +76,24 @@ namespace SimCore.Core
             Vector3 highest = Vector3.Zero;
             float highestY = float.MinValue;
 
-            // Sample points across the sector
+            // Shrink the sector slightly to avoid boundary lines
+            // This prevents robots from getting stuck on the sector boundary geometry
+            float boundaryBuffer = 0.15f; // radians (~8.6 degrees)
+            float thetaMinInner = ThetaMin + boundaryBuffer;
+            float thetaMaxInner = ThetaMax - boundaryBuffer;
+            
+            // Make sure we don't invert the range
+            if (thetaMinInner >= thetaMaxInner)
+            {
+                thetaMinInner = (ThetaMin + ThetaMax) / 2f - boundaryBuffer * 0.5f;
+                thetaMaxInner = (ThetaMin + ThetaMax) / 2f + boundaryBuffer * 0.5f;
+            }
+
+            // Sample points across the sector (avoiding exact boundaries)
             for (int a = 0; a < samples; a++)
             {
                 float t = samples > 1 ? (float)a / (samples - 1) : 0.5f;
-                float theta = Mathf.Lerp(ThetaMin, ThetaMax, t);
+                float theta = Mathf.Lerp(thetaMinInner, thetaMaxInner, t);
                 
                 // Sample at different radii
                 for (int r = 1; r <= 5; r++)
@@ -103,7 +116,7 @@ namespace SimCore.Core
                 }
             }
 
-            return highest != Vector3.Zero ? highest : new Vector3(Mathf.Cos(ThetaMin + (ThetaMax - ThetaMin) / 2) * MaxRadius * 0.5f, 0, Mathf.Sin(ThetaMin + (ThetaMax - ThetaMin) / 2) * MaxRadius * 0.5f);
+            return highest != Vector3.Zero ? highest : new Vector3(Mathf.Cos(thetaMinInner + (thetaMaxInner - thetaMinInner) / 2) * MaxRadius * 0.5f, 0, Mathf.Sin(thetaMinInner + (thetaMaxInner - thetaMinInner) / 2) * MaxRadius * 0.5f);
         }
 
         /// <summary>
