@@ -17,35 +17,49 @@ namespace DigSim3D.App
 
         public override void _Ready()
         {
-            // Create main panel
+            // Create main panel - BOTTOM-RIGHT area (so it doesn't overlap with left panels)
+            var viewportSize = GetViewport().GetVisibleRect().Size;
             _panel = new PanelContainer
             {
-                Position = new Vector2(10, 80),
-                CustomMinimumSize = new Vector2(350, 400),
+                Position = new Vector2(viewportSize.X - 370, viewportSize.Y - 420),
+                CustomMinimumSize = new Vector2(360, 410),
                 Modulate = new Color(1, 1, 1, 0.9f)
             };
 
             // Add theme
             var theme = new Theme();
             var font = ThemeDB.FallbackFont;
-            theme.SetFontSize("font_size", "Label", 12);
+            theme.SetFontSize("font_size", "Label", 10);
             _panel.Theme = theme;
 
             // Create container for robot labels
             _vbox = new VBoxContainer
             {
-                Position = new Vector2(5, 5)
+                OffsetLeft = 5,
+                OffsetTop = 5,
+                OffsetRight = -5,
+                OffsetBottom = -5
             };
+            _vbox.AddThemeConstantOverride("separation", 2);
             _panel.AddChild(_vbox);
 
-            // Create labels for each robot
-            for (int i = 0; i < MAX_ROBOTS_TO_SHOW; i++)
+            // Title
+            var title = new Label
+            {
+                Text = "🤖 ROBOT STATUS (Press I to toggle)",
+                CustomMinimumSize = new Vector2(340, 22)
+            };
+            title.AddThemeFontSizeOverride("font_size", 11);
+            _vbox.AddChild(title);
+
+            // Create labels for each robot (show first 5)
+            for (int i = 0; i < 5; i++)
             {
                 var label = new Label
                 {
-                    Text = $"Robot {i}: Initializing...",
-                    CustomMinimumSize = new Vector2(340, 40),
-                    Modulate = new Color(1, 1, 1, 0.95f)
+                    Text = $"Robot {i}: Ready",
+                    CustomMinimumSize = new Vector2(340, 64),
+                    AutowrapMode = TextServer.AutowrapMode.Word
                 };
                 label.Theme = theme;
                 label.AddThemeColorOverride("font_shadow_color", Colors.Black);
@@ -56,7 +70,7 @@ namespace DigSim3D.App
             }
 
             AddChild(_panel);
-            GD.Print("[RobotStatusPanel] ✅ Robot Status Panel initialized");
+            GD.Print("[RobotStatusPanel] ✅ Positioned at BOTTOM-RIGHT (Press I to toggle)");
         }
 
         public void UpdateRobotStatus(int robotId, string status, float payload, int digsCompleted, Vector3 position, float totalDug)
@@ -65,7 +79,7 @@ namespace DigSim3D.App
 
             var label = _robotLabels[robotId];
             label.Text = $@"[{robotId}] {status}
-  Payload: {payload:F2}m³ | Digs: {digsCompleted} | Total: {totalDug:F2}m³
+  Payload: {payload:F1}m³ | Digs: {digsCompleted} | Total: {totalDug:F1}m³
   Pos: ({position.X:F1}, {position.Z:F1})";
 
             // Color code based on status

@@ -44,8 +44,8 @@ namespace DigSim3D.App
         // Dirty flag for color update
         private bool _colorsDirty = false;
         
-        // Heat map toggle
-        private bool _heatMapEnabled = true;
+        // Heat map toggle - DISABLED BY DEFAULT
+        private bool _heatMapEnabled = false;
         public bool HeatMapEnabled
         {
             get => _heatMapEnabled;
@@ -225,9 +225,10 @@ namespace DigSim3D.App
             {
                 var mat = new StandardMaterial3D
                 {
-                    VertexColorUseAsAlbedo = true,
-                    AlbedoColor = new Color(0.6f, 0.55f, 0.5f), // Base dirt/sand color
-                    Roughness = 0.9f,
+                    VertexColorUseAsAlbedo = _heatMapEnabled,  // Only use vertex colors when heatmap is ON
+                    AlbedoColor = new Color(0.65f, 0.55f, 0.45f),  // Rich earth/dirt brown color (RGB: 165/140/115)
+                    Roughness = 0.75f,
+                    Metallic = 0.0f,
                     ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel
                 };
                 _meshMI.SetSurfaceOverrideMaterial(0, mat);
@@ -367,13 +368,13 @@ namespace DigSim3D.App
         // -------------------------------------------------------------------------
         private Color GetHeightColor(float height)
         {
-            // If heat map is disabled, return white (uses material's natural color/texture)
+            // When heatmap is disabled, return dirt color (will be ignored since VertexColorUseAsAlbedo = false)
             if (!_heatMapEnabled)
             {
-                return Colors.White; // No color overlay - use material's base color
+                return new Color(0.7f, 0.65f, 0.55f);  // Dirt brown - matches material albedo
             }
             
-            if (_maxHeight <= _minHeight) return new Color(0.2f, 0.6f, 0.3f); // Default darker green
+            if (_maxHeight <= _minHeight) return new Color(0.2f, 0.6f, 0.3f);
             
             float t = (_maxHeight - height) / (_maxHeight - _minHeight);
             t = Mathf.Clamp(t, 0f, 1f);
@@ -484,12 +485,13 @@ namespace DigSim3D.App
             var mesh = st.Commit();
             _meshMI.Mesh = mesh;
             
-            // Update material to use vertex colors with base dirt color
+            // Update material - only use vertex colors when heatmap is ON
             var mat = new StandardMaterial3D
             {
-                VertexColorUseAsAlbedo = true,
-                AlbedoColor = new Color(0.6f, 0.55f, 0.5f), // Base dirt/sand color
-                Roughness = 0.9f,
+                VertexColorUseAsAlbedo = _heatMapEnabled,
+                AlbedoColor = new Color(0.65f, 0.55f, 0.45f),  // Rich earth/dirt brown color (RGB: 165/140/115)
+                Roughness = 0.75f,
+                Metallic = 0.0f,
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel
             };
             _meshMI.SetSurfaceOverrideMaterial(0, mat);

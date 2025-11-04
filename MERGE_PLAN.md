@@ -195,3 +195,4 @@ DigSim3D/Scripts/
 - Dig and dump automatically
 - Never get stuck or require complex recovery
 - Respond to UI parameter changes in real-time
+

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime;
 
+using DigSim3D.Config;
 using DigSim3D.Domain;
 using DigSim3D.Services;
 
@@ -59,29 +60,45 @@ namespace DigSim3D.App
         private SimulationSettingsUI _settingsUI = null!;
         private SimulationHUD _hud = null!;
         private RobotStatusPanel _robotStatusPanel = null!;
+        private RobotStatsUI _robotStatsUI = null!;
+        private RobotPayloadUI _robotPayloadUI = null!;
         
-        // UI toggles
-        private bool _heatMapEnabled = true;
+        // UI toggles - HEATMAP DISABLED BY DEFAULT
+        private bool _heatMapEnabled = false;
         private bool _showTraveledPaths = false;
         private bool _showPlannedPaths = false;
 
 
         public override void _Ready()
         {
-            // Initialize HUD first
+            // === Initialize UI ===
+            
+            // Layer 1: HUD controls (top-left, minimal)
             _hud = new SimulationHUD();
             AddChild(_hud);
-            GD.Print("[Director] ✅ Simulation HUD initialized");
+            GD.Print("[Director] ✅ HUD initialized (top-left)");
 
-            // Initialize settings UI
+            // Layer 2: Settings UI (top-right)
             _settingsUI = new SimulationSettingsUI();
             AddChild(_settingsUI);
-            GD.Print("[Director] ✅ Simulation Settings UI initialized");
+            GD.Print("[Director] ✅ Settings UI initialized (top-right)");
 
-            // Initialize robot status panel
+            // Layer 3: Excavation Status (bottom-left, compact)
+            _robotPayloadUI = new RobotPayloadUI();
+            AddChild(_robotPayloadUI);
+            GD.Print("[Director] ✅ Excavation Status initialized (bottom-left)");
+
+            // Layer 4: Robot Stats UI (initialized but hidden by default - toggle with V key)
+            _robotStatsUI = new RobotStatsUI();
+            _robotStatsUI.Visible = false;  // Hidden by default
+            AddChild(_robotStatsUI);
+            GD.Print("[Director] ✅ Robot Stats UI created (hidden by default, V key to show)");
+
+            // Layer 5: Robot Status Panel (initialized but hidden by default - toggle with I key)
             _robotStatusPanel = new RobotStatusPanel();
+            _robotStatusPanel.Visible = false;  // Hidden by default
             AddChild(_robotStatusPanel);
-            GD.Print("[Director] ✅ Robot Status Panel initialized");
+            GD.Print("[Director] ✅ Robot Status Panel created (hidden by default, I key to show)");
 
             // Nodes
             _vehiclesRoot = GetNode<Node3D>(VehiclesRootPath);
@@ -125,6 +142,13 @@ namespace DigSim3D.App
                 car.TrackWidth = VehicleWidth;
 
                 _vehicles.Add(car);
+                
+                // Register robot in UI panels
+                Color[] colors = { Colors.Red, Colors.Green, Colors.Blue, Colors.Yellow, Colors.Cyan, Colors.Magenta, Colors.Orange, Colors.Purple };
+                Color robotColor = colors[i % colors.Length];
+                
+                _robotPayloadUI.AddRobot(i, $"Robot_{i}", robotColor);
+                _robotStatsUI.RegisterRobot(i, $"R{i}");
             }
 
             // === Initialize VehicleBrain for each robot (Simplified Reactive Swarm Logic) ===
@@ -312,6 +336,32 @@ namespace DigSim3D.App
                         brain.CurrentPosition,
                         brain.TotalDug
                     );
+                }
+            }
+
+            // === Update robot payload UI ===
+            if (_robotPayloadUI != null)
+            {
+                float totalDirtExtracted = 0f;
+                for (int i = 0; i < _robotBrains.Count; i++)
+                {
+                    var brain = _robotBrains[i];
+                    float payloadPercent = brain.Payload / SimulationConfig.RobotLoadCapacity;
+                    _robotPayloadUI.UpdatePayload(i, payloadPercent, brain.Status, brain.CurrentPosition);
+                    totalDirtExtracted += brain.TotalDug;
+                }
+                _robotPayloadUI.UpdateExtractedDirt(totalDirtExtracted);
+                _robotPayloadUI.UpdateHeatMapStatus(_heatMapEnabled);
+            }
+
+            // === Update robot stats UI ===
+            if (_robotStatsUI != null)
+            {
+                for (int i = 0; i < _robotBrains.Count; i++)
+                {
+                    var brain = _robotBrains[i];
+                    _robotStatsUI.UpdateRobotStats(i, brain.Payload, brain.DigsCompleted, brain.CurrentTarget, brain.Status);
+                    _robotStatsUI.RecordDig(i, brain.TotalDug);
                 }
             }
 
