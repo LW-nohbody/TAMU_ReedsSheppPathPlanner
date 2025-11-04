@@ -109,53 +109,47 @@ namespace DigSim3D.App
                 _vehicles.Add(car);                    // <-- put this back
             }
 
-            // === PLAN FIRST DIG TARGETS (after all cars exist) ===
-            var scheduler = new RadialScheduler();
+            // === Initialize VehicleBrain for each robot (Simplified Reactive Swarm Logic) ===
+            // NOTE: With the simplified reactive swarm approach, robots don't need pre-planned targets.
+            // They discover and dig terrain reactively. Initialize minimal state.
             var brains = new List<VehicleBrain>(_vehicles.Count);
-            foreach (var v in _vehicles)
+            var hybridRSPlanner = new HybridReedsSheppPlanner();
+            var world = new WorldState
             {
-                var brain = new VehicleBrain();
-                v.AddChild(brain);
+                Obstacles = obstacleList,
+                Terrain = _terrain,
+                DumpCenter = Vector3.Zero
+            };
+
+            for (int i = 0; i < _vehicles.Count; i++)
+            {
+                var car = _vehicles[i];
+                Vector3 spawnPos = car.GlobalTransform.Origin;
+                float theta0 = i * (Mathf.Tau / _vehicles.Count);
+                float theta1 = (i + 1) * (Mathf.Tau / _vehicles.Count);
+                float sectorRadius = 15f;
+
+                // Create simplified VehicleBrain with proper initialization
+                var brain = new VehicleBrain(
+                    car,
+                    car.Spec,
+                    hybridRSPlanner,
+                    world,
+                    _terrain,
+                    new RobotCoordinator(),  // Simple coordinator (will improve later)
+                    i,
+                    theta0,
+                    theta1,
+                    sectorRadius,
+                    Vector3.Zero  // Home position at origin
+                );
+                
                 brains.Add(brain);
+                GD.Print($"[Director] Robot {i} initialized with simplified swarm logic");
             }
-
-            var digTargets = scheduler.PlanFirstDigTargets(
-                brains, _terrain, Vector3.Zero, DigScoring.Default);
-
-            // === Build paths to the assigned dig targets (scheduler-driven) ===
-            for (int k = 0; k < _vehicles.Count; k++)
-            {
-                var car = _vehicles[k];
-                var (digPos, approachYaw) = digTargets[k];
-
-                // current forward yaw in XZ (Godot forward is -Z)
-                var fwd = -car.GlobalTransform.Basis.Z;
-                double startYaw = MathF.Atan2(fwd.Z, fwd.X);
-                var start = car.GlobalTransform.Origin;
-
-                // Planner poses use X/Z + yaw
-                var startPose = new Pose(start.X, start.Z, startYaw);
-                var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
-
-                // Vehicle + world (note: Obstacles is List<Obstacle3D>)
-                VehicleSpec spec = car.Spec;
-                var world = new WorldState
-                {
-                    Obstacles = obstacleList,   // <— List<Obstacle3D>
-                    Terrain = _terrain
-                };
-
-                var hybridRSPlanner = new HybridReedsSheppPlanner();
-                PlannedPath path = hybridRSPlanner.Plan(startPose, goalPose, spec, world);
-
-                DrawPathProjectedToTerrain(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
-                DrawMarkerProjected(start, new Color(0, 1, 0));
-                DrawMarkerProjected(digPos, new Color(0, 0, 1));
-
-                car.SetPath(path.Points.ToArray(), path.Gears.ToArray());
-
-                GD.Print($"[Director] {car.Name} path: {path.Points.Count} samples");
-            }
+            
+            // All robots ready! They'll start finding and digging targets reactively.
+            GD.Print($"[Director] All {_vehicles.Count} robots ready for reactive terrain discovery");
 
             _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
         }

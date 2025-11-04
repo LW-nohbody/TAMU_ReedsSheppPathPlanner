@@ -18,6 +18,9 @@ namespace DigSim3D.Domain
 
         // World size (meters)
         public float Extent = 50f;
+        
+        // Dirt extraction tracking
+        public float TotalDirtExtracted = 0f;
 
         // Utility
         public bool HasTerrain => Terrain != null;

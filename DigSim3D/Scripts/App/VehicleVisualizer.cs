@@ -25,6 +25,22 @@ namespace DigSim3D.App
         public VehicleSpec Spec { get; private set; }
 
 
+        // Public properties for VehicleBrain compatibility
+        public bool IsDone => _done;
+        
+        public Vector3[] GetCurrentPath() 
+        { 
+            try 
+            { 
+                if (!GodotObject.IsInstanceValid(this)) return Array.Empty<Vector3>();
+                return _path ?? Array.Empty<Vector3>(); 
+            } 
+            catch 
+            { 
+                return Array.Empty<Vector3>(); 
+            } 
+        }
+
         // Path
         private Vector3[] _path = Array.Empty<Vector3>();
         private int[] _gears = Array.Empty<int>();

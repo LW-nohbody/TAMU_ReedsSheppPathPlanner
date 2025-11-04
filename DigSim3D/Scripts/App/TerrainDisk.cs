@@ -353,6 +353,15 @@ namespace DigSim3D.App
             CallDeferred(nameof(UpdateMeshFromHeights));
         }
         
+        /// <summary>
+        /// Lower an area of terrain (alias for ModifyHeight with negative delta)
+        /// Used by VehicleBrain for digging
+        /// </summary>
+        public void LowerArea(Vector3 worldXZ, float radius, float deltaHeight)
+        {
+            ModifyHeight(worldXZ, -Mathf.Abs(deltaHeight), radius);
+        }
+        
         // -------------------------------------------------------------------------
         // Get vertex color based on height - Beautiful gradient heat map
         // -------------------------------------------------------------------------
