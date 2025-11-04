@@ -87,7 +87,8 @@ namespace SimCore.Core
                             if (claim.RobotId == robotId) continue;
                             
                             float dist = pt.DistanceTo(claim.Position);
-                            if (dist < _minSeparation + claim.Radius)
+                            // Increased separation distance to avoid collision clusters
+                            if (dist < _minSeparation + claim.Radius + 0.5f)
                             {
                                 tooClose = true;
                                 break;
@@ -109,12 +110,18 @@ namespace SimCore.Core
                 return best.pos;
             }
 
-            // Fallback: return outer edge of sector (further out, more likely to have terrain)
+            // Fallback: return various positions in sector if no good spot found
+            // This gives multiple options instead of always the same fallback
+            float fallbackRadius = maxRadius * 0.6f;  // Reduced from 0.8f to be safer
             float midTheta = (thetaMin + thetaMax) / 2f;
+            
+            // Try offset angles to vary fallback location
+            float offsetTheta = midTheta + (Mathf.Sin(Godot.GD.Randf() * Mathf.Tau) * 0.3f);
+            
             return new Vector3(
-                Mathf.Cos(midTheta) * maxRadius * 0.8f,  // 80% of max radius (was 50%)
+                Mathf.Cos(offsetTheta) * fallbackRadius,
                 0,
-                Mathf.Sin(midTheta) * maxRadius * 0.8f
+                Mathf.Sin(offsetTheta) * fallbackRadius
             );
         }
 

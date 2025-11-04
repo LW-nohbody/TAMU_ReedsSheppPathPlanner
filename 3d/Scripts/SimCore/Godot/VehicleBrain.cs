@@ -38,9 +38,11 @@ public sealed class VehicleBrain
   private string _currentStatus = "Initializing";
   private bool _sectorCompleted = false;
   
-  // Stuck detection
+  // Stuck detection and recovery
   private Vector3 _lastKnownGoodPos = Vector3.Zero;
   private int _stuckCycleCount = 0;
+  private int _recoveryAttempts = 0;
+  private int _consecutiveStuckRecoveries = 0;
 
   // Public properties for UI/stats
   public int RobotId => _robotId;
@@ -97,25 +99,36 @@ public sealed class VehicleBrain
     {
       _lastKnownGoodPos = currentPos;
       _stuckCycleCount = 0;
+      _consecutiveStuckRecoveries = 0;  // Reset recovery counter on good movement
       return false;
     }
     
     // Not moved much - increment counter
     _stuckCycleCount++;
     
-    // INCREASED threshold - 120 frames (2 seconds at 60fps) to allow more time for path planning
-    if (_stuckCycleCount > 120)
+    // REDUCED threshold - 60 frames (1 second at 60fps) for faster stuck detection
+    // This allows quicker recovery attempts rather than waiting 2 seconds
+    if (_stuckCycleCount > 60)
     {
       // Only log once per recovery, not every frame
-      if (_stuckCycleCount == 121)
+      if (_stuckCycleCount == 61)
       {
-        GD.PrintErr($"[{_spec.Name}] STUCK for {_stuckCycleCount} cycles at {currentPos}. Recovering...");
+        GD.PrintErr($"[{_spec.Name}] STUCK for {_stuckCycleCount} cycles at {currentPos}. Attempting recovery #{_consecutiveStuckRecoveries + 1}...");
+        _recoveryAttempts++;
       }
       
-      // Recovery: release claim and reset
+      // If we've recovered too many times in a row, do aggressive recovery
+      if (_consecutiveStuckRecoveries >= 2)
+      {
+        _returningHome = true;  // Force going home to reset
+        GD.PrintErr($"[{_spec.Name}] AGGRESSIVE RECOVERY: Multiple stuck recoveries, returning home!");
+      }
+      
+      // Recovery: release claim, reset state, and pick new target
       _coordinator.ReleaseClaim(_robotId);
       _stuckCycleCount = 0;
       _lastKnownGoodPos = currentPos;
+      _consecutiveStuckRecoveries++;
       return true;
     }
     
@@ -188,7 +201,7 @@ public sealed class VehicleBrain
         targetPos = _coordinator.GetBestDigPoint(_robotId, _terrain, _thetaMin, _thetaMax, _maxRadius);
         
         float digRadius = SimpleDigLogic.GetDigRadius(_spec.Width);
-        if (_coordinator.ClaimDigSite(_robotId, targetPos, digRadius))
+        if (targetPos != Vector3.Zero && _coordinator.ClaimDigSite(_robotId, targetPos, digRadius))
         {
           _currentStatus = "Digging";
         }
