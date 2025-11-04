@@ -112,11 +112,6 @@ public partial class SimulationDirector : Node3D
         var digTargets = scheduler.PlanFirstDigTargets(
             brains, _terrain, Vector3.Zero, SimCore.Core.DigScoring.Default);
 
-        if (obstacleList.Count > 0)
-        {
-            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.5f, gridExtent: 40);
-        }
-
         // === Build paths to the assigned dig targets (scheduler-driven) ===
         for (int k = 0; k < _vehicles.Count; k++)
         {
