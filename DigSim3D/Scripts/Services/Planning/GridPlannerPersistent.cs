@@ -216,5 +216,55 @@ namespace DigSim3D.Services
         {
             return ((long)(gx + extent) * (extent * 2 + 1)) + (gz + extent);
         }
+
+        /// <summary>
+        /// Returns true if the grid cell under this world-space XZ is disabled
+        /// (i.e., falls inside an obstacle + the buffer passed to BuildGrid).
+        /// </summary>
+        public static bool IsCellBlocked(Vector3 xz)
+        {
+            if (!_built) return false;
+
+            int gx = Mathf.RoundToInt(xz.X / _gridSize);
+            int gz = Mathf.RoundToInt(xz.Z / _gridSize);
+
+            // Treat out-of-bounds as blocked so schedulers avoid outside the baked grid.
+            if (Math.Abs(gx) > _gridExtent || Math.Abs(gz) > _gridExtent)
+                return true;
+
+            long id = ToId(gx, gz, _gridExtent);
+            return _astar.IsPointDisabled(id);
+        }
+
+        /// <summary>
+        /// Optional inflated check – looks at neighboring cells within a circular radius
+        /// measured in meters (useful if a wider keep-out than BuildGrid is needed).
+        /// </summary>
+        public static bool IsCellBlocked(Vector3 xz, float extraInflationMeters)
+        {
+            if (!_built) return false;
+
+            int cx = Mathf.RoundToInt(xz.X / _gridSize);
+            int cz = Mathf.RoundToInt(xz.Z / _gridSize);
+
+            int rCells = Mathf.CeilToInt(extraInflationMeters / Math.Max(_gridSize, 1e-4f));
+            int r2 = rCells * rCells;
+
+            for (int dz = -rCells; dz <= rCells; dz++)
+                for (int dx = -rCells; dx <= rCells; dx++)
+                {
+                    if (dx * dx + dz * dz > r2) continue;
+
+                    int gx = cx + dx;
+                    int gz = cz + dz;
+
+                    if (Math.Abs(gx) > _gridExtent || Math.Abs(gz) > _gridExtent)
+                        return true; // treat off-grid as blocked
+
+                    long id = ToId(gx, gz, _gridExtent);
+                    if (_astar.IsPointDisabled(id)) return true;
+                }
+            return false;
+        }
     }
 }
