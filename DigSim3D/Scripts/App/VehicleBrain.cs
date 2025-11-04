@@ -47,7 +47,11 @@ namespace DigSim3D.App
         public Vector3 CurrentTarget => _currentTarget;
         public string Status => _currentStatus;
         public Vector3 CurrentPosition => new Vector3(_ctrl.GlobalTransform.Origin.X, 0, _ctrl.GlobalTransform.Origin.Z);
-
+        
+        /// <summary>
+        /// Agent property for compatibility with RadialScheduler and other systems
+        /// </summary>
+        public VehicleVisualizer Agent => _ctrl;
 
         public VehicleBrain(
             VehicleVisualizer ctrl,
