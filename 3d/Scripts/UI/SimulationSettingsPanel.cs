@@ -7,7 +7,7 @@ namespace SimCore.UI
     /// <summary>
     /// Simple settings panel for adjusting dig depth and robot speed in real-time
     /// </summary>
-    public partial class SimulationSettingsPanel : CanvasLayer
+    public partial class SimulationSettingsPanel : Control
     {
         private HSlider _digDepthSlider = null!;
         private HSlider _speedSlider = null!;
@@ -18,24 +18,26 @@ namespace SimCore.UI
         {
             GD.Print("[SimulationSettingsPanel] Creating UI...");
 
-            // Create main container
-            var mainPanel = new Panel
-            {
-                CustomMinimumSize = new Vector2(320, 250)
-            };
-            AddChild(mainPanel);
+            // Setup this Control as the container
+            AnchorLeft = 1.0f;
+            AnchorTop = 0.0f;
+            AnchorRight = 1.0f;
+            AnchorBottom = 0.0f;
+            OffsetLeft = -330;
+            OffsetTop = 10;
+            OffsetRight = -10;
+            OffsetBottom = 260;
+            CustomMinimumSize = new Vector2(320, 250);
 
-            // Position in top-right corner
-            mainPanel.AnchorLeft = 1.0f;
-            mainPanel.AnchorTop = 0.0f;
-            mainPanel.AnchorRight = 1.0f;
-            mainPanel.AnchorBottom = 0.0f;
-            mainPanel.OffsetLeft = -330;
-            mainPanel.OffsetTop = 10;
-            mainPanel.OffsetRight = -10;
-            mainPanel.OffsetBottom = 260;
+            // Background panel
+            var bgPanel = new Panel();
+            bgPanel.AnchorLeft = 0;
+            bgPanel.AnchorTop = 0;
+            bgPanel.AnchorRight = 1;
+            bgPanel.AnchorBottom = 1;
+            AddChild(bgPanel);
 
-            // Create VBox inside
+            // VBox for spacing and layout
             var vbox = new VBoxContainer
             {
                 AnchorLeft = 0,
@@ -44,7 +46,7 @@ namespace SimCore.UI
                 AnchorBottom = 1
             };
             vbox.AddThemeConstantOverride("separation", 10);
-            mainPanel.AddChild(vbox);
+            AddChild(vbox);
 
             // Title
             var titleLabel = new Label { Text = "⚙️ SIMULATION SETTINGS" };

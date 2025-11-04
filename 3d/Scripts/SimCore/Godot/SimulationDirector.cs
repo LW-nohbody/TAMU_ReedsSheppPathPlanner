@@ -114,14 +114,12 @@ public partial class SimulationDirector : Node3D
         
         _payloadUI = new SimCore.UI.RobotPayloadUI();
         AddChild(_payloadUI);
-        
-        // Add simulation settings UI
-        var settingsUI = new SimCore.UI.SimulationSettingsUI();
-        AddChild(settingsUI);
 
-        // Add settings panel UI (CanvasLayer automatically handles layering)
+        // Add settings panel UI inside a CanvasLayer
+        var uiLayer = new CanvasLayer { Layer = 100 };
+        AddChild(uiLayer);
         var settingsPanel = new SimCore.UI.SimulationSettingsPanel();
-        GetTree().Root.AddChild(settingsPanel);
+        uiLayer.AddChild(settingsPanel);
 
         // Spawn on ring
         int N = Math.Max(1, VehicleCount);
