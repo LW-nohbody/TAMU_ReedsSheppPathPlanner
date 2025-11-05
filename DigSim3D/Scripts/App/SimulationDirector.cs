@@ -38,6 +38,8 @@ namespace DigSim3D.App
         [Export] public float ZoomSensitivity = 1.0f;
         [Export] public float ChaseLerp = 8.0f;
         [Export] public Vector3 ChaseOffset = new(0, 2.5f, 5.5f);
+        [Export] public float FreeMoveSpeed = 6.0f;   // world-relative m/s
+        [Export] public float FreeMoveSpeedFast = 14.0f;
 
         // Debug
         [Export] public bool DebugPathOnTop = true;
@@ -47,6 +49,10 @@ namespace DigSim3D.App
         private readonly List<VehicleVisualizer> _vehicles = new();
 
         private Camera3D _camTop = null!, _camChase = null!, _camFree = null!, _camOrbit = null!;
+        private enum CameraMode { Free, Orbit, TopDown, VehicleFollow }
+        private CameraMode _mode = CameraMode.TopDown;
+        private int _followIndex = 0;
+
         private bool _usingTop = true;
         private bool _movingFreeCam = false, _rotatingFreeCam = false, _rotatingOrbitCam = false;
         private float _freePitch = 0f, _freeYaw = 0f, _orbitPitch = 0, _orbitYaw = 0, Distance = 15.0f;
@@ -151,12 +157,32 @@ namespace DigSim3D.App
                 GD.Print($"[Director] {car.Name} path: {path.Points.Count} samples");
             }
 
-            _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
+            SetCameraMode(CameraMode.TopDown);
         }
 
         // ---------- Input / camera (unchanged) ----------
         public override void _Input(InputEvent e)
         {
+            // ---- Camera mode hotkeys ----
+            if (e is InputEventKey k && k.Pressed && !k.Echo)
+            {
+                switch (k.Keycode)
+                {
+                    case Key.Key1: SetCameraMode(CameraMode.TopDown); return;
+                    case Key.Key2: SetCameraMode(CameraMode.Orbit); return;
+                    case Key.Key3: SetCameraMode(CameraMode.Free); return;
+                    case Key.Key4: SetCameraMode(CameraMode.VehicleFollow); return;
+
+                    case Key.Left:
+                        if (_mode == CameraMode.VehicleFollow) { CycleFollowTarget(-1); return; }
+                        break;
+                    case Key.Right:
+                        if (_mode == CameraMode.VehicleFollow) { CycleFollowTarget(+1); return; }
+                        break;
+                }
+            }
+
+            // ---- (keep your existing mouse handlers below) ----
             if (e is InputEventMouseMotion mm && _rotatingFreeCam)
             {
                 _freeYaw += -mm.Relative.X * MouseSensitivity;
@@ -175,25 +201,15 @@ namespace DigSim3D.App
             {
                 if (mb.ButtonIndex == MouseButton.WheelUp)
                 {
-                    // Get the forward direction (-Z axis in local space)
                     Vector3 forward = -_camFree.GlobalTransform.Basis.Z.Normalized();
-
-                    // Calculate new position
                     Vector3 newPosition = _camFree.GlobalTransform.Origin + forward * -ZoomSensitivity;
-
                     _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPosition);
-
                 }
                 else if (mb.ButtonIndex == MouseButton.WheelDown)
                 {
-                    // Get the forward direction (-Z axis in local space)
                     Vector3 forward = -_camFree.GlobalTransform.Basis.Z.Normalized();
-
-                    // Calculate new position
                     Vector3 newPosition = _camFree.GlobalTransform.Origin + forward * ZoomSensitivity;
-
                     _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPosition);
-
                 }
             }
             else if (e is InputEventMouseMotion mm3 && _rotatingOrbitCam)
@@ -214,14 +230,9 @@ namespace DigSim3D.App
             }
             else if (e is InputEventMouseButton mb2 && _camOrbit.Current)
             {
-                if (mb2.ButtonIndex == MouseButton.WheelUp)
-                {
-                    Distance += ZoomSensitivity;
-                }
-                else if (mb2.ButtonIndex == MouseButton.WheelDown)
-                {
-                    Distance -= ZoomSensitivity;
-                }
+                if (mb2.ButtonIndex == MouseButton.WheelUp) Distance += ZoomSensitivity;
+                else if (mb2.ButtonIndex == MouseButton.WheelDown) Distance -= ZoomSensitivity;
+
                 Distance = Mathf.Clamp(Distance, MinDist, MaxDist);
 
                 Vector3 targetPosition = _terrain.GlobalTransform.Origin;
@@ -238,28 +249,18 @@ namespace DigSim3D.App
 
         public override void _Process(double delta)
         {
+            // (keep your existing toggles if you still want them)
             if (Input.IsActionJustPressed("toggle_camera"))
             {
-                _usingTop = !_usingTop;
-                _camTop.Current = _usingTop;
-                _camChase.Current = !_usingTop;
-                _camFree.Current = _camOrbit.Current = false;
-                _movingFreeCam = _rotatingFreeCam = _rotatingOrbitCam = false;
-                Input.MouseMode = Input.MouseModeEnum.Visible;
-            }
-            if (!_usingTop) FollowChaseCamera(delta);
-
-            if (Input.IsActionJustPressed("select_free_camera"))
-            {
-                _camFree.Current = true;
-                _camTop.Current = _camChase.Current = _camOrbit.Current = false;
+                // Backward-compat: flip between top and follow
+                if (_mode == CameraMode.TopDown) SetCameraMode(CameraMode.VehicleFollow);
+                else if (_mode == CameraMode.VehicleFollow) SetCameraMode(CameraMode.TopDown);
             }
 
-            if (Input.IsActionJustPressed("select_orbit_camera"))
-            {
-                _camOrbit.Current = true;
-                _camTop.Current = _camChase.Current = _camFree.Current = false;
-            }
+            if (_mode == CameraMode.VehicleFollow) FollowChaseCamera(delta);
+
+            if (Input.IsActionJustPressed("select_free_camera")) SetCameraMode(CameraMode.Free);
+            if (Input.IsActionJustPressed("select_orbit_camera")) SetCameraMode(CameraMode.Orbit);
 
             if (Input.IsActionPressed("translate_free_camera") && _camFree.Current)
             {
@@ -277,14 +278,64 @@ namespace DigSim3D.App
                 _movingFreeCam = _rotatingFreeCam = _rotatingOrbitCam = false;
                 Input.MouseMode = Input.MouseModeEnum.Visible;
             }
+
+            if (_camFree.Current)
+            {
+                // Camera-forward/right projected to XZ (ignore pitch)
+                Vector3 camForward = -_camFree.GlobalTransform.Basis.Z;
+                Vector3 camRight = _camFree.GlobalTransform.Basis.X;
+
+                Vector3 fwdXZ = new Vector3(camForward.X, 0, camForward.Z);
+                Vector3 rightXZ = new Vector3(camRight.X, 0, camRight.Z);
+
+                const float EPS = 1e-4f;
+                if (fwdXZ.LengthSquared() < EPS) fwdXZ = new Vector3(0, 0, -1);
+                if (rightXZ.LengthSquared() < EPS) rightXZ = new Vector3(1, 0, 0);
+
+                fwdXZ = fwdXZ.Normalized();
+                rightXZ = rightXZ.Normalized();
+
+                // Build ground-plane intent via InputMap actions
+                Vector3 move = Vector3.Zero;
+                if (Input.IsActionPressed("free_forward")) move += fwdXZ;
+                if (Input.IsActionPressed("free_back")) move -= fwdXZ;
+                if (Input.IsActionPressed("free_right")) move += rightXZ;
+                if (Input.IsActionPressed("free_left")) move -= rightXZ;
+
+                // Add vertical movement in world-Y (Space/Ctrl)
+                float upDown = 0f;
+                if (Input.IsActionPressed("free_up")) upDown += 1f;
+                if (Input.IsActionPressed("free_down")) upDown -= 1f;
+
+                // Speed
+                float speed = Input.IsActionPressed("free_sprint") ? FreeMoveSpeedFast : FreeMoveSpeed;
+
+                // Apply movement
+                if (move != Vector3.Zero || MathF.Abs(upDown) > 0f)
+                {
+                    move = move.Normalized();
+                    Vector3 pos = _camFree.GlobalTransform.Origin;
+
+                    // XZ move (camera-relative, flattened)
+                    Vector3 deltaXZ = move * speed * (float)delta;
+
+                    // Y move (world up/down)
+                    Vector3 deltaY = new Vector3(0, upDown * speed * (float)delta, 0);
+
+                    Vector3 newPos = pos + deltaXZ + deltaY;
+
+                    _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPos);
+                }
+            }
         }
 
         private void FollowChaseCamera(double delta)
         {
             if (_vehicles.Count == 0) return;
-            var car = _vehicles[0];
 
+            var car = _vehicles[Mathf.Clamp(_followIndex, 0, _vehicles.Count - 1)];
             var basis = car.GlobalTransform.Basis;
+
             var targetPos =
                 car.GlobalTransform.Origin +
                 basis.X * ChaseOffset.X +
@@ -297,6 +348,52 @@ namespace DigSim3D.App
             _camChase.GlobalTransform = new Transform3D(_camChase.GlobalTransform.Basis, next);
             _camChase.LookAt(car.GlobalTransform.Origin, Vector3.Up);
         }
+
+        private void SetCameraMode(CameraMode m)
+        {
+            _mode = m;
+
+            // Reset "Current" flags
+            _camTop.Current = false;
+            _camChase.Current = false;
+            _camFree.Current = false;
+            _camOrbit.Current = false;
+
+            // Reset mouse capture state on mode changes
+            _movingFreeCam = _rotatingFreeCam = _rotatingOrbitCam = false;
+            Input.MouseMode = Input.MouseModeEnum.Visible;
+
+            switch (_mode)
+            {
+                case CameraMode.TopDown:
+                    _camTop.Current = true;
+                    break;
+
+                case CameraMode.VehicleFollow:
+                    // clamp follow index if vehicles changed
+                    if (_vehicles.Count > 0)
+                        _followIndex = Mathf.PosMod(_followIndex, _vehicles.Count);
+                    _camChase.Current = true;
+                    break;
+
+                case CameraMode.Free:
+                    _camFree.Current = true;
+                    break;
+
+                case CameraMode.Orbit:
+                    _camOrbit.Current = true;
+                    break;
+            }
+        }
+
+        // Wrap index cleanly when cycling vehicles
+        private void CycleFollowTarget(int delta)
+        {
+            if (_vehicles.Count == 0) return;
+            _followIndex = (_followIndex + delta) % _vehicles.Count;
+            if (_followIndex < 0) _followIndex += _vehicles.Count;
+        }
+
         // ------------------------------------------------
 
         // === Placement on terrain using FL/FR/RC (unchanged) =======================
