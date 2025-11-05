@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Runtime;
 
-using DigSim3D.Config;
 using DigSim3D.Domain;
 using DigSim3D.Services;
 
@@ -46,7 +45,6 @@ namespace DigSim3D.App
         private TerrainDisk _terrain = null!;
         private Node3D _vehiclesRoot = null!;
         private readonly List<VehicleVisualizer> _vehicles = new();
-        private readonly List<VehicleBrain> _robotBrains = new();  // Store brains for updates
 
         private Camera3D _camTop = null!, _camChase = null!, _camFree = null!, _camOrbit = null!;
         private bool _usingTop = true;
@@ -57,49 +55,10 @@ namespace DigSim3D.App
 
         [Export] public NodePath ObstacleManagerPath = null!;
         private ObstacleManager _obstacleManager = null!;
-        private SimulationSettingsUI _settingsUI = null!;
-        private SimulationHUD _hud = null!;
-        private RobotStatusPanel _robotStatusPanel = null!;
-        private RobotStatsUI _robotStatsUI = null!;
-        private RobotPayloadUI _robotPayloadUI = null!;
-        
-        // UI toggles - HEATMAP DISABLED BY DEFAULT
-        private bool _heatMapEnabled = false;
-        private bool _showTraveledPaths = false;
-        private bool _showPlannedPaths = false;
 
 
         public override void _Ready()
         {
-            // === Initialize UI ===
-            
-            // Layer 1: HUD controls (top-left, minimal)
-            _hud = new SimulationHUD();
-            AddChild(_hud);
-            GD.Print("[Director] ✅ HUD initialized (top-left)");
-
-            // Layer 2: Settings UI (top-right)
-            _settingsUI = new SimulationSettingsUI();
-            AddChild(_settingsUI);
-            GD.Print("[Director] ✅ Settings UI initialized (top-right)");
-
-            // Layer 3: Excavation Status (bottom-left, compact)
-            _robotPayloadUI = new RobotPayloadUI();
-            AddChild(_robotPayloadUI);
-            GD.Print("[Director] ✅ Excavation Status initialized (bottom-left)");
-
-            // Layer 4: Robot Stats UI (initialized but hidden by default - toggle with V key)
-            _robotStatsUI = new RobotStatsUI();
-            _robotStatsUI.Visible = false;  // Hidden by default
-            AddChild(_robotStatsUI);
-            GD.Print("[Director] ✅ Robot Stats UI created (hidden by default, V key to show)");
-
-            // Layer 5: Robot Status Panel (initialized but hidden by default - toggle with I key)
-            _robotStatusPanel = new RobotStatusPanel();
-            _robotStatusPanel.Visible = false;  // Hidden by default
-            AddChild(_robotStatusPanel);
-            GD.Print("[Director] ✅ Robot Status Panel created (hidden by default, I key to show)");
-
             // Nodes
             _vehiclesRoot = GetNode<Node3D>(VehiclesRootPath);
             _camTop = GetNode<Camera3D>(CameraTopPath);
@@ -141,53 +100,56 @@ namespace DigSim3D.App
                 car.Wheelbase = VehicleLength;
                 car.TrackWidth = VehicleWidth;
 
-                _vehicles.Add(car);
-                
-                // Register robot in UI panels
-                Color[] colors = { Colors.Red, Colors.Green, Colors.Blue, Colors.Yellow, Colors.Cyan, Colors.Magenta, Colors.Orange, Colors.Purple };
-                Color robotColor = colors[i % colors.Length];
-                
-                _robotPayloadUI.AddRobot(i, $"Robot_{i}", robotColor);
-                _robotStatsUI.RegisterRobot(i, $"R{i}");
+                _vehicles.Add(car);                    // <-- put this back
             }
 
-            // === Initialize VehicleBrain for each robot (Simplified Reactive Swarm Logic) ===
-            var hybridRSPlanner = new HybridReedsSheppPlanner();
-            var world = new WorldState
+            // === PLAN FIRST DIG TARGETS (after all cars exist) ===
+            var scheduler = new RadialScheduler();
+            var brains = new List<VehicleBrain>(_vehicles.Count);
+            foreach (var v in _vehicles)
             {
-                Obstacles = obstacleList,
-                Terrain = _terrain,
-                DumpCenter = Vector3.Zero
-            };
-
-            for (int i = 0; i < _vehicles.Count; i++)
-            {
-                var car = _vehicles[i];
-                Vector3 spawnPos = car.GlobalTransform.Origin;
-                float theta0 = i * (Mathf.Tau / _vehicles.Count);
-                float theta1 = (i + 1) * (Mathf.Tau / _vehicles.Count);
-                float sectorRadius = 15f;
-
-                // Create simplified VehicleBrain with proper initialization
-                var brain = new VehicleBrain(
-                    car,
-                    car.Spec,
-                    hybridRSPlanner,
-                    world,
-                    _terrain,
-                    new RobotCoordinator(),  // Simple coordinator
-                    i,
-                    theta0,
-                    theta1,
-                    sectorRadius,
-                    Vector3.Zero  // Home position at origin
-                );
-                
-                _robotBrains.Add(brain);  // Store for updates
-                GD.Print($"[Director] Robot {i} initialized with simplified swarm logic");
+                var brain = new VehicleBrain();
+                v.AddChild(brain);
+                brains.Add(brain);
             }
-            
-            GD.Print($"[Director] All {_vehicles.Count} robots ready for reactive terrain discovery");
+
+            var digTargets = scheduler.PlanFirstDigTargets(
+                brains, _terrain, Vector3.Zero, DigScoring.Default);
+
+            // === Build paths to the assigned dig targets (scheduler-driven) ===
+            for (int k = 0; k < _vehicles.Count; k++)
+            {
+                var car = _vehicles[k];
+                var (digPos, approachYaw) = digTargets[k];
+
+                // current forward yaw in XZ (Godot forward is -Z)
+                var fwd = -car.GlobalTransform.Basis.Z;
+                double startYaw = MathF.Atan2(fwd.Z, fwd.X);
+                var start = car.GlobalTransform.Origin;
+
+                // Planner poses use X/Z + yaw
+                var startPose = new Pose(start.X, start.Z, startYaw);
+                var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
+
+                // Vehicle + world (note: Obstacles is List<Obstacle3D>)
+                VehicleSpec spec = car.Spec;
+                var world = new WorldState
+                {
+                    Obstacles = obstacleList,   // <— List<Obstacle3D>
+                    Terrain = _terrain
+                };
+
+                var hybridRSPlanner = new HybridReedsSheppPlanner();
+                PlannedPath path = hybridRSPlanner.Plan(startPose, goalPose, spec, world);
+
+                DrawPathProjectedToTerrain(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
+                DrawMarkerProjected(start, new Color(0, 1, 0));
+                DrawMarkerProjected(digPos, new Color(0, 0, 1));
+
+                car.SetPath(path.Points.ToArray(), path.Gears.ToArray());
+
+                GD.Print($"[Director] {car.Name} path: {path.Points.Count} samples");
+            }
 
             _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
         }
@@ -276,96 +238,6 @@ namespace DigSim3D.App
 
         public override void _Process(double delta)
         {
-            // === Handle keyboard input for toggles ===
-            if (Input.IsActionJustPressed("ui_h") || Input.IsKeyPressed(Key.H))
-            {
-                _heatMapEnabled = !_heatMapEnabled;
-                _terrain.HeatMapEnabled = _heatMapEnabled;
-                GD.Print($"[Director] Heat Map: {(_heatMapEnabled ? "ON" : "OFF")}");
-            }
-
-            if (Input.IsActionJustPressed("ui_p") || Input.IsKeyPressed(Key.P))
-            {
-                _showTraveledPaths = !_showTraveledPaths;
-                GD.Print($"[Director] Traveled Paths: {(_showTraveledPaths ? "ON" : "OFF")}");
-            }
-
-            if (Input.IsActionJustPressed("ui_l") || Input.IsKeyPressed(Key.L))
-            {
-                _showPlannedPaths = !_showPlannedPaths;
-                GD.Print($"[Director] Planned Paths: {(_showPlannedPaths ? "ON" : "OFF")}");
-            }
-
-            if (Input.IsActionJustPressed("ui_c") || Input.IsKeyPressed(Key.C))
-            {
-                GD.Print($"[Director] Clear Traveled Paths");
-                // Clear paths from PathVisualizer if available
-            }
-
-            // === Update robot brains ===
-            foreach (var brain in _robotBrains)
-            {
-                if (brain != null)
-                {
-                    brain.PlanAndGoOnce();
-                }
-            }
-
-            // === Update HUD stats ===
-            if (_hud != null)
-            {
-                float totalDirt = 0f;
-                foreach (var brain in _robotBrains)
-                {
-                    totalDirt += brain.TotalDug;
-                }
-                _hud.UpdateStats(_vehicles.Count, totalDirt, _heatMapEnabled, _showTraveledPaths, _showPlannedPaths);
-            }
-
-            // === Update robot status panel ===
-            if (_robotStatusPanel != null)
-            {
-                for (int i = 0; i < _robotBrains.Count; i++)
-                {
-                    var brain = _robotBrains[i];
-                    _robotStatusPanel.UpdateRobotStatus(
-                        brain.RobotId,
-                        brain.Status,
-                        brain.Payload,
-                        brain.DigsCompleted,
-                        brain.CurrentPosition,
-                        brain.TotalDug
-                    );
-                }
-            }
-
-            // === Update robot payload UI ===
-            if (_robotPayloadUI != null)
-            {
-                float totalDirtExtracted = 0f;
-                for (int i = 0; i < _robotBrains.Count; i++)
-                {
-                    var brain = _robotBrains[i];
-                    float payloadPercent = brain.Payload / SimulationConfig.RobotLoadCapacity;
-                    _robotPayloadUI.UpdatePayload(i, payloadPercent, brain.Status, brain.CurrentPosition);
-                    totalDirtExtracted += brain.TotalDug;
-                }
-                _robotPayloadUI.UpdateExtractedDirt(totalDirtExtracted);
-                _robotPayloadUI.UpdateHeatMapStatus(_heatMapEnabled);
-            }
-
-            // === Update robot stats UI ===
-            if (_robotStatsUI != null)
-            {
-                for (int i = 0; i < _robotBrains.Count; i++)
-                {
-                    var brain = _robotBrains[i];
-                    _robotStatsUI.UpdateRobotStats(i, brain.Payload, brain.DigsCompleted, brain.CurrentTarget, brain.Status);
-                    _robotStatsUI.RecordDig(i, brain.TotalDug);
-                }
-            }
-
-            // === Camera controls ===
             if (Input.IsActionJustPressed("toggle_camera"))
             {
                 _usingTop = !_usingTop;

@@ -101,7 +101,7 @@ namespace DigSim3D.Services
             double goalYaw)
         {
             if (gridPath == null || gridPath.Count < 2)
-                return (new List<Vector3>(), new List<int>());
+                return (null, null);
 
             // --- 1) Simplify the A* path by removing nearly-collinear interior points ---
             var simplifiedPath = new List<Vector3> { gridPath[0] };
@@ -344,7 +344,7 @@ namespace DigSim3D.Services
             int maxDepth)
         {
             if (depth > maxDepth)
-                return (new List<Vector3>(), new List<int>());
+                return (null, null);
 
             var (segArr, gearsArr) = RSAdapter.ComputePath3D(
                 start, startYaw,
@@ -381,8 +381,8 @@ namespace DigSim3D.Services
                 obstacleBuffer,
                 depth + 1, maxDepth);
 
-            if (firstHalf.Count == 0 || secondHalf.Count == 0)
-                return (new List<Vector3>(), new List<int>());
+            if (firstHalf == null || secondHalf == null)
+                return (null, null);
 
             var mergedPts = new List<Vector3>(firstHalf);
             mergedPts.AddRange(secondHalf.Skip(1));
