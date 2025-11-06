@@ -32,7 +32,7 @@ public partial class Nameplate3D : Node3D
 
         AddChild(_label);
 
-        _label.RotateY(Mathf.Pi);
+        AddToGroup("nameplates");
 
         // place the nameplate above the parent
         Position = new Vector3(0, HeightOffset, 0);
@@ -49,12 +49,15 @@ public partial class Nameplate3D : Node3D
             Vector3 toCam = cam.GlobalTransform.Origin - GlobalTransform.Origin;
             toCam.Y = 0;
             if (toCam.LengthSquared() > 1e-6f)
-                LookAt(GlobalTransform.Origin + toCam, Vector3.Up);
+            {
+                float yaw = Mathf.Atan2(toCam.X, toCam.Z);
+                Rotation = new Vector3(0f, yaw, 0f);
+            }
         }
         else
         {
-            // Full billboard
-            LookAt(cam.GlobalTransform.Origin, Vector3.Up);
+            // Full billboard but screen-upright.
+            GlobalBasis = cam.GlobalTransform.Basis; // copies camera up/orientation
         }
     }
 
