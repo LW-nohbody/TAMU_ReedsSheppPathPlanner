@@ -59,8 +59,18 @@ namespace DigSim3D.App
 
         // === Dig System ===
         private DigService _digService = null!;
-        private DigConfig _digConfig = DigConfig.Default;
+        private DigConfig _digConfig = new DigConfig 
+        { 
+            DigRadius = 0.8f,  // Smaller radius for more precise digging
+            DigDepth = 0.3f,
+            DigRatePerSecond = 2.0f,
+            AtSiteThreshold = 0.5f,
+            AtDumpThreshold = 0.5f,
+            MinHeightChange = 0.01f
+        };
         private DigVisualizer _digVisualizer = null!;
+        private SectorVisualizer _sectorVisualizer = null!;
+        private BufferVisualizer _bufferVisualizer = null!;
         private List<VehicleBrain> _robotBrains = new();
         private float _initialTerrainVolume = 0f;  // Store initial volume at startup
 
@@ -91,7 +101,7 @@ namespace DigSim3D.App
 
             // Build global static navigation grid from obstacles BEFORE spawning vehicles
             var obstacleList = _obstacleManager.GetObstacles();
-            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 1.0f);
+            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 0.2f);  // Minimal buffer per user request
 
             // Spawn on ring
             int N = Math.Max(1, VehicleCount);
@@ -130,6 +140,21 @@ namespace DigSim3D.App
             // Create dig visualizer
             _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
             AddChild(_digVisualizer);
+            
+            // Create sector visualizer to show robot sectors
+            _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
+            AddChild(_sectorVisualizer);
+            float arenaRadius = _terrain.GridResolution * _terrain.GridStep / 2f;
+            _sectorVisualizer.Initialize(_vehicles.Count, arenaRadius);
+            GD.Print($"[Director] SectorVisualizer created with {_vehicles.Count} sectors, radius {arenaRadius:F1}m");
+
+            // Create buffer visualizer to show obstacle and wall buffer zones
+            _bufferVisualizer = new BufferVisualizer { Name = "BufferVisualizer" };
+            AddChild(_bufferVisualizer);
+            const float obstacleBufferMeters = 0.2f; // Minimal buffer per user request
+            const float wallBufferMeters = 0.2f;     // Minimal buffer per user request
+            _bufferVisualizer.Initialize(obstacleList, obstacleBufferMeters, _terrain.Radius, wallBufferMeters);
+            GD.Print($"[Director] BufferVisualizer created - obstacle buffer: {obstacleBufferMeters}m, wall buffer: {wallBufferMeters}m");
 
             // Create world state for path planning
             var worldState = new WorldState
@@ -144,7 +169,9 @@ namespace DigSim3D.App
             // Initialize brain dig system with path drawing callback
             foreach (var brain in _robotBrains)
             {
-                brain.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, _digVisualizer, DrawPathProjectedToTerrain);
+                int robotIndex = _robotBrains.IndexOf(brain);
+                int totalRobots = _robotBrains.Count;
+                brain.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, _digVisualizer, DrawPathProjectedToTerrain, robotIndex, totalRobots);
             }
 
             var digTargets = scheduler.PlanFirstDigTargets(

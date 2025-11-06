@@ -14,7 +14,8 @@ namespace DigSim3D.Domain
             TravelingToDigSite,     // Moving to dig target
             Digging,                // At dig site, accumulating load
             TravelingToDump,        // Moving back to origin to dump
-            Dumping                 // At origin, unloading payload
+            Dumping,                // At origin, unloading payload
+            Complete                // Finished - no more valid dig targets
         }
 
         /// <summary> Current amount of dirt in payload (cubic meters) </summary>

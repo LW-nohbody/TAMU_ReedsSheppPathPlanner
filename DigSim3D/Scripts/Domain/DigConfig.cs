@@ -11,7 +11,7 @@ namespace DigSim3D.Domain
         public float DigRatePerSecond = 2.0f;  // Increased for more visible progress
 
         /// <summary> Radius of excavation cone (meters) </summary>
-        public float DigRadius = 2.5f;  // Larger radius for more visible area
+        public float DigRadius = 1.2f;  // Reduced to prevent overlap between robots
 
         /// <summary> Depth of excavation cone (meters) </summary>
         public float DigDepth = 0.3f;  // Per-frame depth

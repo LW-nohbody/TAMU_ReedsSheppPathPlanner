@@ -79,6 +79,11 @@ namespace DigSim3D.Services
                 float bestYaw = 0f;
                 bool foundAny = false;
 
+                // Calculate wall buffer zone (minimal - allow digging closer to arena wall)
+                float arenaRadius = terrain.Radius;
+                const float WallBufferMeters = 0.2f; // Minimal wall buffer (user requested)
+                float maxAllowedRadius = arenaRadius - WallBufferMeters;
+
                 for (int a = 0; a < cfg.ArcSteps; a++)
                 {
                     float t = (a + 0.5f) / cfg.ArcSteps;
@@ -89,6 +94,10 @@ namespace DigSim3D.Services
                     {
                         float u = (r + 0.5f) / cfg.RadialSteps;
                         float R = Mathf.Lerp(cfg.InnerR, cfg.OuterR, u);
+                        
+                        // CRITICAL: Clamp R to stay within safe zone (away from wall)
+                        if (R > maxAllowedRadius) continue;
+                        
                         Vector3 xz = center + dir * R;
 
                         // Terrain sample
@@ -103,6 +112,7 @@ namespace DigSim3D.Services
                         }
                         if (tooClose) continue;
 
+                        // Check if blocked by obstacle buffer
                         if (GridPlannerPersistent.IsBuilt && GridPlannerPersistent.IsCellBlocked(xz))
                             continue;
 
