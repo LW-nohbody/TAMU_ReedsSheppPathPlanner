@@ -1,10 +1,10 @@
-namespace DCore
+namespace DDCore
 {
     using Godot;
     using System;
     using System.Collections.Generic;
 
-    public static class DSampler
+    public static class DdSampler
     {
         // startWorld: (x,y,thetaRadians) in world units; path normalized (R=1); R scales to world units
         public static Vector2[] SamplePolyline(
@@ -22,7 +22,7 @@ namespace DCore
                 if (seg.Steering == Steering.STRAIGHT)
                 {
                     double len = seg.Param * R;                    // straight length
-                    double dir = 1;
+                    double dir = seg.Gear == Gear.FORWARD ? 1 : -1;
 
                     double remaining = len;
                     while (remaining > 1e-6)
@@ -36,10 +36,11 @@ namespace DCore
                 }
                 else
                 {
-                    int steerSign = seg.Steering == Steering.LEFT ? -1 : +1;   // circle side
+                    int steerSign = seg.Steering == Steering.LEFT ? +1 : -1;   // circle side
+                    int gearSign = seg.Gear == Gear.FORWARD ? +1 : -1;   // travel direction
 
                     // total signed heading change (radians)
-                    double total = seg.Param * steerSign;
+                    double total = seg.Param * steerSign * gearSign;
 
                     double invk = R * steerSign;
 
@@ -77,11 +78,11 @@ namespace DCore
 
             double x = startWorld.x, y = startWorld.y, th = startWorld.theta;
             outPts.Add(new Vector2((float)x, (float)y));
-            outGears.Add(+1); // assume start forward //TODO:REMOVE???
+            outGears.Add(+1); // assume start forward
 
             foreach (var seg in path)
             {
-                int gear = +1;
+                int gear = (seg.Gear == Gear.FORWARD) ? +1 : -1;
 
                 if (seg.Steering == Steering.STRAIGHT)
                 {
@@ -99,9 +100,10 @@ namespace DCore
                 }
                 else
                 {
-                    int steerSign = seg.Steering == Steering.LEFT ? -1 : +1;
+                    int steerSign = seg.Steering == Steering.LEFT ? +1 : -1;
+                    int gearSign = gear;
 
-                    double total = seg.Param * steerSign;
+                    double total = seg.Param * steerSign * gearSign;
                     double invk = R * steerSign;
                     double remaining = Math.Abs(total);
                     double dTheta = ds / R; // ds = R * dθ (magnitude)
@@ -140,7 +142,7 @@ namespace DCore
             {
                 if (seg.Steering == Steering.STRAIGHT)
                 {
-                    double s = seg.Param; // normalized
+                    double s = seg.Param * (seg.Gear == Gear.FORWARD ? 1.0 : -1.0); // normalized
                     int n = PointsFor(Math.Abs(s));
                     for (int i = 1; i <= n; i++)
                     {
@@ -155,8 +157,8 @@ namespace DCore
                 }
                 else
                 {
-                    int steerSign = seg.Steering == Steering.LEFT ? -1 : +1;   // circle side
-                    // int gearSign = seg.Gear == Gear.FORWARD ? +1 : -1;   // travel direction
+                    int steerSign = seg.Steering == Steering.LEFT ? +1 : -1;   // circle side
+                    int gearSign = seg.Gear == Gear.FORWARD ? +1 : -1;   // travel direction
 
                     double total = seg.Param;
                     int n = PointsFor(total);
@@ -165,7 +167,7 @@ namespace DCore
                     for (int i = 1; i <= n; i++)
                     {
                         double t = (double)i / n;
-                        double dth = steerSign * (total * t);
+                        double dth = gearSign * steerSign * (total * t);
                         double thNew = th + dth;
 
                         double xx = x + (Math.Sin(thNew) - Math.Sin(th)) * invk;
@@ -175,7 +177,7 @@ namespace DCore
                     }
 
                     // advance to segment end
-                    double dthTot = steerSign * total;
+                    double dthTot = gearSign * steerSign * total;
                     double thPrev = th;
                     th += dthTot;
 

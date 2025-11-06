@@ -14,11 +14,6 @@ config/name="3d"
 run/main_scene="uid://cc5m8lpvnpnfv"
 config/features=PackedStringArray("4.4", "C#", "Forward Plus")
 
-[debug]
-
-file_logging/enable_file_logging=true
-file_logging/log_path="res://logs/godot_run.log"
-
 [display]
 
 window/size/viewport_width=1920
