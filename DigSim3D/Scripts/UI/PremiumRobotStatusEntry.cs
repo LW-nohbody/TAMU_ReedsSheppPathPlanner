@@ -19,7 +19,7 @@ namespace DigSim3D.UI
         {
             _robotId = id;
             _robotColor = color;
-            CustomMinimumSize = new Vector2(380, 120);
+            CustomMinimumSize = new Vector2(380, 85);
             MouseFilter = MouseFilterEnum.Stop;
             
             // Style with glassmorphism
@@ -35,9 +35,16 @@ namespace DigSim3D.UI
 
         public override void _Ready()
         {
+            var margin = new MarginContainer();
+            margin.AddThemeConstantOverride("margin_left", 8);
+            margin.AddThemeConstantOverride("margin_right", 8);
+            margin.AddThemeConstantOverride("margin_top", 6);
+            margin.AddThemeConstantOverride("margin_bottom", 6);
+            AddChild(margin);
+            
             var vbox = new VBoxContainer();
-            vbox.AddThemeConstantOverride("separation", 6);
-            AddChild(vbox);
+            vbox.AddThemeConstantOverride("separation", 3);
+            margin.AddChild(vbox);
             
             // Name with icon
             _nameLabel = new Label
@@ -45,7 +52,7 @@ namespace DigSim3D.UI
                 Text = $"🤖 Robot {_robotId}",
                 Modulate = _robotColor
             };
-            _nameLabel.AddThemeFontSizeOverride("font_size", 14);
+            _nameLabel.AddThemeFontSizeOverride("font_size", 12);
             _nameLabel.AddThemeColorOverride("font_color", Colors.White);
             vbox.AddChild(_nameLabel);
             
@@ -55,7 +62,7 @@ namespace DigSim3D.UI
                 MinValue = 0,
                 MaxValue = 100,
                 Value = 0,
-                CustomMinimumSize = new Vector2(350, 20),
+                CustomMinimumSize = new Vector2(350, 14),
                 ShowPercentage = false
             };
             
@@ -77,7 +84,7 @@ namespace DigSim3D.UI
                 Text = "Status: Idle | (0.0, 0.0)",
                 Modulate = Colors.White
             };
-            _statusLabel.AddThemeFontSizeOverride("font_size", 10);
+            _statusLabel.AddThemeFontSizeOverride("font_size", 9);
             _statusLabel.AddThemeColorOverride("font_color", new Color(0.8f, 0.8f, 0.9f));
             vbox.AddChild(_statusLabel);
             

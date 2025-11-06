@@ -14,6 +14,7 @@ namespace DigSim3D.UI
         
         public float MinValue { get; set; } = 0f;
         public float MaxValue { get; set; } = 100f;
+        public float Value { get; set; } = 50f;
         public float CurrentValue { get; private set; } = 50f;
         
         public event Action<double>? ValueChanged;
@@ -43,11 +44,13 @@ namespace DigSim3D.UI
             {
                 MinValue = MinValue,
                 MaxValue = MaxValue,
-                Value = CurrentValue,
+                Value = Value,  // Use the Value property
                 Step = (MaxValue - MinValue) / 100f,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 CustomMinimumSize = new Vector2(280, 24)
             };
+            
+            CurrentValue = Value;  // Initialize CurrentValue
             
             // Style the slider
             var grabberStyleBox = new StyleBoxFlat();

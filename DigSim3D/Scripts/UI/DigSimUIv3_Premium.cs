@@ -18,7 +18,7 @@ namespace DigSim3D.UI
         private ProgressBar _overallProgressBar = null!;
         private AnimatedValueLabel _overallProgressLabel = null!;
         private Label _heatMapStatusLabel = null!;
-        private TerrainHeightMapThumbnail _terrainThumbnail = null!;
+        private ProgressBar _dirtRemainingBar = null!;  // Changed from thumbnail to progress bar
 
         private DigConfig _digConfig = null!;
         private float _initialTerrainVolume = 0f;
@@ -131,7 +131,7 @@ namespace DigSim3D.UI
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 SizeFlagsVertical = SizeFlags.ExpandFill
             };
-            _leftPanelContainer.AddThemeConstantOverride("separation", 12);
+            _leftPanelContainer.AddThemeConstantOverride("separation", 10);
             margin.AddChild(_leftPanelContainer);
 
             // Overall Progress with animation
@@ -143,7 +143,7 @@ namespace DigSim3D.UI
                 Text = "Progress: 0%",
                 SizeFlagsHorizontal = SizeFlags.ExpandFill
             };
-            _overallProgressLabel.SetFontSize(18);
+            _overallProgressLabel.SetFontSize(14);
             _overallProgressLabel.SetColor(new Color(0.7f, 1.0f, 0.8f));
             progressHbox.AddChild(_overallProgressLabel);
 
@@ -153,7 +153,7 @@ namespace DigSim3D.UI
                 MinValue = 0,
                 MaxValue = 100,
                 Value = 0,
-                CustomMinimumSize = new Vector2(380, 32),
+                CustomMinimumSize = new Vector2(380, 20),
                 MouseFilter = MouseFilterEnum.Stop
             };
             
@@ -174,7 +174,7 @@ namespace DigSim3D.UI
             {
                 Text = "Remaining: 0.00 m³"
             };
-            _remainingDirtLabel.SetFontSize(14);
+            _remainingDirtLabel.SetFontSize(12);
             _remainingDirtLabel.SetColor(new Color(1.0f, 0.9f, 0.7f));
             _leftPanelContainer.AddChild(_remainingDirtLabel);
 
@@ -184,13 +184,40 @@ namespace DigSim3D.UI
                 Text = "🌡️ Heat Map: OFF",
                 Modulate = Colors.White
             };
-            _heatMapStatusLabel.AddThemeFontSizeOverride("font_size", 13);
+            _heatMapStatusLabel.AddThemeFontSizeOverride("font_size", 11);
             _heatMapStatusLabel.AddThemeColorOverride("font_color", new Color(0.8f, 0.8f, 1.0f));
             _leftPanelContainer.AddChild(_heatMapStatusLabel);
             
-            // Terrain thumbnail
-            _terrainThumbnail = new TerrainHeightMapThumbnail();
-            _leftPanelContainer.AddChild(_terrainThumbnail);
+            // Add spacing before dirt remaining bar
+            var spacer1 = new Control { CustomMinimumSize = new Vector2(0, 10) };
+            _leftPanelContainer.AddChild(spacer1);
+            
+            // Dirt remaining progress bar (starts at 100%, decreases to 0%)
+            _dirtRemainingBar = new ProgressBar
+            {
+                MinValue = 0,
+                MaxValue = 100,
+                Value = 100,  // Start at 100%
+                CustomMinimumSize = new Vector2(380, 20),
+                MouseFilter = MouseFilterEnum.Stop,
+                ShowPercentage = true
+            };
+            
+            var dirtProgressStyleBox = new StyleBoxFlat();
+            dirtProgressStyleBox.BgColor = new Color(0.2f, 0.2f, 0.3f, 0.6f);
+            dirtProgressStyleBox.SetCornerRadiusAll(6);
+            _dirtRemainingBar.AddThemeStyleboxOverride("background", dirtProgressStyleBox);
+            
+            var dirtProgressFillStyleBox = new StyleBoxFlat();
+            dirtProgressFillStyleBox.BgColor = new Color(0.8f, 0.5f, 0.3f, 1.0f); // Orange/brown for dirt
+            dirtProgressFillStyleBox.SetCornerRadiusAll(6);
+            _dirtRemainingBar.AddThemeStyleboxOverride("fill", dirtProgressFillStyleBox);
+            
+            _leftPanelContainer.AddChild(_dirtRemainingBar);
+
+            // Add spacing after dirt remaining bar
+            var spacer2 = new Control { CustomMinimumSize = new Vector2(0, 15) };
+            _leftPanelContainer.AddChild(spacer2);
 
             // Separator with gradient
             var separator = new HSeparator();
@@ -200,6 +227,10 @@ namespace DigSim3D.UI
             sepStyleBox.ContentMarginBottom = 1;
             separator.AddThemeStyleboxOverride("separator", sepStyleBox);
             _leftPanelContainer.AddChild(separator);
+            
+            // Add extra spacing after separator (before robot panels)
+            var spacer3 = new Control { CustomMinimumSize = new Vector2(0, 15) };
+            _leftPanelContainer.AddChild(spacer3);
             
             GD.Print("[DigSimUIv3_Premium] Left panel created with glassmorphism");
         }
@@ -252,7 +283,8 @@ namespace DigSim3D.UI
             var speedSlider = new PremiumSlider
             {
                 MinValue = 0.1f,
-                MaxValue = 5.0f
+                MaxValue = 5.0f,
+                Value = 0.1f  // Start at minimum
             };
             speedSlider.ValueChanged += (value) => OnSpeedChanged(value);
             vbox.AddChild(speedSlider);
@@ -272,7 +304,8 @@ namespace DigSim3D.UI
             var depthSlider = new PremiumSlider
             {
                 MinValue = 0.05f,
-                MaxValue = 1.0f
+                MaxValue = 1.0f,
+                Value = 0.05f  // Start at minimum
             };
             depthSlider.ValueChanged += (value) => OnDigDepthChanged(value);
             vbox.AddChild(depthSlider);
@@ -285,7 +318,8 @@ namespace DigSim3D.UI
             var radiusSlider = new PremiumSlider
             {
                 MinValue = 0.5f,
-                MaxValue = 5.0f
+                MaxValue = 5.0f,
+                Value = 0.5f  // Start at minimum
             };
             radiusSlider.ValueChanged += (value) => OnDigRadiusChanged(value);
             vbox.AddChild(radiusSlider);
@@ -293,6 +327,10 @@ namespace DigSim3D.UI
 
         public void AddRobot(int robotId, string name, Color color)
         {
+            // Add spacing before each robot panel
+            var spacer = new Control { CustomMinimumSize = new Vector2(0, 8) };
+            _leftPanelContainer.AddChild(spacer);
+            
             var robotPanel = new PremiumRobotStatusEntry(robotId, name, color);
             _leftPanelContainer.AddChild(robotPanel);
             _robotEntries[robotId] = robotPanel;
@@ -314,11 +352,13 @@ namespace DigSim3D.UI
             float progress = initialVolume > 0 ? ((initialVolume - remainingVolume) / initialVolume) * 100f : 0f;
             progress = Mathf.Clamp(progress, 0f, 100f);
             
+            // Update overall progress bar (0% to 100%)
             _overallProgressBar.Value = progress;
             _overallProgressLabel.SetText($"Progress: {progress:F0}%");
             
-            // Update terrain thumbnail
-            _terrainThumbnail.UpdateProgress(progress / 100f);
+            // Update dirt remaining bar (100% to 0% - inverse of progress)
+            float dirtRemaining = 100f - progress;
+            _dirtRemainingBar.Value = dirtRemaining;
         }
 
         public void SetDigConfig(DigConfig config) => _digConfig = config;
@@ -333,11 +373,6 @@ namespace DigSim3D.UI
         public void SetInitialVolume(float volume) => _initialTerrainVolume = volume;
         
         public void SetVehicles(List<VehicleVisualizer> vehicles) => _vehicles = vehicles;
-        
-        public void SetTerrain(TerrainDisk terrain)
-        {
-            _terrainThumbnail.SetTerrain(terrain);
-        }
 
         // Preset callbacks
         private void OnSpeedPresetSelected(float value)

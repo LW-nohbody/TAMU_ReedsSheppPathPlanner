@@ -16,7 +16,7 @@ namespace DigSim3D.UI
 
         public override void _Ready()
         {
-            CustomMinimumSize = new Vector2(350, 40);
+            CustomMinimumSize = new Vector2(350, 25);
             MouseFilter = MouseFilterEnum.Ignore;
         }
 

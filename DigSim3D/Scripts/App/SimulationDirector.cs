@@ -62,6 +62,7 @@ namespace DigSim3D.App
         private DigConfig _digConfig = DigConfig.Default;
         private DigVisualizer _digVisualizer = null!;
         private List<VehicleBrain> _robotBrains = new();
+        private float _initialTerrainVolume = 0f;  // Store initial volume at startup
 
         // === UI ===
         private DigSim3D.UI.DigSimUIv3_Premium _digSimUI = null!;
@@ -198,11 +199,18 @@ namespace DigSim3D.App
                 _digSimUI.AddRobot(i, $"Robot_{i}", new Color((float)i / _robotBrains.Count, 0.6f, 1.0f));
             }
 
+            // Calculate and store initial terrain volume
+            _initialTerrainVolume = CalculateTerrainVolume();
+            GD.Print($"[Director] Initial terrain volume: {_initialTerrainVolume:F2} m³");
+
             _digSimUI.SetDigConfig(_digConfig);
             _digSimUI.SetHeatMapStatus(false);
-            _digSimUI.SetInitialVolume(500f);
+            _digSimUI.SetInitialVolume(_initialTerrainVolume);
             _digSimUI.SetVehicles(_vehicles);
-            _digSimUI.SetTerrain(_terrain);
+            // Removed SetTerrain call - no longer needed without terrain thumbnail
+            
+            // Initialize progress bars to 0% and 100%
+            _digSimUI.UpdateTerrainProgress(_initialTerrainVolume, _initialTerrainVolume);
 
             GD.Print("[Director] DigSimUIv3_Premium initialized successfully");
 
@@ -336,9 +344,8 @@ namespace DigSim3D.App
                 }
 
                 // Update terrain progress
-                float initialVolume = 500f; // TODO: Calculate from terrain at startup
                 float remainingVolume = CalculateTerrainVolume();
-                _digSimUI.UpdateTerrainProgress(remainingVolume, initialVolume);
+                _digSimUI.UpdateTerrainProgress(remainingVolume, _initialTerrainVolume);
             }
 
             // Original camera code
