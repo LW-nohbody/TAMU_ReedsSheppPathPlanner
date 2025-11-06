@@ -1,11 +1,10 @@
 [gd_scene load_steps=9 format=3 uid="uid://bjwl37wdxs6ua"]
 
 [ext_resource type="Script" uid="uid://bphtvec6igp6u" path="res://Scripts/App/VehicleVisualizer.cs" id="1_andsp"]
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7mycd"]
+[ext_resource type="Material" uid="uid://d0aiqbs32qvub" path="res://Materials/concrete.tres" id="2_qufrh"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_272bh"]
-material = SubResource("StandardMaterial3D_7mycd")
+material = ExtResource("2_qufrh")
 size = Vector3(0.5, 0.5, 0.75)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_0xm2m"]

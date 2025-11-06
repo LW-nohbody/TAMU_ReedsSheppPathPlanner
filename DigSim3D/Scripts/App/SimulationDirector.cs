@@ -38,8 +38,8 @@ namespace DigSim3D.App
         [Export] public float ZoomSensitivity = 1.0f;
         [Export] public float ChaseLerp = 8.0f;
         [Export] public Vector3 ChaseOffset = new(0, 2.5f, 5.5f);
-        [Export] public float FreeMoveSpeed = 6.0f;   // world-relative m/s
-        [Export] public float FreeMoveSpeedFast = 14.0f;
+        [Export] public float FreeMoveSpeed = 12.0f;   // world-relative m/s
+        [Export] public float FreeMoveSpeedFast = 18.0f;
 
         // Debug
         [Export] public bool DebugPathOnTop = true;
@@ -106,7 +106,21 @@ namespace DigSim3D.App
                 car.Wheelbase = VehicleLength;
                 car.TrackWidth = VehicleWidth;
 
-                _vehicles.Add(car);                    // <-- put this back
+                _vehicles.Add(car);
+
+                // Add nameplate
+                var id = $"RS-{(i + 1):00}";
+                var nameplate = new Nameplate3D
+                {
+                    Text = id,
+                    HeightOffset = 0.5f,
+                    FontColor = Colors.White,
+                    YBillboardOnly = false,
+                    FixedSize = true,
+                    FontSize = 64,
+                    PixelSize = 0.0005f,
+                };
+                car.AddChild(nameplate);
             }
 
             // === PLAN FIRST DIG TARGETS (after all cars exist) ===
