@@ -73,6 +73,77 @@ namespace DigSim3D.Services{
 			return (list3.ToArray(), gears.ToArray());
 		}
 
+		public static (Vector3[][] points, int[][] gears) ComputeAllPath3D(
+			Vector3 startPos, double startYawRad,
+			Vector3 goalPos, double goalYawRad,
+			double turnRadiusMeters,
+			float fieldRadius,
+			double sampleStepMeters = 0.25)
+		{
+			// 1) 3D → math
+			var sM = ToMath3D(startPos, startYawRad);
+			var gM = ToMath3D(goalPos, goalYawRad);
+
+			// 2) Normalize by R for planning (x,y only)
+			double R = turnRadiusMeters;
+			var sN = (sM.x / R, sM.y / R, sM.th);
+			var gN = (gM.x / R, gM.y / R, gM.th);
+
+			// 3) Optimal RS in normalized space
+			// List<PathElement> best = DubinsPaths.GetOptimalPath(sN, gN);
+			// if (best == null || best.Count == 0)
+			// 	return (Array.Empty<Vector3>(), Array.Empty<int>());
+			List<PathElement> best = null;
+
+			//get the shortest valid path
+			var all = DubinsPaths.GetAllPaths(sN, gN);
+			if (all.Count == 0)
+			{
+				return (Array.Empty<Vector3[]>(), Array.Empty<int[]>());
+			}
+			var pathList = new List<List<PathElement>>(); 
+			var orderedAll = all.OrderBy(p => p.Sum(e => e.Param));
+			foreach (var path in orderedAll)
+			{
+				if (ValidatePath(startPos, startYawRad, path, turnRadiusMeters, sampleStepMeters, fieldRadius))
+				{
+					// best = path;
+					pathList.Add(path);
+					// break;
+				}
+			}
+			if (pathList.Count == 0)
+			{
+				return (Array.Empty<Vector3[]>(), Array.Empty<int[]>());
+			}
+
+
+
+			var listOfPathPoints = new List<Vector3[]>();
+			var listOfPathGears = new List<int[]>();
+			foreach (var path in pathList)
+			{
+				// 4) Sample polyline and gears in local normalized (start at 0,0,0)
+				var pts2D = new List<Vector2>();
+				var gears = new List<int>();
+				DSampler.SamplePolylineWithGears((0.0, 0.0, 0.0), path, 1.0, sampleStepMeters / R, pts2D, gears);
+
+				// 5) Transform back to world-math (scale, rotate by start θ, translate by start x,y)
+				var list3 = new List<Vector3>(pts2D.Count);
+				double c0 = Math.Cos(sM.th), s0 = Math.Sin(sM.th);
+				foreach (var p in pts2D)
+				{
+					double sx = p.X * R, sy = p.Y * R;
+					double wx = sM.x + (sx * c0 - sy * s0);
+					double wy = sM.y + (sx * s0 + sy * c0);
+					list3.Add(new Vector3((float)wx, 0f, (float)wy)); // (x, 0, z=y)
+				}
+				listOfPathPoints.Add(list3.ToArray());
+				listOfPathGears.Add(gears.ToArray());
+			}
+			return (listOfPathPoints.ToArray(), listOfPathGears.ToArray());
+		}
+
 		private static bool ValidatePath(
 			Vector3 startPos, double startYawRad,
 			List<PathElement> testPath,
