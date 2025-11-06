@@ -75,7 +75,7 @@ namespace DigSim3D.App
         private float _initialTerrainVolume = 0f;  // Store initial volume at startup
 
         // === UI ===
-        private DigSim3D.UI.DigSimUIv3_Premium _digSimUI = null!;
+        private DigSim3D.UI.DigSimUI _digSimUI = null!;
         // private SimpleTestUI _testUI = null!;
 
         public override void _Ready()
@@ -218,9 +218,9 @@ namespace DigSim3D.App
             AddChild(uiLayer);
             GD.Print($"[Director] Created CanvasLayer for UI");
             
-            _digSimUI = new DigSim3D.UI.DigSimUIv3_Premium();
+            _digSimUI = new DigSim3D.UI.DigSimUI();
             uiLayer.AddChild(_digSimUI);
-            GD.Print($"[Director] Added DigSimUIv3_Premium to CanvasLayer");
+            GD.Print($"[Director] Added DigSimUI to CanvasLayer");
 
             // Add robots to UI
             for (int i = 0; i < _robotBrains.Count; i++)
@@ -241,7 +241,7 @@ namespace DigSim3D.App
             // Initialize progress bars to 0% and 100%
             _digSimUI.UpdateTerrainProgress(_initialTerrainVolume, _initialTerrainVolume);
 
-            GD.Print("[Director] DigSimUIv3_Premium initialized successfully");
+            GD.Print("[Director] DigSimUI initialized successfully");
 
             _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
         }

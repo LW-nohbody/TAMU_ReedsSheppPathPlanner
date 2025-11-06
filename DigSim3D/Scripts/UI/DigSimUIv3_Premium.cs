@@ -10,7 +10,7 @@ namespace DigSim3D.UI
     /// <summary>
     /// Premium DigSim3D UI with glassmorphism, animations, and advanced features
     /// </summary>
-    public partial class DigSimUIv3_Premium : Control
+    public partial class DigSimUI : Control
     {
         private VBoxContainer _leftPanelContainer = null!;
         private Dictionary<int, PremiumRobotStatusEntry> _robotEntries = new();
@@ -36,7 +36,7 @@ namespace DigSim3D.UI
 
         public override void _Ready()
         {
-            GD.Print("[DigSimUIv3_Premium] Initializing premium UI...");
+            GD.Print("[DigSimUI] Initializing premium UI...");
 
             // Root setup
             Visible = true;
@@ -51,7 +51,7 @@ namespace DigSim3D.UI
             CreateLeftPanel();
             CreateSettingsPanel();
             
-            GD.Print("[DigSimUIv3_Premium] ✅ Premium UI initialized!");
+            GD.Print("[DigSimUI] ✅ Premium UI initialized!");
         }
 
         private void CreateLeftPanel()
@@ -232,7 +232,7 @@ namespace DigSim3D.UI
             var spacer3 = new Control { CustomMinimumSize = new Vector2(0, 15) };
             _leftPanelContainer.AddChild(spacer3);
             
-            GD.Print("[DigSimUIv3_Premium] Left panel created with glassmorphism");
+            GD.Print("[DigSimUI] Left panel created with glassmorphism");
         }
 
         private void CreateSettingsPanel()
@@ -258,7 +258,7 @@ namespace DigSim3D.UI
             // Add settings content
             AddSettingsContent();
             
-            GD.Print("[DigSimUIv3_Premium] Settings panel created at top-right");
+            GD.Print("[DigSimUI] Settings panel created at top-right");
         }
 
         private void AddSettingsContent()
@@ -334,7 +334,7 @@ namespace DigSim3D.UI
             var robotPanel = new PremiumRobotStatusEntry(robotId, name, color);
             _leftPanelContainer.AddChild(robotPanel);
             _robotEntries[robotId] = robotPanel;
-            GD.Print($"[DigSimUIv3_Premium] Added premium robot panel {robotId}: {name}");
+            GD.Print($"[DigSimUI] Added premium robot panel {robotId}: {name}");
         }
 
         public void UpdateRobotPayload(int robotId, float payloadPercent, Vector3 position, string status)
