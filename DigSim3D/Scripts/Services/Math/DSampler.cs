@@ -1,8 +1,9 @@
-namespace DCore
+namespace DigSim3D.Services
 {
     using Godot;
     using System;
     using System.Collections.Generic;
+
 
     public static class DSampler
     {
@@ -156,7 +157,7 @@ namespace DCore
                 else
                 {
                     int steerSign = seg.Steering == Steering.LEFT ? -1 : +1;   // circle side
-                    // int gearSign = seg.Gear == Gear.FORWARD ? +1 : -1;   // travel direction
+                                                                               // int gearSign = seg.Gear == Gear.FORWARD ? +1 : -1;   // travel direction
 
                     double total = seg.Param;
                     int n = PointsFor(total);
