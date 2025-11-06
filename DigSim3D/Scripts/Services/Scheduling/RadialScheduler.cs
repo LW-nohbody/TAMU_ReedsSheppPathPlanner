@@ -2,8 +2,8 @@
 using System;
 using System.Collections.Generic;
 using Godot;
-using DigSim3D.Domain;
 using DigSim3D.App;
+using DigSim3D.Domain;
 
 namespace DigSim3D.Services
 {
@@ -18,7 +18,7 @@ namespace DigSim3D.Services
             Vector3 center,
             DigScoring cfg,
             float keepoutR = 2.0f,
-            bool randomizeOrder = false)
+            bool randomizeOrder = true)
         {
             // Calls the new overload with empty obstacles + zero inflation for exact compatibility.
             return PlanFirstDigTargets(
@@ -44,7 +44,7 @@ namespace DigSim3D.Services
             obstacles ??= new List<Obstacle3D>(0);
 
             int n = Math.Max(1, vehicles.Count);
-            var result   = new (Vector3, float)[n];
+            var result = new (Vector3, float)[n];
             var reserved = new List<Vector3>(n);
 
             // Decide an assignment order (optional shuffle)
@@ -70,25 +70,25 @@ namespace DigSim3D.Services
                 float theta0 = SectorTheta0(k);
                 float theta1 = SectorTheta1(k);
 
-                var car    = vehicles[k];
+                var car = vehicles[k];
                 var carPos = car.Agent.GlobalTransform.Origin;
                 var carFwd = (-car.Agent.GlobalTransform.Basis.Z).WithY(0).Normalized();
 
-                float   bestScore = float.NegativeInfinity;
-                Vector3 bestP     = carPos;
-                float   bestYaw   = 0f;
-                bool    foundAny  = false;
+                float bestScore = float.NegativeInfinity;
+                Vector3 bestP = carPos;
+                float bestYaw = 0f;
+                bool foundAny = false;
 
                 for (int a = 0; a < cfg.ArcSteps; a++)
                 {
-                    float t     = (a + 0.5f) / cfg.ArcSteps;
+                    float t = (a + 0.5f) / cfg.ArcSteps;
                     float theta = Mathf.Lerp(theta0, theta1, t);
                     Vector3 dir = new(Mathf.Cos(theta), 0, Mathf.Sin(theta));
 
                     for (int r = 0; r < cfg.RadialSteps; r++)
                     {
-                        float  u  = (r + 0.5f) / cfg.RadialSteps;
-                        float  R  = Mathf.Lerp(cfg.InnerR, cfg.OuterR, u);
+                        float u = (r + 0.5f) / cfg.RadialSteps;
+                        float R = Mathf.Lerp(cfg.InnerR, cfg.OuterR, u);
                         Vector3 xz = center + dir * R;
 
                         // Terrain sample
@@ -103,8 +103,7 @@ namespace DigSim3D.Services
                         }
                         if (tooClose) continue;
 
-                        // Obstacle keepout – reject any candidate inside inflated obstacle
-                        if (obstacles.Count > 0 && !ObstacleClearance.IsSiteValid(hit, obstacles, inflation))
+                        if (GridPlannerPersistent.IsBuilt && GridPlannerPersistent.IsCellBlocked(xz))
                             continue;
 
                         // Score (unchanged: height only)
@@ -113,10 +112,10 @@ namespace DigSim3D.Services
                         if (score > bestScore)
                         {
                             bestScore = score;
-                            bestP     = new Vector3(xz.X, hit.Y, xz.Z);
+                            bestP = new Vector3(xz.X, hit.Y, xz.Z);
                             // approach along the ray from car to spot (unchanged)
                             Vector3 approach = (xz - carPos).WithY(0).Normalized();
-                            bestYaw  = Mathf.Atan2(approach.Z, approach.X);
+                            bestYaw = Mathf.Atan2(approach.Z, approach.X);
                             foundAny = true;
                         }
                     }
@@ -125,7 +124,7 @@ namespace DigSim3D.Services
                 // If a sector had zero valid candidates (rare), fall back to car position to keep behavior predictable.
                 if (!foundAny)
                 {
-                    bestP   = carPos;
+                    bestP = carPos;
                     bestYaw = Mathf.Atan2(carFwd.Z, carFwd.X);
                 }
 
