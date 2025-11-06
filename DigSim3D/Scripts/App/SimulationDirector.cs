@@ -56,6 +56,11 @@ namespace DigSim3D.App
         [Export] public NodePath ObstacleManagerPath = null!;
         private ObstacleManager _obstacleManager = null!;
 
+        // === Dig System ===
+        private DigService _digService = null!;
+        private DigConfig _digConfig = DigConfig.Default;
+        private DigVisualizer _digVisualizer = null!;
+        private List<VehicleBrain> _robotBrains = new();
 
         public override void _Ready()
         {
@@ -105,22 +110,49 @@ namespace DigSim3D.App
 
             // === PLAN FIRST DIG TARGETS (after all cars exist) ===
             var scheduler = new RadialScheduler();
-            var brains = new List<VehicleBrain>(_vehicles.Count);
+            _robotBrains = new List<VehicleBrain>(_vehicles.Count);
             foreach (var v in _vehicles)
             {
                 var brain = new VehicleBrain();
                 v.AddChild(brain);
-                brains.Add(brain);
+                _robotBrains.Add(brain);
+            }
+
+            // === Initialize Dig Service ===
+            _digService = new DigService(_terrain, _digConfig);
+            
+            // Create dig visualizer
+            _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
+            AddChild(_digVisualizer);
+
+            // Create world state for path planning
+            var worldState = new WorldState
+            {
+                Obstacles = obstacleList,
+                Terrain = _terrain
+            };
+
+            // Create path planner (will be reused for all robots)
+            var hybridPlanner = new HybridReedsSheppPlanner();
+
+            // Initialize brain dig system with path drawing callback
+            foreach (var brain in _robotBrains)
+            {
+                brain.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, _digVisualizer, DrawPathProjectedToTerrain);
             }
 
             var digTargets = scheduler.PlanFirstDigTargets(
-                brains, _terrain, Vector3.Zero, DigScoring.Default);
+                _robotBrains, _terrain, Vector3.Zero, DigScoring.Default);
 
             // === Build paths to the assigned dig targets (scheduler-driven) ===
             for (int k = 0; k < _vehicles.Count; k++)
             {
                 var car = _vehicles[k];
+                var brain = _robotBrains[k];
                 var (digPos, approachYaw) = digTargets[k];
+
+                // Set dig target on brain
+                brain.SetDigTarget(digPos, approachYaw);
 
                 // current forward yaw in XZ (Godot forward is -Z)
                 var fwd = -car.GlobalTransform.Basis.Z;
@@ -131,16 +163,10 @@ namespace DigSim3D.App
                 var startPose = new Pose(start.X, start.Z, startYaw);
                 var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
 
-                // Vehicle + world (note: Obstacles is List<Obstacle3D>)
+                // Vehicle spec
                 VehicleSpec spec = car.Spec;
-                var world = new WorldState
-                {
-                    Obstacles = obstacleList,   // <— List<Obstacle3D>
-                    Terrain = _terrain
-                };
 
-                var hybridRSPlanner = new HybridReedsSheppPlanner();
-                PlannedPath path = hybridRSPlanner.Plan(startPose, goalPose, spec, world);
+                PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, worldState);
 
                 DrawPathProjectedToTerrain(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
                 DrawMarkerProjected(start, new Color(0, 1, 0));
@@ -238,6 +264,13 @@ namespace DigSim3D.App
 
         public override void _Process(double delta)
         {
+            // Update robot dig behaviors
+            foreach (var brain in _robotBrains)
+            {
+                brain.UpdateDigBehavior((float)delta);
+            }
+
+            // Original camera code
             if (Input.IsActionJustPressed("toggle_camera"))
             {
                 _usingTop = !_usingTop;
