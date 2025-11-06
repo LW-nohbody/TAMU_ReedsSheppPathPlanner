@@ -5,25 +5,20 @@ namespace SimCore.Core
 {
     public sealed class WorldState
     {
-        // Dig sites with detailed information (for your simple dig system)
-        public readonly List<DigSite> DigSites = new();
-        
-        // Dump location
+        // Points of interest (for mission logic)
+        public readonly List<Vector3> DigSites = new();
         public Vector3 DumpCenter;
-        
-        // Cumulative dirt removed (for your dig system)
-        public float TotalDirtExtracted = 0f;
 
-        // Terrain reference (from main branch)
+        // Terrain reference
         public TerrainDisk Terrain;
 
-        // Obstacles in the world (from main branch)
+        // Obstacles in the world
         public List<Obstacle3D> Obstacles = new();
 
-        // World size (meters) (from main branch)
+        // World size (meters)
         public float Extent = 50f;
 
-        // Utility (from main branch)
+        // Utility
         public bool HasTerrain => Terrain != null;
     }
 }
