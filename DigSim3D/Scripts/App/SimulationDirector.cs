@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Runtime;
+using DigSim3D.UI;
 
 using DigSim3D.Domain;
 using DigSim3D.Services;
@@ -61,6 +62,10 @@ namespace DigSim3D.App
         private DigConfig _digConfig = DigConfig.Default;
         private DigVisualizer _digVisualizer = null!;
         private List<VehicleBrain> _robotBrains = new();
+
+        // === UI ===
+        private DigSim3D.UI.DigSimUIv2 _digSimUI = null!;
+        // private SimpleTestUI _testUI = null!;
 
         public override void _Ready()
         {
@@ -177,6 +182,28 @@ namespace DigSim3D.App
                 GD.Print($"[Director] {car.Name} path: {path.Points.Count} samples");
             }
 
+            // === Initialize UI ===
+            // Add UI Control to a CanvasLayer to ensure it's drawn on top
+            var uiLayer = new CanvasLayer { Layer = 100 };
+            AddChild(uiLayer);
+            GD.Print($"[Director] Created CanvasLayer for UI");
+            
+            _digSimUI = new DigSim3D.UI.DigSimUIv2();
+            uiLayer.AddChild(_digSimUI);
+            GD.Print($"[Director] Added DigSimUIv2 to CanvasLayer");
+
+            // Add robots to UI
+            for (int i = 0; i < _robotBrains.Count; i++)
+            {
+                _digSimUI.AddRobot(i, $"Robot_{i}", new Color((float)i / _robotBrains.Count, 0.6f, 1.0f));
+            }
+
+            _digSimUI.SetDigConfig(_digConfig);
+            _digSimUI.SetHeatMapStatus(false);
+            _digSimUI.SetInitialVolume(500f);
+
+            GD.Print("[Director] DigSimUIv2 initialized successfully");
+
             _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
         }
 
@@ -262,12 +289,54 @@ namespace DigSim3D.App
             }
         }
 
+        private float CalculateTerrainVolume()
+        {
+            if (_terrain == null || _terrain.HeightGrid == null) return 0f;
+            
+            float totalVolume = 0f;
+            float gridStep = _terrain.GridStep;
+            float cellArea = gridStep * gridStep;
+            
+            for (int i = 0; i < _terrain.GridResolution; i++)
+            {
+                for (int j = 0; j < _terrain.GridResolution; j++)
+                {
+                    float height = _terrain.HeightGrid[i, j];
+                    if (!float.IsNaN(height) && height > 0)
+                    {
+                        totalVolume += height * cellArea;
+                    }
+                }
+            }
+            
+            return totalVolume;
+        }
+
         public override void _Process(double delta)
         {
             // Update robot dig behaviors
             foreach (var brain in _robotBrains)
             {
                 brain.UpdateDigBehavior((float)delta);
+            }
+
+            // Update UI with robot stats
+            if (_digSimUI != null && _robotBrains.Count > 0)
+            {
+                for (int i = 0; i < _robotBrains.Count; i++)
+                {
+                    var brain = _robotBrains[i];
+                    var state = brain.DigState;
+                    var robotPos = brain.Agent.GlobalTransform.Origin;
+                    
+                    float payloadPercent = state.MaxPayload > 0 ? (state.CurrentPayload / state.MaxPayload) : 0f;
+                    _digSimUI.UpdateRobotPayload(i, payloadPercent, robotPos, state.State.ToString());
+                }
+
+                // Update terrain progress
+                float initialVolume = 500f; // TODO: Calculate from terrain at startup
+                float remainingVolume = CalculateTerrainVolume();
+                _digSimUI.UpdateTerrainProgress(remainingVolume, initialVolume);
             }
 
             // Original camera code
