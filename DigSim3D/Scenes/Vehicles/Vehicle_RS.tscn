@@ -1,11 +1,7 @@
-[gd_scene load_steps=9 format=3 uid="uid://bjwl37wdxs6ua"]
+[gd_scene load_steps=8 format=3 uid="uid://bjwl37wdxs6ua"]
 
-[ext_resource type="Script" uid="uid://bphtvec6igp6u" path="res://Scripts/App/VehicleVisualizer.cs" id="1_andsp"]
-[ext_resource type="Material" uid="uid://d0aiqbs32qvub" path="res://Materials/concrete.tres" id="2_qufrh"]
-
-[sub_resource type="BoxMesh" id="BoxMesh_272bh"]
-material = ExtResource("2_qufrh")
-size = Vector3(0.5, 0.5, 0.75)
+[ext_resource type="Script" uid="uid://cavti2wlvm0kw" path="res://Scripts/App/VehicleVisualizer.cs" id="1_andsp"]
+[ext_resource type="ArrayMesh" uid="uid://ray1n477cf7u" path="res://Scenes/Vehicles/Vehicle_Mesh_3.res" id="2_qufrh"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_0xm2m"]
 size = Vector3(0.5, 0.5, 0.75)
@@ -32,13 +28,15 @@ height = 0.75
 script = ExtResource("1_andsp")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-mesh = SubResource("BoxMesh_272bh")
+transform = Transform3D(-1.74846e-08, 0, 0.4, 0, 0.4, 0, -0.4, 0, -1.74846e-08, 0, 0.15, 0)
+mesh = ExtResource("2_qufrh")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("BoxShape3D_0xm2m")
 
 [node name="Arrow" type="MeshInstance3D" parent="."]
 transform = Transform3D(0.3, 0, 0, 0, -1.31134e-08, -0.3, 0, 0.3, -1.31134e-08, 0, 0, -0.44)
+visible = false
 mesh = SubResource("CylinderMesh_ev2fh")
 
 [node name="ArrowHead" type="MeshInstance3D" parent="Arrow"]

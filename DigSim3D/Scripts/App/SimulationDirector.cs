@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Runtime;
+using DigSim3D.UI;
 
 using DigSim3D.Domain;
 using DigSim3D.Services;
@@ -62,6 +63,26 @@ namespace DigSim3D.App
         [Export] public NodePath ObstacleManagerPath = null!;
         private ObstacleManager _obstacleManager = null!;
 
+        // === Dig System ===
+        private DigService _digService = null!;
+        private DigConfig _digConfig = new DigConfig 
+        { 
+            DigRadius = 0.8f,  // Smaller radius for more precise digging
+            DigDepth = 0.3f,
+            DigRatePerSecond = 2.0f,
+            AtSiteThreshold = 0.5f,
+            AtDumpThreshold = 0.5f,
+            MinHeightChange = 0.01f
+        };
+        private DigVisualizer _digVisualizer = null!;
+        private SectorVisualizer _sectorVisualizer = null!;
+        private BufferVisualizer _bufferVisualizer = null!;
+        private List<VehicleBrain> _robotBrains = new();
+        private float _initialTerrainVolume = 0f;  // Store initial volume at startup
+
+        // === UI ===
+        private DigSim3D.UI.DigSimUI _digSimUI = null!;
+        // private SimpleTestUI _testUI = null!;
 
         public override void _Ready()
         {
@@ -86,7 +107,7 @@ namespace DigSim3D.App
 
             // Build global static navigation grid from obstacles BEFORE spawning vehicles
             var obstacleList = _obstacleManager.GetObstacles();
-            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 1.0f);
+            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 0.5f);  // 0.5m obstacle buffer
 
             // Spawn on ring
             int N = Math.Max(1, VehicleCount);
@@ -125,22 +146,68 @@ namespace DigSim3D.App
 
             // === PLAN FIRST DIG TARGETS (after all cars exist) ===
             var scheduler = new RadialScheduler();
-            var brains = new List<VehicleBrain>(_vehicles.Count);
+            _robotBrains = new List<VehicleBrain>(_vehicles.Count);
             foreach (var v in _vehicles)
             {
                 var brain = new VehicleBrain();
                 v.AddChild(brain);
-                brains.Add(brain);
+                _robotBrains.Add(brain);
+            }
+
+            // === Initialize Dig Service ===
+            _digService = new DigService(_terrain, _digConfig);
+            
+            // Create dig visualizer
+            _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
+            AddChild(_digVisualizer);
+            
+            // Create sector visualizer to show robot sectors
+            _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
+            AddChild(_sectorVisualizer);
+            float arenaRadius = _terrain.GridResolution * _terrain.GridStep / 2f;
+            _sectorVisualizer.Initialize(_vehicles.Count, arenaRadius);
+            GD.Print($"[Director] SectorVisualizer created with {_vehicles.Count} sectors, radius {arenaRadius:F1}m");
+
+            // Create buffer visualizer to show obstacle and wall buffer zones
+            _bufferVisualizer = new BufferVisualizer { Name = "BufferVisualizer" };
+            AddChild(_bufferVisualizer);
+            const float obstacleBufferMeters = 0.5f; // 0.5m obstacle buffer (both dig target selection and path planning)
+            const float wallBufferMeters = 0.5f;     // 0.5m wall buffer (dig target selection only)
+            _bufferVisualizer.Initialize(obstacleList, obstacleBufferMeters, _terrain.Radius, wallBufferMeters);
+            GD.Print($"[Director] BufferVisualizer created - obstacle buffer: {obstacleBufferMeters}m, wall buffer: {wallBufferMeters}m");
+
+            // Create world state for path planning
+            var worldState = new WorldState
+            {
+                Obstacles = obstacleList,
+                Terrain = _terrain
+            };
+
+            // Create path planner (will be reused for all robots)
+            var hybridPlanner = new HybridReedsSheppPlanner();
+
+            // Initialize brain dig system with path drawing callback
+            foreach (var brain in _robotBrains)
+            {
+                int robotIndex = _robotBrains.IndexOf(brain);
+                int totalRobots = _robotBrains.Count;
+                brain.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, _digVisualizer, DrawPathProjectedToTerrain, robotIndex, totalRobots);
             }
 
             var digTargets = scheduler.PlanFirstDigTargets(
-                brains, _terrain, Vector3.Zero, DigScoring.Default);
+                _robotBrains, _terrain, Vector3.Zero, DigScoring.Default,
+                keepoutR: 2.0f, randomizeOrder: true,
+                obstacles: obstacleList, inflation: 0.5f);  // Pass obstacles for manual checking
 
             // === Build paths to the assigned dig targets (scheduler-driven) ===
             for (int k = 0; k < _vehicles.Count; k++)
             {
                 var car = _vehicles[k];
+                var brain = _robotBrains[k];
                 var (digPos, approachYaw) = digTargets[k];
+
+                // Set dig target on brain
+                brain.SetDigTarget(digPos, approachYaw);
 
                 // current forward yaw in XZ (Godot forward is -Z)
                 var fwd = -car.GlobalTransform.Basis.Z;
@@ -151,16 +218,10 @@ namespace DigSim3D.App
                 var startPose = new Pose(start.X, start.Z, startYaw);
                 var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
 
-                // Vehicle + world (note: Obstacles is List<Obstacle3D>)
+                // Vehicle spec
                 VehicleSpec spec = car.Spec;
-                var world = new WorldState
-                {
-                    Obstacles = obstacleList,   // <— List<Obstacle3D>
-                    Terrain = _terrain
-                };
 
-                var hybridRSPlanner = new HybridReedsSheppPlanner();
-                PlannedPath path = hybridRSPlanner.Plan(startPose, goalPose, spec, world);
+                PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, worldState);
 
                 DrawPathProjectedToTerrain(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
                 DrawMarkerProjected(start, new Color(0, 1, 0));
@@ -170,6 +231,37 @@ namespace DigSim3D.App
 
                 GD.Print($"[Director] {car.Name} path: {path.Points.Count} samples");
             }
+
+            // === Initialize UI ===
+            // Add UI Control to a CanvasLayer to ensure it's drawn on top
+            var uiLayer = new CanvasLayer { Layer = 100 };
+            AddChild(uiLayer);
+            GD.Print($"[Director] Created CanvasLayer for UI");
+            
+            _digSimUI = new DigSim3D.UI.DigSimUI();
+            uiLayer.AddChild(_digSimUI);
+            GD.Print($"[Director] Added DigSimUI to CanvasLayer");
+
+            // Add robots to UI
+            for (int i = 0; i < _robotBrains.Count; i++)
+            {
+                _digSimUI.AddRobot(i, $"Robot_{i}", new Color((float)i / _robotBrains.Count, 0.6f, 1.0f));
+            }
+
+            // Calculate and store initial terrain volume
+            _initialTerrainVolume = CalculateTerrainVolume();
+            GD.Print($"[Director] Initial terrain volume: {_initialTerrainVolume:F2} m³");
+
+            _digSimUI.SetDigConfig(_digConfig);
+            _digSimUI.SetHeatMapStatus(false);
+            _digSimUI.SetInitialVolume(_initialTerrainVolume);
+            _digSimUI.SetVehicles(_vehicles);
+            // Removed SetTerrain call - no longer needed without terrain thumbnail
+            
+            // Initialize progress bars to 0% and 100%
+            _digSimUI.UpdateTerrainProgress(_initialTerrainVolume, _initialTerrainVolume);
+
+            GD.Print("[Director] DigSimUI initialized successfully");
 
             SetCameraMode(CameraMode.TopDown);
         }
@@ -261,8 +353,56 @@ namespace DigSim3D.App
             }
         }
 
+        private float CalculateTerrainVolume()
+        {
+            if (_terrain == null || _terrain.HeightGrid == null) return 0f;
+            
+            float totalVolume = 0f;
+            float gridStep = _terrain.GridStep;
+            float cellArea = gridStep * gridStep;
+            
+            for (int i = 0; i < _terrain.GridResolution; i++)
+            {
+                for (int j = 0; j < _terrain.GridResolution; j++)
+                {
+                    float height = _terrain.HeightGrid[i, j];
+                    if (!float.IsNaN(height) && height > 0)
+                    {
+                        totalVolume += height * cellArea;
+                    }
+                }
+            }
+            
+            return totalVolume;
+        }
+
         public override void _Process(double delta)
         {
+            // Update robot dig behaviors
+            foreach (var brain in _robotBrains)
+            {
+                brain.UpdateDigBehavior((float)delta);
+            }
+
+            // Update UI with robot stats
+            if (_digSimUI != null && _robotBrains.Count > 0)
+            {
+                for (int i = 0; i < _robotBrains.Count; i++)
+                {
+                    var brain = _robotBrains[i];
+                    var state = brain.DigState;
+                    var robotPos = brain.Agent.GlobalTransform.Origin;
+                    
+                    float payloadPercent = state.MaxPayload > 0 ? (state.CurrentPayload / state.MaxPayload) : 0f;
+                    _digSimUI.UpdateRobotPayload(i, payloadPercent, robotPos, state.State.ToString());
+                }
+
+                // Update terrain progress
+                float remainingVolume = CalculateTerrainVolume();
+                _digSimUI.UpdateTerrainProgress(remainingVolume, _initialTerrainVolume);
+            }
+
+            // Original camera code
             // (keep your existing toggles if you still want them)
             if (Input.IsActionJustPressed("toggle_camera"))
             {
@@ -276,12 +416,15 @@ namespace DigSim3D.App
             if (Input.IsActionJustPressed("select_free_camera")) SetCameraMode(CameraMode.Free);
             if (Input.IsActionJustPressed("select_orbit_camera")) SetCameraMode(CameraMode.Orbit);
 
-            if (Input.IsActionPressed("translate_free_camera") && _camFree.Current)
+            // Check if mouse is over UI before capturing
+            bool mouseOverUI = IsMouseOverUI();
+
+            if (Input.IsActionPressed("translate_free_camera") && _camFree.Current && !mouseOverUI)
             {
                 _movingFreeCam = true; _rotatingFreeCam = _rotatingOrbitCam = false;
                 Input.MouseMode = Input.MouseModeEnum.Captured;
             }
-            else if (Input.IsActionPressed("rotate_camera"))
+            else if (Input.IsActionPressed("rotate_camera") && !mouseOverUI)
             {
                 _movingFreeCam = false;
                 _rotatingFreeCam = _camFree.Current; _rotatingOrbitCam = _camOrbit.Current;
@@ -503,6 +646,39 @@ namespace DigSim3D.App
             mat.NoDepthTest = DebugPathOnTop;
             m.SetSurfaceOverrideMaterial(0, mat);
             AddChild(m);
+        }
+
+        private bool IsMouseOverUI()
+        {
+            if (_digSimUI == null || !_digSimUI.Visible) return false;
+            
+            var mousePos = GetViewport().GetMousePosition();
+            
+            // Check if mouse is over the UI panel or any of its children
+            return IsPointInControl(_digSimUI, mousePos);
+        }
+        
+        private bool IsPointInControl(Control control, Vector2 point)
+        {
+            if (!control.Visible) return false;
+            
+            // Check if point is in this control's rectangle
+            var rect = control.GetGlobalRect();
+            if (rect.HasPoint(point))
+            {
+                return true;
+            }
+            
+            // Recursively check all Control children
+            foreach (var child in control.GetChildren())
+            {
+                if (child is Control childControl && IsPointInControl(childControl, point))
+                {
+                    return true;
+                }
+            }
+            
+            return false;
         }
     }
 }

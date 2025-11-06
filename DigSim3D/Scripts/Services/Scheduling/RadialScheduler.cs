@@ -79,6 +79,13 @@ namespace DigSim3D.Services
                 float bestYaw = 0f;
                 bool foundAny = false;
 
+                // Calculate wall buffer zone
+                float arenaRadius = terrain.Radius;
+                const float WallBufferMeters = 0.5f; // 0.5m wall buffer
+                float maxAllowedRadius = arenaRadius - WallBufferMeters;
+                
+                const float ObstacleBufferMeters = 0.5f; // 0.5m obstacle buffer
+
                 for (int a = 0; a < cfg.ArcSteps; a++)
                 {
                     float t = (a + 0.5f) / cfg.ArcSteps;
@@ -89,6 +96,10 @@ namespace DigSim3D.Services
                     {
                         float u = (r + 0.5f) / cfg.RadialSteps;
                         float R = Mathf.Lerp(cfg.InnerR, cfg.OuterR, u);
+                        
+                        // Check if too far from center (beyond safe wall buffer zone)
+                        if (R > maxAllowedRadius) continue;
+                        
                         Vector3 xz = center + dir * R;
 
                         // Terrain sample
@@ -103,8 +114,28 @@ namespace DigSim3D.Services
                         }
                         if (tooClose) continue;
 
-                        if (GridPlannerPersistent.IsBuilt && GridPlannerPersistent.IsCellBlocked(xz))
-                            continue;
+                        // Manual obstacle check - skip if inside obstacle buffer zone
+                        bool tooCloseToObstacle = false;
+                        if (obstacles != null)
+                        {
+                            foreach (var obstacle in obstacles)
+                            {
+                                if (obstacle is CylinderObstacle cyl)
+                                {
+                                    Vector2 candidateXZ = new Vector2(xz.X, xz.Z);
+                                    Vector2 obstacleXZ = new Vector2(cyl.GlobalPosition.X, cyl.GlobalPosition.Z);
+                                    float distToObstacle = candidateXZ.DistanceTo(obstacleXZ);
+                                    
+                                    // Check if inside obstacle + buffer
+                                    if (distToObstacle < (cyl.Radius + ObstacleBufferMeters))
+                                    {
+                                        tooCloseToObstacle = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (tooCloseToObstacle) continue;
 
                         // Score (unchanged: height only)
                         float score = cfg.WHeight * hit.Y;
