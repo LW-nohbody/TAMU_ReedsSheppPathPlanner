@@ -222,7 +222,8 @@ namespace DigSim3D.Services
                 //If path to next A* point isn't valid, split path into multiple Dubins paths up to 5 times
                 int subdiv = 0;
                 while ((!AStarValid) && subdiv < 5)
-                {                    
+                {
+                    bool pathFound = false;
                     GD.Print("[HybridDubinsPlanner] Running Lerp for loop");
                     subdiv++;
                     Vector3 mid = segStart.Lerp(target, 0.5f);
@@ -232,16 +233,32 @@ namespace DigSim3D.Services
                     // mid = mid + segStart;
                     double midYaw = Math.Atan2((mid - segStart).Z, (mid - segStart).X); //TODO: Redo so the midYaw is angled to follow the rest of the path
 
-                    var (d1, dGears1) = DAdapter.ComputePath3D(segStart, prevYaw, mid, midYaw, turnRadius, world.Terrain.Radius, _sampleStep);
+                    var (listD1, listD1Gears) = DAdapter.ComputeAllPath3D(segStart, prevYaw, mid, midYaw, turnRadius, world.Terrain.Radius, _sampleStep);
 
-                    if (d1.Length == 0 || !PathIsValid(d1.ToList(), obstacles, midYaw, world.Terrain.Radius))
+                    foreach (var d1 in listD1)
                     {
-                        GD.Print("[HybridDubinsPlanner] Valid Lerp Path not found");
-                        continue;
+                        if (d1.Length > 0 && PathIsValid(d1.ToList(), obstacles, midYaw, world.Terrain.Radius))
+                        {
+                            mergedPoints.AddRange(d1.Skip(1));
+                            // mergedGears.AddRange(dGears1.Skip(1));
+                            farthestReachable--;
+                            pathFound = true;
+                            break;
+                        }
                     }
-                    mergedPoints.AddRange(d1.Skip(1));
-                    mergedGears.AddRange(dGears1.Skip(1));
-                    farthestReachable--;
+                    if (pathFound) { break; }
+                    else{ GD.Print("[HybridDubinsPlanner] Lerp failed");  }
+
+                    // var (d1, dGears1) = DAdapter.ComputePath3D(segStart, prevYaw, mid, midYaw, turnRadius, world.Terrain.Radius, _sampleStep);
+
+                    // if (d1.Length == 0 || !PathIsValid(d1.ToList(), obstacles, midYaw, world.Terrain.Radius))
+                    // {
+                    //     GD.Print("[HybridDubinsPlanner] Valid Lerp Path not found");
+                    //     continue;
+                    // }
+                    // mergedPoints.AddRange(d1.Skip(1));
+                    // mergedGears.AddRange(dGears1.Skip(1));
+                    // farthestReachable--;
 
                     // var (d2, dGears2) = DAdapter.ComputePath3D(mid, midYaw, target, targetYaw, turnRadius, world.Terrain.Radius, _sampleStep);
 
