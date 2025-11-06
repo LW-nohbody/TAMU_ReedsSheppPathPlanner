@@ -78,18 +78,18 @@ public class DubinsPath : Path<DubinsElement>
                 else
                 {
                     double steerSign = (int)elem.Steering; // +1 left, -1 right
-                    double dtheta = steerSign * (dsWorld / turningRadius);
+                    double dtheta = -steerSign * (dsWorld / turningRadius);
                     // rotate about instantaneous center
                     double thetaPrev = theta;
                     theta += dtheta;
 
                     // arc-based incremental update (exact integration of circular arc)
                     // center-based incremental:
-                    double cx = x - steerSign * turningRadius * Math.Sin(thetaPrev);
-                    double cy = y + steerSign * turningRadius * Math.Cos(thetaPrev);
+                    double cx = x + steerSign * turningRadius * Math.Sin(thetaPrev);
+                    double cy = y - steerSign * turningRadius * Math.Cos(thetaPrev);
 
-                    double newX = cx + steerSign * turningRadius * Math.Sin(theta);
-                    double newY = cy - steerSign * turningRadius * Math.Cos(theta);
+                    double newX = cx - steerSign * turningRadius * Math.Sin(theta);
+                    double newY = cy + steerSign * turningRadius * Math.Cos(theta);
 
                     x = newX;
                     y = newY;
