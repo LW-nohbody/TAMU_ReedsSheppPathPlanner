@@ -119,6 +119,15 @@ transform = Transform3D(-4.37114e-08, -0.5, 0.866025, 0, 0.866025, 0.5, -1, 2.18
 [node name="CameraOrbit" type="Camera3D" parent="Cameras"]
 transform = Transform3D(1.01535, 0, 0, 0, 0.999925, 0.176314, 0, -0.176314, 0.999925, 0, 6, 17)
 
+[node name="Terrain" parent="." instance=ExtResource("1_rtcuc")]
+transform = Transform3D(0.999996, -0.00255967, 0.000692282, 0.00255972, 0.999997, -8.11034e-05, -0.000692072, 8.2874e-05, 1, 0, 0, 0)
+Radius = 15.2
+Frequency = 0.15
+Octaves = 2
+Smooth = 0.9
+FloorY = -0.492442
+FloorNodePath = NodePath("../Tank_Outer/Tank_Floor")
+
 [node name="Tank_Outer" type="CSGCylinder3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 radius = 15.3
@@ -139,15 +148,6 @@ radius = 15.3
 height = 0.3
 sides = 48
 material = ExtResource("3_qfmbg")
-
-[node name="Terrain" parent="." instance=ExtResource("1_rtcuc")]
-transform = Transform3D(0.999996, -0.00255967, 0.000692282, 0.00255972, 0.999997, -8.11034e-05, -0.000692072, 8.2874e-05, 1, 0, 0, 0)
-Radius = 15.2
-Frequency = 0.15
-Octaves = 2
-Smooth = 0.9
-FloorY = -0.492442
-FloorNodePath = NodePath("../Tank_Outer/Tank_Floor")
 
 [node name="ObstacleManager" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
