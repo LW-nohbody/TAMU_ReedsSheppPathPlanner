@@ -1,11 +1,11 @@
 [gd_scene load_steps=20 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
-[ext_resource type="Script" uid="uid://bfglxgrxg7rc2" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
+[ext_resource type="Script" uid="uid://y3xj5surludi" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
 [ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://Scenes/Vehicles/Vehicle_RS.tscn" id="2_q02dg"]
-[ext_resource type="Script" uid="uid://ctei1mufbr5ia" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
+[ext_resource type="Script" uid="uid://ytlhjpjwably" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
 [ext_resource type="Material" uid="uid://d0aiqbs32qvub" path="res://Materials/concrete.tres" id="3_qfmbg"]
-[ext_resource type="Script" uid="uid://dvogxcl3icimb" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
+[ext_resource type="Script" uid="uid://b13ashnn4eika" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tjpb3"]
 sky_top_color = Color(0.361634, 0.42475, 0.999998, 1)

@@ -66,26 +66,26 @@ namespace DigSim3D.App
         public void UpdateStats(int vehicleCount, float totalDirt, bool heatMapOn, bool pathsOn, bool plannedPathsOn)
         {
             _statsLabel.Text = $@"Vehicles: {vehicleCount}
-Dirt Extracted: {totalDirt:F1}m³
-Heat Map: {(heatMapOn ? "ON" : "OFF")}
-Traveled Paths: {(pathsOn ? "ON" : "OFF")}
-Planned Paths: {(plannedPathsOn ? "ON" : "OFF")}";
+            Dirt Extracted: {totalDirt:F1}m³
+            Heat Map: {(heatMapOn ? "ON" : "OFF")}
+            Traveled Paths: {(pathsOn ? "ON" : "OFF")}
+            Planned Paths: {(plannedPathsOn ? "ON" : "OFF")}";
         }
 
         private string GetControlsText()
         {
             return @"=== CONTROLS ===
-H - Toggle Heat Map
-P - Toggle Traveled Paths
-L - Toggle Planned Paths
-C - Clear Traveled Paths
-F1 - Toggle HUD
+            H - Toggle Heat Map
+            P - Toggle Traveled Paths
+            L - Toggle Planned Paths
+            C - Clear Traveled Paths
+            F1 - Toggle HUD
 
-Camera Controls:
-TAB - Toggle Camera
-Right Mouse - Rotate
-Middle Mouse - Pan
-Scroll - Zoom";
+            Camera Controls:
+            TAB - Toggle Camera
+            Right Mouse - Rotate
+            Middle Mouse - Pan
+            Scroll - Zoom";
         }
     }
 }
