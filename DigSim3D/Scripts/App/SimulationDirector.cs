@@ -64,7 +64,7 @@ namespace DigSim3D.App
         private List<VehicleBrain> _robotBrains = new();
 
         // === UI ===
-        private DigSim3D.UI.DigSimUIv2 _digSimUI = null!;
+        private DigSim3D.UI.DigSimUIv3_Premium _digSimUI = null!;
         // private SimpleTestUI _testUI = null!;
 
         public override void _Ready()
@@ -188,9 +188,9 @@ namespace DigSim3D.App
             AddChild(uiLayer);
             GD.Print($"[Director] Created CanvasLayer for UI");
             
-            _digSimUI = new DigSim3D.UI.DigSimUIv2();
+            _digSimUI = new DigSim3D.UI.DigSimUIv3_Premium();
             uiLayer.AddChild(_digSimUI);
-            GD.Print($"[Director] Added DigSimUIv2 to CanvasLayer");
+            GD.Print($"[Director] Added DigSimUIv3_Premium to CanvasLayer");
 
             // Add robots to UI
             for (int i = 0; i < _robotBrains.Count; i++)
@@ -201,8 +201,10 @@ namespace DigSim3D.App
             _digSimUI.SetDigConfig(_digConfig);
             _digSimUI.SetHeatMapStatus(false);
             _digSimUI.SetInitialVolume(500f);
+            _digSimUI.SetVehicles(_vehicles);
+            _digSimUI.SetTerrain(_terrain); // Pass terrain for thumbnail
 
-            GD.Print("[Director] DigSimUIv2 initialized successfully");
+            GD.Print("[Director] DigSimUIv3_Premium initialized successfully");
 
             _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
         }
@@ -363,12 +365,15 @@ namespace DigSim3D.App
                 _camTop.Current = _camChase.Current = _camFree.Current = false;
             }
 
-            if (Input.IsActionPressed("translate_free_camera") && _camFree.Current)
+            // Check if mouse is over UI before capturing
+            bool mouseOverUI = IsMouseOverUI();
+
+            if (Input.IsActionPressed("translate_free_camera") && _camFree.Current && !mouseOverUI)
             {
                 _movingFreeCam = true; _rotatingFreeCam = _rotatingOrbitCam = false;
                 Input.MouseMode = Input.MouseModeEnum.Captured;
             }
-            else if (Input.IsActionPressed("rotate_camera"))
+            else if (Input.IsActionPressed("rotate_camera") && !mouseOverUI)
             {
                 _movingFreeCam = false;
                 _rotatingFreeCam = _camFree.Current; _rotatingOrbitCam = _camOrbit.Current;
@@ -494,6 +499,38 @@ namespace DigSim3D.App
             mat.NoDepthTest = DebugPathOnTop;
             m.SetSurfaceOverrideMaterial(0, mat);
             AddChild(m);
+        }
+
+        private bool IsMouseOverUI()
+        {
+            if (_digSimUI == null) return false;
+            
+            var mousePos = GetViewport().GetMousePosition();
+            
+            // Recursively check all Control children
+            return IsPointInControl(this, mousePos);
+        }
+        
+        private bool IsPointInControl(Node node, Vector2 point)
+        {
+            foreach (var child in node.GetChildren())
+            {
+                if (child is Control childControl && childControl.Visible)
+                {
+                    var rect = childControl.GetGlobalRect();
+                    if (rect.HasPoint(point))
+                    {
+                        return true;
+                    }
+                    
+                    // Recursively check children
+                    if (IsPointInControl(childControl, point))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
     }
 }
