@@ -6,9 +6,4 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>DigSim3D</RootNamespace>
   </PropertyGroup>
-
-  <!-- reference the math/path library -->
-  <ItemGroup>
-    <ProjectReference Include="..\PathPlanningLib\PathPlanningLib.csproj" />
-  </ItemGroup>
 </Project>

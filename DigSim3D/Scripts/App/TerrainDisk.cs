@@ -17,6 +17,8 @@ namespace DigSim3D.App
         [Export] public float Gain = 0.4f;
         [Export] public int Seed = 1337;
         [Export(PropertyHint.Range, "0,1,0.01")] public float Smooth = 0.6f;
+        [Export] public float FloorY = 0.0f;
+        [Export] public NodePath FloorNodePath = null!;
 
         [Export] public Material MaterialOverride = null!;
 
@@ -34,34 +36,17 @@ namespace DigSim3D.App
         private Vector3[,] _norms = null!;    // per-vertex normals (local space)
         private int _N;
         private float _step;         // world spacing between grid verts
-        
-        // Height bounds for coloring
-        private float _minHeight = float.MaxValue;
-        private float _maxHeight = float.MinValue;
-        
-        // Dirty flag for color update
-        private bool _colorsDirty = false;
-        
-        // Heat map toggle
-        private bool _heatMapEnabled = true;
-        public bool HeatMapEnabled
-        {
-            get => _heatMapEnabled;
-            set
-            {
-                if (_heatMapEnabled != value)
-                {
-                    _heatMapEnabled = value;
-                    _colorsDirty = true;
-                    CallDeferred(nameof(UpdateMeshFromHeights));
-                }
-            }
-        }
+
+        // Public accessors for external terrain modification
+        public float[,] HeightGrid => _heights;
+        public int GridResolution => _N;
+        public float GridStep => _step;
 
         public override void _Ready()
         {
             EnsureChildren();
             Rebuild();
+            FloorYFromNode();
             if (Engine.IsEditorHint()) SetProcess(false);
         }
 
@@ -104,9 +89,6 @@ namespace DigSim3D.App
             bool Inside(float x, float z) => (x * x + z * z) <= (Radius * Radius);
 
             // heights
-            _minHeight = float.MaxValue;
-            _maxHeight = float.MinValue;
-            
             for (int j = 0; j < N; j++)
             {
                 float z = -Radius + j * step;
@@ -117,10 +99,6 @@ namespace DigSim3D.App
                     {
                         float n = Smoothed(x, z, blurR);
                         _heights[i, j] = Amplitude * n;
-                        
-                        // Track height bounds
-                        _minHeight = Mathf.Min(_minHeight, _heights[i, j]);
-                        _maxHeight = Mathf.Max(_maxHeight, _heights[i, j]);
                     }
                     else
                     {
@@ -178,34 +156,28 @@ namespace DigSim3D.App
                     Vector2 uv10 = new((float)(i + 1) / (N - 1), (float)j / (N - 1));
                     Vector2 uv01 = new((float)i / (N - 1), (float)(j + 1) / (N - 1));
                     Vector2 uv11 = new((float)(i + 1) / (N - 1), (float)(j + 1) / (N - 1));
-                    
-                    // Get vertex colors based on height
-                    Color c00 = GetHeightColor(_heights[i, j]);
-                    Color c10 = GetHeightColor(_heights[i + 1, j]);
-                    Color c01 = GetHeightColor(_heights[i, j + 1]);
-                    Color c11 = GetHeightColor(_heights[i + 1, j + 1]);
 
                     bool flip = ((i + j) & 1) == 1; // checkerboard
 
                     if (!flip)
                     {
-                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
-                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
-                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
 
-                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
-                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
-                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
                     }
                     else
                     {
-                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
-                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
-                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
 
-                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
-                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
-                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
                     }
                 }
             }
@@ -222,9 +194,8 @@ namespace DigSim3D.App
             {
                 var mat = new StandardMaterial3D
                 {
-                    VertexColorUseAsAlbedo = true,
-                    AlbedoColor = new Color(0.6f, 0.55f, 0.5f), // Base dirt/sand color
-                    Roughness = 0.9f,
+                    AlbedoColor = new Color(0.36f, 0.31f, 0.27f),
+                    Roughness = 1.0f,
                     ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel
                 };
                 _meshMI.SetSurfaceOverrideMaterial(0, mat);
@@ -292,123 +263,153 @@ namespace DigSim3D.App
             Vector3 localHit = new Vector3(x, h, z);
             hitPos = ToGlobal(localHit);
             normal = (GlobalTransform.Basis * n).Normalized();
+
+            // Check if concrete floor
+            if (hitPos.Y < FloorY)
+            {
+                hitPos.Y = FloorY;
+                normal = Vector3.Up;   // flat slab
+            }
+
             return true;
         }
-        
+
         // -------------------------------------------------------------------------
-        // Modify terrain height at a location (for digging simulation)
+        // Terrain deformation: reduce height at grid points (for excavation)
         // -------------------------------------------------------------------------
-        public void ModifyHeight(Vector3 worldXZ, float deltaHeight, float radius)
+        /// <summary>
+        /// Reduce terrain height at specific grid indices by the given amount.
+        /// Call Rebuild() after modifications to update the mesh.
+        /// </summary>
+        public void ReduceHeightAt(int gridI, int gridJ, float amount)
         {
-            Vector3 local = ToLocal(worldXZ);
-            float x = local.X, z = local.Z;
-            
-            // Outside disk?
-            if ((x * x + z * z) > (Radius * Radius)) return;
-            
-            // Apply to nearby grid points with falloff
-            float fx = (x + Radius) / _step;
-            float fz = (z + Radius) / _step;
-            
-            int centerI = Mathf.RoundToInt(fx);
-            int centerJ = Mathf.RoundToInt(fz);
-            int affectRadius = Mathf.CeilToInt(radius / _step);
-            
-            for (int j = centerJ - affectRadius; j <= centerJ + affectRadius; j++)
+            if (_heights == null || gridI < 0 || gridI >= _N || gridJ < 0 || gridJ >= _N)
+                return;
+
+            if (!float.IsNaN(_heights[gridI, gridJ]))
             {
-                if (j < 0 || j >= _N) continue;
-                
-                for (int i = centerI - affectRadius; i <= centerI + affectRadius; i++)
+                _heights[gridI, gridJ] = Mathf.Max(-Amplitude * 2f, _heights[gridI, gridJ] - amount);
+            }
+        }
+
+        /// <summary>
+        /// Reduce terrain height in a circular region around a world position.
+        /// </summary>
+        public void ReduceHeightCircle(Vector3 worldCenter, float radiusMeters, float depthMeters)
+        {
+            if (_heights == null) return;
+
+            Vector3 local = ToLocal(worldCenter);
+            float cx = local.X;
+            float cz = local.Z;
+
+            float fx = (cx + Radius) / _step;
+            float fz = (cz + Radius) / _step;
+
+            int ci = Mathf.FloorToInt(fx);
+            int cj = Mathf.FloorToInt(fz);
+
+            int radiusInCells = Mathf.CeilToInt(radiusMeters / _step) + 1;
+
+            for (int i = Mathf.Max(0, ci - radiusInCells); i <= Mathf.Min(_N - 1, ci + radiusInCells); i++)
+            {
+                for (int j = Mathf.Max(0, cj - radiusInCells); j <= Mathf.Min(_N - 1, cj + radiusInCells); j++)
                 {
-                    if (i < 0 || i >= _N) continue;
                     if (float.IsNaN(_heights[i, j])) continue;
-                    
-                    // Distance-based falloff
-                    float dist = Mathf.Sqrt((i - fx) * (i - fx) + (j - fz) * (j - fz)) * _step;
-                    if (dist > radius) continue;
-                    
-                    float falloff = 1f - (dist / radius);
-                    _heights[i, j] += deltaHeight * falloff;
-                    
-                    // Update height bounds
-                    _minHeight = Mathf.Min(_minHeight, _heights[i, j]);
-                    _maxHeight = Mathf.Max(_maxHeight, _heights[i, j]);
+
+                    float xi = -Radius + i * _step;
+                    float zj = -Radius + j * _step;
+                    float dist = Mathf.Sqrt((xi - cx) * (xi - cx) + (zj - cz) * (zj - cz));
+
+                    if (dist <= radiusMeters)
+                    {
+                        // Falloff: stronger at center, weaker at edges
+                        float falloff = 1f - (dist / radiusMeters);
+                        falloff = falloff * falloff;  // quadratic
+
+                        ReduceHeightAt(i, j, depthMeters * falloff);
+                    }
                 }
             }
-            
-            _colorsDirty = true;
-            
-            // Rebuild mesh to reflect changes
-            CallDeferred(nameof(UpdateMeshFromHeights));
         }
-        
-        // -------------------------------------------------------------------------
-        // Get vertex color based on height - Beautiful gradient heat map
-        // -------------------------------------------------------------------------
-        private Color GetHeightColor(float height)
+
+        /// <summary>
+        /// Lower terrain height in a circular area (for digging/excavation).
+        /// Directly modifies _heights and rebuilds only the mesh (preserves modifications).
+        /// This is efficient for real-time terrain deformation.
+        /// </summary>
+        public void LowerArea(Vector3 worldXZ, float radius, float deltaHeight)
         {
-            // If heat map is disabled, return white (uses material's natural color/texture)
-            if (!_heatMapEnabled)
+            if (_heights == null) return;
+
+            // Convert to local coordinates used by _heights
+            Vector3 local = ToLocal(worldXZ);
+            float cx = local.X, cz = local.Z;
+
+            // Iterate grid and subtract deltaHeight where within radius
+            for (int j = 0; j < _N; j++)
             {
-                return Colors.White; // No color overlay - use material's base color
+                float z = -Radius + j * _step;
+                for (int i = 0; i < _N; i++)
+                {
+                    float x = -Radius + i * _step;
+                    if (float.IsNaN(_heights[i, j])) continue;
+
+                    float dx = x - cx;
+                    float dz = z - cz;
+
+                    if (dx * dx + dz * dz <= radius * radius)
+                    {
+                        _heights[i, j] = _heights[i, j] - deltaHeight;
+                    }
+                }
             }
-            
-            if (_maxHeight <= _minHeight) return new Color(0.2f, 0.6f, 0.3f); // Default darker green
-            
-            float t = (_maxHeight - height) / (_maxHeight - _minHeight);
-            t = Mathf.Clamp(t, 0f, 1f);
-            
-            // Beautiful gradient: Deep Red (highest) -> Orange -> Yellow -> Green -> Teal -> Deep Blue (lowest)
-            if (t < 0.2f)
-            {
-                // Deep Red to Bright Orange (highest peaks)
-                float local = t / 0.2f;
-                return new Color(0.8f, 0.1f, 0.1f).Lerp(new Color(1.0f, 0.4f, 0.0f), local);
-            }
-            else if (t < 0.4f)
-            {
-                // Orange to Yellow (high areas)
-                float local = (t - 0.2f) / 0.2f;
-                return new Color(1.0f, 0.4f, 0.0f).Lerp(new Color(1.0f, 0.85f, 0.0f), local);
-            }
-            else if (t < 0.6f)
-            {
-                // Yellow to Light Green (mid-high)
-                float local = (t - 0.4f) / 0.2f;
-                return new Color(1.0f, 0.85f, 0.0f).Lerp(new Color(0.5f, 0.85f, 0.3f), local);
-            }
-            else if (t < 0.8f)
-            {
-                // Green to Teal (mid-low)
-                float local = (t - 0.6f) / 0.2f;
-                return new Color(0.5f, 0.85f, 0.3f).Lerp(new Color(0.2f, 0.7f, 0.6f), local);
-            }
-            else
-            {
-                // Teal to Deep Blue (lowest areas)
-                float local = (t - 0.8f) / 0.2f;
-                return new Color(0.2f, 0.7f, 0.6f).Lerp(new Color(0.1f, 0.3f, 0.7f), local);
-            }
+
+            // Rebuild mesh ONLY (preserves modified heights)
+            RebuildMeshOnly();
         }
-        
-        // -------------------------------------------------------------------------
-        // Update mesh from modified heights (called deferred after modifications)
-        // -------------------------------------------------------------------------
-        private void UpdateMeshFromHeights()
+
+        /// <summary>
+        /// Rebuild mesh after height modifications.
+        /// Recomputes normals and updates geometry without regenerating the entire terrain.
+        /// Much faster than Rebuild() for real-time updates.
+        /// </summary>
+        public void RebuildMeshOnly()
         {
-            if (_meshMI == null || _meshMI.Mesh == null) return;
-            
+            if (_heights == null || _norms == null) return;
+
+            // Recompute normals based on current heights
+            for (int j = 0; j < _N; j++)
+            {
+                for (int i = 0; i < _N; i++)
+                {
+                    if (float.IsNaN(_heights[i, j])) { _norms[i, j] = Vector3.Up; continue; }
+
+                    int il = Math.Max(0, i - 1), ir = Math.Min(_N - 1, i + 1);
+                    int jd = Math.Max(0, j - 1), ju = Math.Min(_N - 1, j + 1);
+
+                    float hL = _heights[il, j]; if (float.IsNaN(hL)) hL = _heights[i, j];
+                    float hR = _heights[ir, j]; if (float.IsNaN(hR)) hR = _heights[i, j];
+                    float hD = _heights[i, jd]; if (float.IsNaN(hD)) hD = _heights[i, j];
+                    float hU = _heights[i, ju]; if (float.IsNaN(hU)) hU = _heights[i, j];
+
+                    Vector3 dx = new Vector3(2f * _step, hR - hL, 0f);
+                    Vector3 dz = new Vector3(0f, hU - hD, 2f * _step);
+
+                    _norms[i, j] = dz.Cross(dx).Normalized();
+                }
+            }
+
+            // Rebuild mesh with updated heights and normals
             var st = new SurfaceTool();
             st.Begin(Mesh.PrimitiveType.Triangles);
-            
-            int N = _N;
-            
-            for (int j = 0; j < N - 1; j++)
+
+            for (int j = 0; j < _N - 1; j++)
             {
                 float z0 = -Radius + j * _step;
                 float z1 = z0 + _step;
 
-                for (int i = 0; i < N - 1; i++)
+                for (int i = 0; i < _N - 1; i++)
                 {
                     float x0 = -Radius + i * _step;
                     float x1 = x0 + _step;
@@ -422,60 +423,46 @@ namespace DigSim3D.App
                     Vector3 v01 = new Vector3(x0, _heights[i, j + 1], z1);
                     Vector3 v11 = new Vector3(x1, _heights[i + 1, j + 1], z1);
 
-                    Vector2 uv00 = new((float)i / (N - 1), (float)j / (N - 1));
-                    Vector2 uv10 = new((float)(i + 1) / (N - 1), (float)j / (N - 1));
-                    Vector2 uv01 = new((float)i / (N - 1), (float)(j + 1) / (N - 1));
-                    Vector2 uv11 = new((float)(i + 1) / (N - 1), (float)(j + 1) / (N - 1));
-                    
-                    // Get vertex colors
-                    Color c00 = GetHeightColor(_heights[i, j]);
-                    Color c10 = GetHeightColor(_heights[i + 1, j]);
-                    Color c01 = GetHeightColor(_heights[i, j + 1]);
-                    Color c11 = GetHeightColor(_heights[i + 1, j + 1]);
+                    Vector2 uv00 = new((float)i / (_N - 1), (float)j / (_N - 1));
+                    Vector2 uv10 = new((float)(i + 1) / (_N - 1), (float)j / (_N - 1));
+                    Vector2 uv01 = new((float)i / (_N - 1), (float)(j + 1) / (_N - 1));
+                    Vector2 uv11 = new((float)(i + 1) / (_N - 1), (float)(j + 1) / (_N - 1));
 
                     bool flip = ((i + j) & 1) == 1;
 
                     if (!flip)
                     {
-                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
-                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
-                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
 
-                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
-                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
-                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
                     }
                     else
                     {
-                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
-                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
-                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.SetColor(c01); st.AddVertex(v01);
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
 
-                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.SetColor(c00); st.AddVertex(v00);
-                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.SetColor(c10); st.AddVertex(v10);
-                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.SetColor(c11); st.AddVertex(v11);
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
                     }
                 }
             }
-            
+
             st.Index();
             st.GenerateTangents();
-            
+
             var mesh = st.Commit();
             _meshMI.Mesh = mesh;
-            
-            // Update material to use vertex colors with base dirt color
-            var mat = new StandardMaterial3D
-            {
-                VertexColorUseAsAlbedo = true,
-                AlbedoColor = new Color(0.6f, 0.55f, 0.5f), // Base dirt/sand color
-                Roughness = 0.9f,
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel
-            };
-            _meshMI.SetSurfaceOverrideMaterial(0, mat);
-            
-            _colorsDirty = false;
+
+            if (MaterialOverride != null)
+                _meshMI.SetSurfaceOverrideMaterial(0, MaterialOverride);
         }
+
         // -------------------------------------------------------------------------
         // Internals
         // -------------------------------------------------------------------------
@@ -501,6 +488,15 @@ namespace DigSim3D.App
                 _colShape = new CollisionShape3D { Name = "Shape" };
                 _staticBody.AddChild(_colShape);
             }
+        }
+        private void FloorYFromNode()
+        {
+            var cyl = GetNodeOrNull<CsgCylinder3D>(FloorNodePath);
+            if (cyl == null) return;
+
+            // top cap world Y = centerY + (height/2) * worldScaleY
+            float scaleY = cyl.GlobalTransform.Basis.Y.Length();
+            FloorY = cyl.GlobalTransform.Origin.Y + 0.5f * cyl.Height * scaleY;
         }
     }
 }

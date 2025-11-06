@@ -5,12 +5,12 @@ using SimCore.Core;
 using SimCore.Services;
 
 /// <summary>
-/// Enhanced robot brain with collision avoidance and stats tracking:
-/// 1. Find highest point in your sector (avoiding other robots)
+/// Simplified robot brain:
+/// 1. Find nearest highest point in entire terrain (no sector restriction)
 /// 2. Use Reeds-Shepp to drive there
 /// 3. Dig a little (flatten the peak)
 /// 4. When full, drive back to origin and dump
-/// 5. Repeat until sector is flat
+/// 5. Repeat
 /// </summary>
 public sealed class VehicleBrain
 {
@@ -22,12 +22,8 @@ public sealed class VehicleBrain
   private readonly RobotCoordinator _coordinator;
   private readonly int _robotId;
   
-  // Robot's assigned sector
-  private readonly float _thetaMin, _thetaMax, _maxRadius;
+  // Home position (origin)
   private readonly Vector3 _homePosition;
-  
-  // Callback when sector is complete
-  private System.Action<int> _onSectorComplete = null;
   
   // Robot state
   private float _payload = 0f;
@@ -36,17 +32,6 @@ public sealed class VehicleBrain
   private float _totalDug = 0f;
   private Vector3 _currentTarget = Vector3.Zero;
   private string _currentStatus = "Initializing";
-  private bool _sectorCompleted = false;
-  
-  // Stuck detection and recovery
-  private Vector3 _lastKnownGoodPos = Vector3.Zero;
-  private int _stuckCycleCount = 0;
-  private int _recoveryAttempts = 0;
-  private int _consecutiveStuckRecoveries = 0;
-  
-  // Blacklist of dig sites that caused repeated stuck events (prevents circular patterns)
-  private readonly List<Vector3> _blacklistedSites = new();
-  private int _blacklistDecayCounter = 0;
 
   // Public properties for UI/stats
   public int RobotId => _robotId;
@@ -77,415 +62,205 @@ public sealed class VehicleBrain
     _terrain = terrain;
     _coordinator = coordinator;
     _robotId = robotId;
-    _thetaMin = thetaMin;
-    _thetaMax = thetaMax;
-    _maxRadius = maxRadius;
     _homePosition = homePosition;
   }
 
   /// <summary>
-  /// Set callback for when this sector is complete
+  /// Main update loop - simple algorithm:
+  /// If full -> go home and dump
+  /// Otherwise -> find nearest highest point and dig
   /// </summary>
-  public void SetSectorCompleteCallback(System.Action<int> callback)
-  {
-    _onSectorComplete = callback;
-  }
-
-  /// <summary>
-  /// Check if robot is stuck and attempt recovery
-  /// </summary>
-  private bool IsStuck(Vector3 currentPos)
-  {
-    float distMoved = currentPos.DistanceTo(_lastKnownGoodPos);
-    
-    // If we've moved a reasonable distance, we're good
-    if (distMoved > 0.5f)
-    {
-      _lastKnownGoodPos = currentPos;
-      _stuckCycleCount = 0;
-      _consecutiveStuckRecoveries = 0;  // Reset recovery counter on good movement
-      return false;
-    }
-    
-    // Not moved much - increment counter
-    _stuckCycleCount++;
-    
-    // REDUCED threshold - 60 frames (1 second at 60fps) for faster stuck detection
-    // This allows quicker recovery attempts rather than waiting 2 seconds
-    if (_stuckCycleCount > 60)
-    {
-      // Only log once per recovery, not every frame
-      if (_stuckCycleCount == 61)
-      {
-        GD.PrintErr($"[{_spec.Name}] STUCK for {_stuckCycleCount} cycles at {currentPos}. Attempting recovery #{_consecutiveStuckRecoveries + 1}...");
-        _recoveryAttempts++;
-      }
-      
-      // Progressive recovery strategy to avoid circular movement:
-      // Level 1: On first stuck, release claim and try alternative
-      // Level 2: On second stuck, force return home to break the cycle
-      // Level 3+: Stay home until sector state changes
-      
-      if (_consecutiveStuckRecoveries == 0)
-      {
-        // First recovery: Release claim and try alternative target
-        GD.PrintErr($"[{_spec.Name}] LEVEL 1 RECOVERY: Releasing claim and trying alternative target");
-        _coordinator.ReleaseClaim(_robotId);
-      }
-      else if (_consecutiveStuckRecoveries == 1)
-      {
-        // Second recovery: Force return home to break circular pattern
-        GD.PrintErr($"[{_spec.Name}] LEVEL 2 RECOVERY: Forcing return home to break circular pattern!");
-        _returningHome = true;
-        _coordinator.ReleaseClaim(_robotId);
-      }
-      else if (_consecutiveStuckRecoveries >= 2)
-      {
-        // Third+ recovery: Aggressive home return and blacklist the location
-        GD.PrintErr($"[{_spec.Name}] LEVEL 3+ RECOVERY (attempt #{_consecutiveStuckRecoveries}): BLACKLISTING and forcing immediate home!");
-        _returningHome = true;
-        _coordinator.ReleaseClaim(_robotId);
-        
-        // Blacklist this location to prevent return
-        if (_blacklistedSites.Count == 0 || !_blacklistedSites.Exists(s => s.DistanceTo(currentPos) < 0.5f))
-        {
-          _blacklistedSites.Add(currentPos);
-        }
-        
-        // After 3+ attempts, reset recovery counter to prevent infinite escalation
-        if (_consecutiveStuckRecoveries > 5)
-        {
-          GD.PrintErr($"[{_spec.Name}] EMERGENCY: 6+ stuck recoveries! Forcing full reset and immediate dump.");
-          _consecutiveStuckRecoveries = 0;
-        }
-      }
-      
-      _stuckCycleCount = 0;
-      _lastKnownGoodPos = currentPos;
-      _consecutiveStuckRecoveries++;
-      return true;
-    }
-    
-    return false;
-  }
-
   public void PlanAndGoOnce()
   {
     try
     {
-      // Validate controller is still valid before attempting to use it
-      if (_ctrl == null || !GodotObject.IsInstanceValid(_ctrl))
-      {
-        _currentStatus = "ERROR: Controller invalid";
-        GD.PrintErr($"[{_spec.Name}] Controller is no longer valid!");
-        return;
-      }
+      if (_ctrl == null || !GodotObject.IsInstanceValid(_ctrl)) return;
 
-      // Get current pose
-      var xf = _ctrl.GlobalTransform;
-      var fwd = -xf.Basis.Z;
-      double yaw = Math.Atan2(fwd.Z, fwd.X);
-      var curPose = new Pose(xf.Origin.X, xf.Origin.Z, yaw);
-      var curPos = new Vector3(xf.Origin.X, 0, xf.Origin.Z);
-
-      // Check if robot is stuck
-      bool isStuck = IsStuck(curPos);
-      if (isStuck)
-      {
-        _currentStatus = "STUCK - Recovering";
-        // Clear current target to force new path planning
-        _currentTarget = Vector3.Zero;
-        
-        // If we're stuck at the same location multiple times, blacklist it
-        if (_consecutiveStuckRecoveries > 0 && _currentTarget.DistanceTo(curPos) < 1.0f)
-        {
-          GD.PrintErr($"[{_spec.Name}] BLACKLISTING site {curPos} - repeated stuck events!");
-          _blacklistedSites.Add(curPos);
-          _returningHome = true;  // Force home immediately
-        }
-        else if (_consecutiveStuckRecoveries > 1)
-        {
-          _returningHome = true;  // Force home after multiple stuck events
-        }
-      }
-      
-      // Decay blacklist every 300 frames (5 seconds at 60fps)
-      _blacklistDecayCounter++;
-      if (_blacklistDecayCounter > 300 && _blacklistedSites.Count > 0)
-      {
-        GD.Print($"[{_spec.Name}] Clearing blacklist - {_blacklistedSites.Count} sites removed");
-        _blacklistedSites.Clear();
-        _blacklistDecayCounter = 0;
-      }
+      Vector3 curPos = new Vector3(_ctrl.GlobalTransform.Origin.X, 0, _ctrl.GlobalTransform.Origin.Z);
 
       // Decide what to do
-      Vector3 targetPos = Vector3.Zero;
-      
       if (_returningHome)
       {
         // Go home to dump
-        targetPos = _homePosition;
         float distToHome = curPos.DistanceTo(_homePosition);
-        _currentStatus = $"Returning Home ({distToHome:F1}m)";
+        _currentStatus = $"Dumping ({distToHome:F1}m)";
         
-        // Try to dump if close
+        // Dump if close enough
         if (distToHome < 5.0f && _payload > 0.001f)
         {
           _world.TotalDirtExtracted += _payload;
-          GD.Print($"[{_spec.Name}] *** DUMPED {_payload:F3}m³ *** Total: {_world.TotalDirtExtracted:F2}m³");
+          GD.Print($"[Robot_{_robotId}] ✓✓✓ DUMPED {_payload:F2}m³ at ({curPos.X:F1}, {curPos.Z:F1}) - Total: {_world.TotalDirtExtracted:F2}m³");
           _payload = 0f;
           _returningHome = false;
-          _consecutiveStuckRecoveries = 0;  // Reset recovery counter after successful dump
-          _currentStatus = "Dumped - Ready";
+          _currentStatus = "Ready";
           _ctrl.SetPath(Array.Empty<Vector3>(), Array.Empty<int>());
           return;
         }
+
+        // Plan path to home
+        PlanPath(curPos, _homePosition);
       }
-      else if (_payload >= SimpleDigLogic.ROBOT_CAPACITY)
+      else if (_payload >= SimulationConfig.RobotLoadCapacity)
       {
         // Full! Go home
         _returningHome = true;
-        targetPos = _homePosition;
-        _currentStatus = "▌▌▌ FULL - Going Home ▌▌▌";
+        _currentStatus = $"FULL ({_payload:F2}m³)";
         _coordinator.ReleaseClaim(_robotId);
-        GD.Print($"[{_spec.Name}] ▌▌▌ FULL ({_payload:F3}m³ / {SimpleDigLogic.ROBOT_CAPACITY}m³), heading to home at ({_homePosition.X:F1}, {_homePosition.Z:F1})");
+        GD.Print($"[Robot_{_robotId}] ▌▌▌ FULL ({_payload:F2}m³ / {SimulationConfig.RobotLoadCapacity}m³), heading home");
+        PlanPath(curPos, _homePosition);
       }
       else
       {
-        // Find dig target - avoid blacklisted sites and re-planning to same stuck target
-        targetPos = _coordinator.GetBestDigPoint(_robotId, _terrain, _thetaMin, _thetaMax, _maxRadius);
+        // Find nearest highest point in entire terrain
+        Vector3 digTarget = FindNearestHighestPoint(curPos);
         
-        // Check if target is blacklisted
-        bool targetIsBlacklisted = false;
-        foreach (var blacklistedSite in _blacklistedSites)
-        {
-          if (targetPos.DistanceTo(blacklistedSite) < 0.5f)
-          {
-            targetIsBlacklisted = true;
-            GD.Print($"[{_spec.Name}] Target {targetPos} is blacklisted - going home instead");
-            break;
-          }
-        }
-        
-        // If this is the same target as before and we just got stuck, skip it
-        if (isStuck && _currentTarget != Vector3.Zero && targetPos.DistanceTo(_currentTarget) < 0.5f)
-        {
-          GD.Print($"[{_spec.Name}] Skipping same stuck target, trying alternative or going home");
-          _returningHome = true;  // Force home to break the cycle
-          targetPos = _homePosition;
-        }
-        else if (targetIsBlacklisted)
-        {
-          _returningHome = true;  // Force home if target is blacklisted
-          targetPos = _homePosition;
-        }
-        else
+        if (digTarget != Vector3.Zero)
         {
           float digRadius = SimpleDigLogic.GetDigRadius(_spec.Width);
-          if (targetPos != Vector3.Zero && _coordinator.ClaimDigSite(_robotId, targetPos, digRadius))
+          
+          if (_coordinator.ClaimDigSite(_robotId, digTarget, digRadius))
           {
-            _currentStatus = "Digging";
+            _currentTarget = digTarget;
+            float dist = curPos.DistanceTo(digTarget);
+            _currentStatus = $"Digging ({dist:F1}m away)";
+            PlanPath(curPos, digTarget);
           }
           else
           {
-            _currentStatus = "Waiting (collision)";
-            if (_currentTarget != Vector3.Zero)
-              targetPos = _currentTarget;
+            _currentStatus = "Waiting (robot collision)";
           }
         }
-        
-        // Check if sector is done
-        if (!SimpleDigLogic.HasWorkRemaining(_terrain, _thetaMin, _thetaMax, _maxRadius))
+        else
         {
-          if (!_sectorCompleted)
-          {
-            _sectorCompleted = true;
-            try
-            {
-              _onSectorComplete?.Invoke(_robotId);
-            }
-            catch { }
-            GD.Print($"[{_spec.Name}] Sector complete!");
-          }
-          
-          targetPos = _homePosition;
-          _currentStatus = "Sector Done - Idling";
-          _coordinator.ReleaseClaim(_robotId);
+          _currentStatus = "No targets found";
+          _returningHome = true;
+          PlanPath(curPos, _homePosition);
         }
-      }
-
-      _currentTarget = targetPos;
-
-      // Plan path
-      var goalPose = new Pose(targetPos.X, targetPos.Z, yaw);
-      var planned = _planner.Plan(curPose, goalPose, _spec, _world);
-      var pts = planned.Points.ToArray();
-      var gears = planned.Gears.ToArray();
-
-      if (pts.Length == 0 || (pts.Length == 1 && curPos.DistanceTo(pts[0]) < 0.5f))
-      {
-        // Already at target or path planning failed
-        _ctrl.SetPath(Array.Empty<Vector3>(), Array.Empty<int>());
-        // Only call OnArrival once when we're truly at the target
-        OnArrival();
-      }
-      else
-      {
-        _ctrl.SetPath(pts, gears);
       }
     }
     catch (System.Exception ex)
     {
-      GD.PrintErr($"[{_spec.Name}] Exception in PlanAndGoOnce: {ex}");
+      GD.PrintErr($"[Robot_{_robotId}] Error: {ex.Message}");
+      _currentStatus = "Error";
     }
   }
 
+  /// <summary>
+  /// Find the nearest highest point in the entire terrain
+  /// </summary>
+  private Vector3 FindNearestHighestPoint(Vector3 currentPos)
+  {
+    var candidates = new List<(Vector3 pos, float height, float distance)>();
+    
+    // Sample terrain in concentric circles
+    int anglesSamples = 12;  // 12 angles (30° apart)
+    int radiusRings = 6;      // 6 distance rings
+    
+    for (int a = 0; a < anglesSamples; a++)
+    {
+      float theta = (float)a / anglesSamples * Mathf.Tau;
+      
+      for (int r = 1; r <= radiusRings; r++)
+      {
+        float sampleRadius = r * 2.5f;  // 2.5m to 15m
+        Vector3 samplePos = currentPos + new Vector3(Mathf.Cos(theta) * sampleRadius, 0, Mathf.Sin(theta) * sampleRadius);
+        
+        if (_terrain.SampleHeightNormal(samplePos, out var hitPos, out var _))
+        {
+          float distance = currentPos.DistanceTo(hitPos);
+          candidates.Add((new Vector3(hitPos.X, 0, hitPos.Z), hitPos.Y, distance));
+        }
+      }
+    }
+
+    if (candidates.Count == 0)
+      return Vector3.Zero;
+
+    // Sort by: height (descending) primary, distance (ascending) secondary
+    // This prioritizes highest points, but prefers closer ones if heights are similar
+    candidates.Sort((a, b) =>
+    {
+      // Compare heights (higher first)
+      float heightDiff = b.height - a.height;
+      if (Mathf.Abs(heightDiff) > 0.1f)  // Threshold to avoid floating point noise
+        return heightDiff > 0 ? -1 : 1;
+      
+      // Heights are similar - closer is better
+      return a.distance.CompareTo(b.distance);
+    });
+
+    return candidates[0].pos;
+  }
+
+  /// <summary>
+  /// Plan and execute Reeds-Shepp path to target
+  /// </summary>
+  private void PlanPath(Vector3 startPos, Vector3 targetPos)
+  {
+    try
+    {
+      if (_ctrl == null) return;
+
+      // Get current heading
+      var fwd = -_ctrl.GlobalTransform.Basis.Z;
+      double startYaw = Mathf.Atan2(fwd.Z, fwd.X);
+
+      // Calculate target heading
+      Vector3 toTarget = (targetPos - startPos).Normalized();
+      double targetYaw = Mathf.Atan2(toTarget.Z, toTarget.X);
+
+      // Plan using RSAdapter (Reeds-Shepp path planning)
+      var result = RSAdapter.ComputePath3D(
+        startPos, startYaw,
+        targetPos, targetYaw,
+        _ctrl.TurnRadiusMeters, 0.25f);
+
+      var pts = result.Item1;
+      var gears = result.Item2;
+
+      if (pts != null && pts.Length > 0)
+      {
+        _ctrl.SetPath(pts, gears != null ? gears : Array.Empty<int>());
+      }
+    }
+    catch (System.Exception ex)
+    {
+      GD.PrintErr($"[Robot_{_robotId}] Path planning failed: {ex.Message}");
+    }
+  }
+
+  /// <summary>
+  /// Called when robot arrives at target
+  /// </summary>
   public void OnArrival()
   {
     try
     {
-      // FIRST: Validate all critical objects are not null AND valid
-      if (_ctrl == null || !GodotObject.IsInstanceValid(_ctrl))
-      {
-        GD.PrintErr("OnArrival: _ctrl is null or invalid!");
-        return;
-      }
+      if (_returningHome || _currentTarget == Vector3.Zero) return;
 
-      if (_world == null)
-      {
-        GD.PrintErr("OnArrival: _world is null!");
-        return;
-      }
+      Vector3 digPos = _currentTarget;
+      
+      // Dig at current location
+      float digAmount = SimpleDigLogic.DIG_AMOUNT;
+      _terrain.LowerArea(digPos, 2.0f, digAmount);
+      
+      // Add to payload
+      _payload = Mathf.Min(_payload + digAmount * 0.5f, SimulationConfig.RobotLoadCapacity);
+      
+      _digsCompleted++;
+      _totalDug += digAmount * 0.5f;
 
-      if (_coordinator == null)
-      {
-        GD.PrintErr("OnArrival: _coordinator is null!");
-        return;
-      }
+      GD.Print($"[Robot_{_robotId}] Dug {digAmount:F3}m → Payload: {_payload:F2}m³");
 
-      if (_terrain == null)
-      {
-        GD.PrintErr("OnArrival: _terrain is null!");
-        return;
-      }
-
-      Vector3 curPos = Vector3.Zero;
-      try
-      {
-        curPos = new Vector3(_ctrl.GlobalTransform.Origin.X, 0, _ctrl.GlobalTransform.Origin.Z);
-      }
-      catch
-      {
-        GD.PrintErr("OnArrival: Failed to get current position");
-        return;
-      }
-
-      // DUMP LOGIC
-      if (_returningHome)
-      {
-        float distToHome = 0f;
-        try
-        {
-          distToHome = curPos.DistanceTo(_homePosition);
-        }
-        catch
-        {
-          distToHome = 999f;
-        }
-
-        // Dump if close enough AND have payload
-        if (distToHome < 5.0f && _payload > 0.001f)
-        {
-          _world.TotalDirtExtracted += _payload;
-          GD.Print($"[{_spec.Name}] ✓✓✓ DUMPED {_payload:F3}m³ at ({curPos.X:F1}, {curPos.Z:F1}) - Distance to home: {distToHome:F2}m - Total extracted: {_world.TotalDirtExtracted:F2}m³");
-          
-          _payload = 0f;
-          _returningHome = false;
-          _consecutiveStuckRecoveries = 0;  // Reset recovery counter after successful dump
-          _currentStatus = "Dumped - Ready";
-          return;
-        }
-
-        // Not home yet
-        _currentStatus = $"Going Home ({distToHome:F1}m away)";
-        return;
-      }
-
-      // DIG LOGIC (only if not returning home)
-      try
-      {
-        if (_terrain == null)
-        {
-          _currentStatus = "Terrain is null!";
-          return;
-        }
-
-        if (_coordinator == null)
-        {
-          _currentStatus = "Coordinator is null!";
-          return;
-        }
-
-        Vector3 digTarget = Vector3.Zero;
-        try
-        {
-          digTarget = _coordinator.GetBestDigPoint(_robotId, _terrain, _thetaMin, _thetaMax, _maxRadius);
-        }
-        catch (System.Exception ex)
-        {
-          _currentStatus = $"Failed to get dig point: {ex.Message}";
-          return;
-        }
-
-        if (digTarget == Vector3.Zero)
-        {
-          _currentStatus = "No valid dig target";
-          return;
-        }
-
-        float distToDig = curPos.DistanceTo(digTarget);
-
-        if (distToDig < 2.5f)  // Consistent tolerance with dump (5.0f is ~2x this for longer distance)
-        {
-          float digRadius = SimpleDigLogic.GetDigRadius(_spec.Width);
-          float dug = 0f;
-          
-          try
-          {
-            dug = SimpleDigLogic.PerformDig(_terrain, digTarget, _payload, SimpleDigLogic.ROBOT_CAPACITY, digRadius);
-          }
-          catch
-          {
-            _currentStatus = "Dig failed";
-            return;
-          }
-
-          if (dug > 0.00001f)
-          {
-            _payload += dug;
-            _totalDug += dug;
-            _digsCompleted++;
-            _currentStatus = $"Dug {dug:F4}m³";
-            GD.Print($"[{_spec.Name}] Dug {dug:F4}m³ -> Payload: {_payload:F3}m³");
-          }
-        }
-        else
-        {
-          _currentStatus = $"Moving to dig ({distToDig:F1}m)";
-        }
-      }
-      catch (System.Exception ex)
-      {
-        GD.PrintErr($"[{_spec.Name}] Error in dig logic: {ex.Message}");
-        _currentStatus = "Dig error";
-      }
+      // Release claim
+      _coordinator.ReleaseClaim(_robotId);
+      _currentTarget = Vector3.Zero;
     }
     catch (System.Exception ex)
     {
-      GD.PrintErr($"[{_spec.Name}] CRITICAL Exception in OnArrival: {ex}");
+      GD.PrintErr($"[Robot_{_robotId}] Error in OnArrival: {ex.Message}");
     }
   }
-
   public float GetPayload() => _payload;
 
   /// <summary>
@@ -495,7 +270,6 @@ public sealed class VehicleBrain
   {
     var path = new List<Vector3>();
     
-    // Use public accessor instead of reflection
     try
     {
       var pathArray = _ctrl.GetCurrentPath();
@@ -506,7 +280,7 @@ public sealed class VehicleBrain
     }
     catch
     {
-      // Silently fail if controller is no longer valid
+      // Silently fail
     }
     
     return path;
@@ -520,7 +294,6 @@ public sealed class VehicleBrain
     try
     {
       if (_ctrl == null) return false;
-      // Check if the handle is still valid
       return GodotObject.IsInstanceValid(_ctrl) && _ctrl.IsDone;
     }
     catch
@@ -529,3 +302,4 @@ public sealed class VehicleBrain
     }
   }
 }
+

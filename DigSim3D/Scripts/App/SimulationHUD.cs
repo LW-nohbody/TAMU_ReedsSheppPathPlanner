@@ -13,18 +13,18 @@ namespace DigSim3D.App
 
         public override void _Ready()
         {
-            // Create controls label (top-left)
+            // Create controls label (top-left, small)
             _controlsLabel = new Label
             {
                 Position = new Vector2(10, 10),
                 Text = GetControlsText(),
-                Modulate = new Color(1, 1, 1, 0.9f)
+                Modulate = new Color(1, 1, 1, 0.85f)
             };
             
             // Style the label
             var theme = new Theme();
             var font = ThemeDB.FallbackFont;
-            theme.SetFontSize("font_size", "Label", 16);
+            theme.SetFontSize("font_size", "Label", 13);
             _controlsLabel.Theme = theme;
             _controlsLabel.AddThemeColorOverride("font_shadow_color", Colors.Black);
             _controlsLabel.AddThemeConstantOverride("shadow_offset_x", 1);
@@ -32,13 +32,13 @@ namespace DigSim3D.App
             
             AddChild(_controlsLabel);
             
-            // Create stats label (top-right)
+            // Create stats label (top-right, small)
             _statsLabel = new Label
             {
                 Position = new Vector2(10, 10),
                 Text = "",
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Modulate = new Color(1, 1, 1, 0.9f)
+                Modulate = new Color(1, 1, 1, 0.85f)
             };
             _statsLabel.Theme = theme;
             _statsLabel.AddThemeColorOverride("font_shadow_color", Colors.Black);

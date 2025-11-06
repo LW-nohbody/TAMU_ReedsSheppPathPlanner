@@ -1,0 +1,112 @@
+Godot Engine v4.4.1.stable.mono.official.49a5bc7b6 - https://godotengine.org
+Metal 3.2 - Forward+ - Using Device #0: Apple - Apple M4 (Apple9)
+
+[ObstacleManager] Loaded 7 obstacles.
+Obstacle CylinderObs1 - Global Position: (33.635956, 4.768375E-07, 2.0921004)
+Obstacle CylinderObs2 - Global Position: (31.701841, 0, -2.5783968)
+Obstacle CylinderObs3 - Global Position: (29.631319, -4.768375E-07, -0.14462332)
+Obstacle CylinderObs4 - Global Position: (32.19054, -4.768375E-07, 4.3857675)
+Obstacle CylinderObs5 - Global Position: (33.289177, -1.4305144E-06, -3.3646593)
+Obstacle CylinderObs6 - Global Position: (38.10014, -4.768375E-07, 4.3244286)
+Obstacle CylinderObs7 - Global Position: (28.223623, -4.768375E-07, -4.5052633)
+[Director] Terrain OK: Terrain
+[GridPlannerPersistent] BuildGrid: gridSize=0.25, gridExtent=60, obstacleBuffer=1
+[GridPlannerPersistent] BuildGrid: obstacles.Count()=7
+  obs[0] cyl at (33.635956, 4.768375E-07, 2.0921004) r=0.5
+  obs[1] cyl at (31.701841, 0, -2.5783968) r=0.5
+  obs[2] cyl at (29.631319, -4.768375E-07, -0.14462332) r=1
+  obs[3] cyl at (32.19054, -4.768375E-07, 4.3857675) r=1
+  obs[4] cyl at (33.289177, -1.4305144E-06, -3.3646593) r=1
+  obs[5] cyl at (38.10014, -4.768375E-07, 4.3244286) r=1
+  obs[6] cyl at (28.223623, -4.768375E-07, -4.5052633) r=1
+GridPlannerPersistent: disabled 0 cells for 7 obstacles.
+GridPlannerPersistent: grid built and cached.
+[SimulationSettingsPanel] Creating UI...
+[SimulationSettingsPanel] UI created successfully!
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=21 last.x=1.212999 last.y=-2.186009
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=21 last=(3.270,0.000,-2.177)
+[Director] Vehicle spawned with dig sector 0.00 to 0.79 rad
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=51 last.x=-5.260525 last.y=-5.345735
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=51 last=(1.405,0.000,-6.068)
+[Director] @CharacterBody3D@34 spawned with dig sector 0.79 to 1.57 rad
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=13 last.x=2.149306 last.y=1.276904
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=13 last=(-1.265,0.000,4.177)
+[Director] @CharacterBody3D@45 spawned with dig sector 1.57 to 2.36 rad
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=24 last.x=-1.767752 last.y=1.767782
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=24 last=(-1.416,0.000,-1.084)
+[Director] @CharacterBody3D@56 spawned with dig sector 2.36 to 3.14 rad
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=33 last.x=4.278291 last.y=-2.587706
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=33 last=(-6.307,0.000,2.488)
+[Director] @CharacterBody3D@67 spawned with dig sector 3.14 to 3.93 rad
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=13 last.x=2.409541 last.y=0.666417
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=13 last=(-2.673,0.000,-3.562)
+[Director] @CharacterBody3D@78 spawned with dig sector 3.93 to 4.71 rad
+[Director] @CharacterBody3D@89 spawned with dig sector 4.71 to 5.50 rad
+[Director] @CharacterBody3D@100 spawned with dig sector 5.50 to 6.28 rad
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.49291155, 0, -0.8700794) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.04m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.08m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.12m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.16m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.20m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.24m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.28m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.32m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.36m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[@CharacterBody3D@45] Final waypoint reached — forcing done (skipping align). finalAim=(-0.5313047, 0, 0.8471807) lastGear=1
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_2] Dug 0.080m → Payload: 0.04m³
+[Robot_5] Dug 0.080m → Payload: 0.40m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=26 last.x=-0.418168 last.y=4.982482
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=26 last=(-2.916,0.000,-3.912)
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.44m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.48m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=1 last.x=0.000000 last.y=0.000000
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=1 last=(-2.616,0.000,-3.459)
+[@CharacterBody3D@78] Final waypoint reached — forcing done (skipping align). finalAim=(-0.48982587, 0, -0.8718203) lastGear=1
+[Robot_5] Dug 0.080m → Payload: 0.50m³
+[Robot_5] ▌▌▌ FULL (0.50m³ / 0.5m³), heading home
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=28 last.x=-2.371722 last.y=0.046305
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=28 last=(-1.414,0.000,-1.414)
+[Vehicle] Final waypoint reached — forcing done (skipping align). finalAim=(0.5743402, 0, -0.8186167) lastGear=1
+[Robot_0] Dug 0.080m → Payload: 0.04m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=23 last.x=4.526266 last.y=2.124363
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=23 last=(7.520,0.000,-4.590)
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=21 last.x=1.099487 last.y=-2.245245
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=21 last=(2.484,0.000,-1.988)
+[@CharacterBody3D@56] Final waypoint reached — forcing done (skipping align). finalAim=(0.046757363, -0, -0.99890625) lastGear=-1
+[Robot_3] Dug 0.080m → Payload: 0.04m³
+[PATH/CHECK] 3d.adapter :: sample_out_norm: nPts=23 last.x=4.434355 last.y=2.310086
+[PATH/CHECK] 3d.adapter :: mapped_world: nPts=23 last=(-5.531,0.000,6.580)

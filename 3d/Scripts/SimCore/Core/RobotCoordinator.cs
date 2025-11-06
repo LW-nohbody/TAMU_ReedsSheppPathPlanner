@@ -140,6 +140,73 @@ namespace SimCore.Core
         }
 
         /// <summary>
+        /// Get best dig point from ENTIRE TERRAIN, allowing cross-sector digging
+        /// Used when robot's own sector is empty or when strategic cross-sector help is needed
+        /// </summary>
+        public Vector3 GetBestDigPointGlobal(
+            int robotId,
+            TerrainDisk terrain,
+            float maxRadius,
+            int samples = 48)
+        {
+            var candidates = new List<(Vector3 pos, float height)>();
+
+            // Sample points across the ENTIRE circular terrain
+            for (int a = 0; a < samples; a++)
+            {
+                float theta = (float)a / samples * Mathf.Tau;
+
+                for (int r = 1; r <= 5; r++)
+                {
+                    float rad = maxRadius * r / 5f;
+                    Vector3 pt = new Vector3(
+                        Mathf.Cos(theta) * rad,
+                        0,
+                        Mathf.Sin(theta) * rad
+                    );
+
+                    if (terrain.SampleHeightNormal(pt, out var hitPos, out var _))
+                    {
+                        // Check if this point is too close to other robots' claims
+                        bool tooClose = false;
+                        foreach (var claim in _activeClaims.Values)
+                        {
+                            if (claim.RobotId == robotId) continue;
+                            
+                            float dist = pt.DistanceTo(claim.Position);
+                            if (dist < _minSeparation + claim.Radius)
+                            {
+                                tooClose = true;
+                                break;
+                            }
+                        }
+
+                        if (!tooClose)
+                        {
+                            candidates.Add((new Vector3(pt.X, 0, pt.Z), hitPos.Y));
+                        }
+                    }
+                }
+            }
+
+            // No safe candidates? Return a random spot
+            if (candidates.Count == 0)
+            {
+                float randomTheta = Godot.GD.Randf() * Mathf.Tau;
+                float randomRad = maxRadius * 0.5f;
+                return new Vector3(
+                    Mathf.Cos(randomTheta) * randomRad,
+                    0,
+                    Mathf.Sin(randomTheta) * randomRad
+                );
+            }
+
+            // Return highest point from entire terrain
+            candidates.Sort((a, b) => b.height.CompareTo(a.height));
+            return candidates[0].pos;
+        }
+
+        /// <summary>
         /// Get all active dig claims (for visualization)
         /// </summary>
         public IEnumerable<DigClaim> GetActiveClaims() => _activeClaims.Values;

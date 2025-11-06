@@ -153,9 +153,6 @@ public partial class SimulationDirector : Node3D
             float digRadius = 10.0f;  // INCREASED sector radius for more area per robot
             var brain = new VehicleBrain(car, spec, planner, World, _terrain, _coordinator, i, theta0, theta1, digRadius, spawnXZ);
             
-            // Register callback for sector completion
-            brain.SetSectorCompleteCallback(MarkSectorComplete);
-            
             _brains.Add(brain);
             _vehicles.Add(car);
             
@@ -183,7 +180,8 @@ public partial class SimulationDirector : Node3D
         }
 
         // Draw sector visualization lines (colored radial lines showing robot assignments)
-        DrawSectorLines();
+        // DISABLED: Robots were getting stuck on sector boundary lines
+        // DrawSectorLines();
 
         _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
     }

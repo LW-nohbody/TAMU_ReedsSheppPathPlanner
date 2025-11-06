@@ -10,4 +10,5 @@ Amplitude = 0.4
 Frequency = 0.25
 Octaves = 4
 Gain = 0.5
+FloorNodePath = NodePath("")
 MaterialOverride = ExtResource("2_joccj")
