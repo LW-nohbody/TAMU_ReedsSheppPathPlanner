@@ -101,7 +101,7 @@ namespace DigSim3D.App
 
             // Build global static navigation grid from obstacles BEFORE spawning vehicles
             var obstacleList = _obstacleManager.GetObstacles();
-            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 0.2f);  // Minimal buffer per user request
+            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 0.5f);  // 0.5m obstacle buffer
 
             // Spawn on ring
             int N = Math.Max(1, VehicleCount);
@@ -151,8 +151,8 @@ namespace DigSim3D.App
             // Create buffer visualizer to show obstacle and wall buffer zones
             _bufferVisualizer = new BufferVisualizer { Name = "BufferVisualizer" };
             AddChild(_bufferVisualizer);
-            const float obstacleBufferMeters = 0.2f; // Minimal buffer per user request
-            const float wallBufferMeters = 0.2f;     // Minimal buffer per user request
+            const float obstacleBufferMeters = 0.5f; // 0.5m obstacle buffer (both dig target selection and path planning)
+            const float wallBufferMeters = 0.5f;     // 0.5m wall buffer (dig target selection only)
             _bufferVisualizer.Initialize(obstacleList, obstacleBufferMeters, _terrain.Radius, wallBufferMeters);
             GD.Print($"[Director] BufferVisualizer created - obstacle buffer: {obstacleBufferMeters}m, wall buffer: {wallBufferMeters}m");
 
@@ -175,7 +175,9 @@ namespace DigSim3D.App
             }
 
             var digTargets = scheduler.PlanFirstDigTargets(
-                _robotBrains, _terrain, Vector3.Zero, DigScoring.Default);
+                _robotBrains, _terrain, Vector3.Zero, DigScoring.Default,
+                keepoutR: 2.0f, randomizeOrder: true,
+                obstacles: obstacleList, inflation: 0.5f);  // Pass obstacles for manual checking
 
             // === Build paths to the assigned dig targets (scheduler-driven) ===
             for (int k = 0; k < _vehicles.Count; k++)

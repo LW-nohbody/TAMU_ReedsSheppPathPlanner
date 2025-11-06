@@ -176,11 +176,12 @@ namespace DigSim3D.App
             // Find best dig location in this robot's specific sector
             Vector3 digPos = FindBestDigInSector();
             
-            // CRITICAL: Validate dig target - if it's invalid (too low or at origin), mark sector as complete
-            if (digPos.Y < 0.3f || digPos.WithY(0).Length() < 0.5f)
+            // Check if we got a valid position (negative Y means failure from FindBestDigInSector)
+            if (digPos.Y < 0f)
             {
-                GD.PrintErr($"[VehicleBrain] {Agent.Name} sector {SectorIndex} - no valid dig targets found (best was Y={digPos.Y:F2}). Marking complete.");
-                DigState.State = DigState.TaskState.Complete;  // FIX: Mark as Complete, not Idle
+                // No valid dig targets found in sector
+                GD.Print($"[VehicleBrain] {Agent.Name} sector {SectorIndex} - no dig targets available. Marking complete.");
+                DigState.State = DigState.TaskState.Complete;
                 return;
             }
             
@@ -220,10 +221,13 @@ namespace DigSim3D.App
             int candidatesChecked = 0;
             int candidatesInSector = 0;
 
-            // Calculate wall buffer zone (much smaller - allow digging closer to wall)
+            // Calculate wall buffer zone
             float arenaRadius = _terrain.Radius;
-            const float WallBufferMeters = 0.2f; // Minimal wall buffer (user requested)
+            const float WallBufferMeters = 0.5f; // 0.5m wall buffer (user requested)
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
+            
+            // Get obstacles from world state for manual checking
+            const float ObstacleBufferMeters = 0.5f; // 0.5m obstacle buffer
 
             // Search terrain grid for best dig point in this sector
             for (int i = 0; i < resolution; i++)
@@ -232,7 +236,7 @@ namespace DigSim3D.App
                 {
                     float height = _terrain.HeightGrid[i, j];
                     
-                    // Accept any height >= 0.2m (removed strict 0.3m check per user request)
+                    // Accept any height >= 0.2m
                     if (float.IsNaN(height) || height < 0.2f) continue;
 
                     // Convert grid indices to world position
@@ -242,7 +246,7 @@ namespace DigSim3D.App
                     
                     candidatesChecked++;
 
-                    // Check if too close to wall (arena boundary) - minimal buffer now
+                    // Check if too close to wall (arena boundary)
                     float distFromCenter = candidate.WithY(0).Length();
                     if (distFromCenter > maxAllowedRadius)
                     {
@@ -260,11 +264,28 @@ namespace DigSim3D.App
                     if (!inSector) continue;
                     candidatesInSector++;
 
-                    // REMOVED: Recent dig location check (per user request - allow revisiting)
-
-                    // Skip if blocked by obstacles - but only with minimal buffer (user requested 0.2m)
-                    if (GridPlannerPersistent.IsBuilt && GridPlannerPersistent.IsCellBlocked(candidate))
-                        continue;
+                    // MANUAL obstacle check - skip if inside obstacle buffer zone
+                    bool tooCloseToObstacle = false;
+                    if (_worldState?.Obstacles != null)
+                    {
+                        foreach (var obstacle in _worldState.Obstacles)
+                        {
+                            if (obstacle is CylinderObstacle cyl)
+                            {
+                                Vector2 candidateXZ = new Vector2(candidate.X, candidate.Z);
+                                Vector2 obstacleXZ = new Vector2(cyl.GlobalPosition.X, cyl.GlobalPosition.Z);
+                                float distToObstacle = candidateXZ.DistanceTo(obstacleXZ);
+                                
+                                // Check if inside obstacle + buffer
+                                if (distToObstacle < (cyl.Radius + ObstacleBufferMeters))
+                                {
+                                    tooCloseToObstacle = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (tooCloseToObstacle) continue;
 
                     // SIMPLIFIED SCORING: Just prioritize height
                     Vector3 robotPos = Agent.GlobalTransform.Origin;
@@ -349,10 +370,12 @@ namespace DigSim3D.App
             int resolution = _terrain.GridResolution;
             float gridStep = _terrain.GridStep;
 
-            // Calculate wall buffer zone (minimal - same as FindBestDigInSector)
+            // Calculate wall buffer zone (0.5m)
             float arenaRadius = _terrain.Radius;
-            const float WallBufferMeters = 0.2f; // Minimal wall buffer (user requested)
+            const float WallBufferMeters = 0.5f; // 0.5m wall buffer
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
+            
+            const float ObstacleBufferMeters = 0.5f; // 0.5m obstacle buffer
 
             // Check if any grid cell in our sector has significant height
             for (int i = 0; i < resolution; i++)
@@ -361,14 +384,14 @@ namespace DigSim3D.App
                 {
                     float height = _terrain.HeightGrid[i, j];
                     
-                    // Accept any height >= 0.2m (relaxed constraint per user request)
+                    // Accept any height >= 0.2m
                     if (float.IsNaN(height) || height < 0.2f) continue;
 
                     // Convert grid indices to world position
                     float worldX = (i - resolution / 2f) * gridStep;
                     float worldZ = (j - resolution / 2f) * gridStep;
                     
-                    // Check if too close to wall (minimal buffer)
+                    // Check if too close to wall
                     float distFromCenter = Mathf.Sqrt(worldX * worldX + worldZ * worldZ);
                     if (distFromCenter > maxAllowedRadius) continue;
 
@@ -378,7 +401,32 @@ namespace DigSim3D.App
                     
                     bool inSector = IsAngleInSector(angle, sectorStartAngle, sectorEndAngle);
                     
-                    if (inSector) return true; // Found diggable terrain in sector
+                    if (!inSector) continue;
+                    
+                    // Manual obstacle check
+                    bool tooCloseToObstacle = false;
+                    if (_worldState?.Obstacles != null)
+                    {
+                        Vector3 candidate = new Vector3(worldX, height, worldZ);
+                        foreach (var obstacle in _worldState.Obstacles)
+                        {
+                            if (obstacle is CylinderObstacle cyl)
+                            {
+                                Vector2 candidateXZ = new Vector2(candidate.X, candidate.Z);
+                                Vector2 obstacleXZ = new Vector2(cyl.GlobalPosition.X, cyl.GlobalPosition.Z);
+                                float distToObstacle = candidateXZ.DistanceTo(obstacleXZ);
+                                
+                                if (distToObstacle < (cyl.Radius + ObstacleBufferMeters))
+                                {
+                                    tooCloseToObstacle = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (tooCloseToObstacle) continue;
+                    
+                    return true; // Found diggable terrain in sector
                 }
             }
 
@@ -448,22 +496,8 @@ namespace DigSim3D.App
         {
             _digTimeAccumulated += deltaSeconds;
 
-            // Safety check: Don't dig if robot is too low (below ground level)
-            var robotPos = Agent.GlobalTransform.Origin;
-            if (robotPos.Y < 0.2f)
-            {
-                GD.PrintErr($"[VehicleBrain] {Agent.Name} is too low (Y={robotPos.Y:F2}), skipping dig");
-                DigState.State = DigState.TaskState.Idle;
-                return;
-            }
-
-            // Safety check: Don't dig if target height is too low
-            if (DigState.CurrentDigTarget.Y < 0.3f)
-            {
-                GD.Print($"[VehicleBrain] {Agent.Name} dig target too low (Y={DigState.CurrentDigTarget.Y:F2}), requesting new target");
-                DigState.State = DigState.TaskState.Idle;
-                return;
-            }
+            // REMOVED: Safety checks that were causing robots to skip valid dig targets
+            // The dig target selection already filters for valid heights and positions
 
             // Dig at the target position - LowerArea handles mesh rebuild automatically
             float volumeDug = _digService.DigAtPosition(DigState.CurrentDigTarget, deltaSeconds);
