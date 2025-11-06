@@ -80,8 +80,8 @@ public static void BuildGrid(
             int blockedCount = 0;
 
             // Debug: print grid parameters and obstacle overview
-            GD.Print($"[GridPlannerPersistent] BuildGrid: gridSize={gridSize}, gridExtent={gridExtent}, obstacleBuffer={obstacleBufferMeters}");
-            GD.Print($"[GridPlannerPersistent] BuildGrid: obstacles.Count()={obstacles.Count()}");
+            // GD.Print($"[GridPlannerPersistent] BuildGrid: gridSize={gridSize}, gridExtent={gridExtent}, obstacleBuffer={obstacleBufferMeters}");
+            // GD.Print($"[GridPlannerPersistent] BuildGrid: obstacles.Count()={obstacles.Count()}");
             int oi = 0;
             foreach (var obs in obstacles)
             {
@@ -127,14 +127,14 @@ public static void BuildGrid(
                 }
             }
 
-            GD.Print($"GridPlannerPersistent: disabled {blockedCount} cells for {obstacles.Count()} obstacles.");
+            // GD.Print($"GridPlannerPersistent: disabled {blockedCount} cells for {obstacles.Count()} obstacles.");
             // Print a few blocked centers for verification
             for (int k = 0; k < Math.Min(8, _lastBlockedCenters.Count); k++)
                 GD.Print($"  blocked[{k}] = {_lastBlockedCenters[k]}");
         }
 
         _built = true;
-        GD.Print("GridPlannerPersistent: grid built and cached.");
+        // GD.Print("GridPlannerPersistent: grid built and cached.");
     }
 
 
@@ -143,34 +143,34 @@ public static List<Vector3> Plan2DPath(Vector3 start, Vector3 goal)
     {
         if (!_built)
         {
-            GD.PushWarning("GridPlannerPersistent: Grid not built yet! Call BuildGrid() first.");
+            // GD.PushWarning("GridPlannerPersistent: Grid not built yet! Call BuildGrid() first.");
             return new List<Vector3>();
         }
 
-        GD.Print($"[GridPlannerPersistent] Plan2DPath: start=({start.X:F2},{start.Z:F2}) goal=({goal.X:F2},{goal.Z:F2})");
-        GD.Print($"[GridPlannerPersistent] Plan2DPath: gridSize={_gridSize} gridExtent={_gridExtent} blockedCells={_lastBlockedCenters.Count}");
+        // GD.Print($"[GridPlannerPersistent] Plan2DPath: start=({start.X:F2},{start.Z:F2}) goal=({goal.X:F2},{goal.Z:F2})");
+        // GD.Print($"[GridPlannerPersistent] Plan2DPath: gridSize={_gridSize} gridExtent={_gridExtent} blockedCells={_lastBlockedCenters.Count}");
 
         long startId = _astar.GetClosestPoint(new Vector2(start.X, start.Z));
         long goalId = _astar.GetClosestPoint(new Vector2(goal.X, goal.Z));
 
-        GD.Print($"[GridPlannerPersistent] Plan2DPath: startId={startId} goalId={goalId}");
+        // GD.Print($"[GridPlannerPersistent] Plan2DPath: startId={startId} goalId={goalId}");
 
         if (startId == -1 || goalId == -1)
         {
-            GD.PrintErr("[GridPlannerPersistent] Plan2DPath: closest point lookup failed for start or goal.");
+            // GD.PrintErr("[GridPlannerPersistent] Plan2DPath: closest point lookup failed for start or goal.");
             return new List<Vector3>();
         }
 
         var pts2 = _astar.GetPointPath(startId, goalId);
         if (pts2 == null)
         {
-            GD.PrintErr("[GridPlannerPersistent] Plan2DPath: GetPointPath returned null.");
+            // GD.PrintErr("[GridPlannerPersistent] Plan2DPath: GetPointPath returned null.");
             return new List<Vector3>();
         }
 
-        GD.Print($"[GridPlannerPersistent] Plan2DPath: pts2.Length = {pts2.Length}");
-        for (int k = 0; k < Math.Min(8, pts2.Length); k++)
-            GD.Print($"  path2[{k}] = {pts2[k]}");
+        // GD.Print($"[GridPlannerPersistent] Plan2DPath: pts2.Length = {pts2.Length}");
+        // for (int k = 0; k < Math.Min(8, pts2.Length); k++)
+        //     GD.Print($"  path2[{k}] = {pts2[k]}");
 
         var path3 = pts2.Select(p => new Vector3(p.X, 0f, p.Y)).ToList();
 
@@ -188,7 +188,7 @@ public static List<Vector3> Plan2DPath(Vector3 start, Vector3 goal)
                     float d2 = dx * dx + dz * dz;
                     if (d2 < (_gridSize * _gridSize * 0.9f)) // close enough to warn
                     {
-                        GD.PrintErr($"[GridPlannerPersistent] WARNING: planned path point {pi} {p} is within grid cell {bc}");
+                        // GD.PrintErr($"[GridPlannerPersistent] WARNING: planned path point {pi} {p} is within grid cell {bc}");
                         // break early to avoid spamming
                         bi = _lastBlockedCenters.Count;
                         pi = path3.Count;
