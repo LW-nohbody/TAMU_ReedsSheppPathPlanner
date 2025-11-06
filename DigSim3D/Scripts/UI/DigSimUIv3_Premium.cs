@@ -102,7 +102,8 @@ namespace DigSim3D.UI
             var titleStyleBox = new StyleBoxFlat();
             titleStyleBox.BgColor = new Color(0.15f, 0.15f, 0.2f, 0.9f);
             titleStyleBox.SetCornerRadiusAll(12);
-            titleStyleBox.SetCornerRadiusBottom(0);
+            titleStyleBox.CornerRadiusBottomLeft = 0;
+            titleStyleBox.CornerRadiusBottomRight = 0;
             titleBar.AddThemeStyleboxOverride("panel", titleStyleBox);
             panel.AddChild(titleBar);
             
@@ -139,8 +140,7 @@ namespace DigSim3D.UI
             
             _overallProgressLabel = new AnimatedValueLabel
             {
-                InitialText = "Progress: 0%",
-                AnimationDuration = 0.5f,
+                Text = "Progress: 0%",
                 SizeFlagsHorizontal = SizeFlags.ExpandFill
             };
             _overallProgressLabel.SetFontSize(18);
@@ -172,8 +172,7 @@ namespace DigSim3D.UI
             // Remaining dirt with animation
             _remainingDirtLabel = new AnimatedValueLabel
             {
-                InitialText = "Remaining: 0.00 m³",
-                AnimationDuration = 0.3f
+                Text = "Remaining: 0.00 m³"
             };
             _remainingDirtLabel.SetFontSize(14);
             _remainingDirtLabel.SetColor(new Color(1.0f, 0.9f, 0.7f));
@@ -210,8 +209,7 @@ namespace DigSim3D.UI
             _settingsPanel = new PremiumUIPanel
             {
                 Title = "⚙️ Advanced Settings",
-                PanelWidth = 380,
-                PanelHeight = 500
+                CustomMinimumSize = new Vector2(380, 500)
             };
             
             // Position at top-right
@@ -253,14 +251,8 @@ namespace DigSim3D.UI
             
             var speedSlider = new PremiumSlider
             {
-                Label = "Speed (m/s)",
-                MinValue = 0.1,
-                MaxValue = 5.0,
-                CurrentValue = 0.6,
-                Unit = "m/s",
-                ColorLow = new Color(0.3f, 0.8f, 0.5f), // Green
-                ColorMid = new Color(0.8f, 0.8f, 0.3f), // Yellow
-                ColorHigh = new Color(0.8f, 0.3f, 0.3f) // Red
+                MinValue = 0.1f,
+                MaxValue = 5.0f
             };
             speedSlider.ValueChanged += (value) => OnSpeedChanged(value);
             vbox.AddChild(speedSlider);
@@ -279,14 +271,8 @@ namespace DigSim3D.UI
             
             var depthSlider = new PremiumSlider
             {
-                Label = "Depth (m)",
-                MinValue = 0.05,
-                MaxValue = 1.0,
-                CurrentValue = 0.3,
-                Unit = "m",
-                ColorLow = new Color(0.8f, 0.8f, 0.3f),
-                ColorMid = new Color(0.8f, 0.6f, 0.3f),
-                ColorHigh = new Color(0.8f, 0.3f, 0.3f)
+                MinValue = 0.05f,
+                MaxValue = 1.0f
             };
             depthSlider.ValueChanged += (value) => OnDigDepthChanged(value);
             vbox.AddChild(depthSlider);
@@ -298,14 +284,8 @@ namespace DigSim3D.UI
             
             var radiusSlider = new PremiumSlider
             {
-                Label = "Radius (m)",
-                MinValue = 0.5,
-                MaxValue = 5.0,
-                CurrentValue = 2.5,
-                Unit = "m",
-                ColorLow = new Color(0.3f, 0.6f, 0.8f),
-                ColorMid = new Color(0.5f, 0.7f, 0.9f),
-                ColorHigh = new Color(0.7f, 0.8f, 1.0f)
+                MinValue = 0.5f,
+                MaxValue = 5.0f
             };
             radiusSlider.ValueChanged += (value) => OnDigRadiusChanged(value);
             vbox.AddChild(radiusSlider);

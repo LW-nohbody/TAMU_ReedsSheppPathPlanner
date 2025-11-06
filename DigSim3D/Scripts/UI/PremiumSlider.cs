@@ -4,126 +4,96 @@ using System;
 namespace DigSim3D.UI
 {
     /// <summary>
-    /// Premium slider with glow effect when active/changing
+    /// Premium slider with glow effect and color-coded values
     /// </summary>
     public partial class PremiumSlider : VBoxContainer
     {
-        private Label _nameLabel = null!;
-        private HBoxContainer _sliderContainer = null!;
+        private Label _label = null!;
         private HSlider _slider = null!;
-        private AnimatedValueLabel _valueLabel = null!;
-        private Panel _glowPanel = null!;
+        private Label _valueLabel = null!;
         
-        public string LabelText { get; set; } = "Setting";
         public float MinValue { get; set; } = 0f;
         public float MaxValue { get; set; } = 100f;
-        public float Step { get; set; } = 1f;
         public float CurrentValue { get; private set; } = 50f;
-        public string ValueFormat { get; set; } = "F1";
-        public string ValueSuffix { get; set; } = "";
         
-        public event Action<float> ValueChanged;
-        
+        public event Action<double>? ValueChanged;
+
         public override void _Ready()
         {
+            CustomMinimumSize = new Vector2(350, 60);
             AddThemeConstantOverride("separation", 5);
             
-            // Title label
-            _nameLabel = new Label
+            // Label
+            _label = new Label
             {
-                Text = LabelText
+                Text = "Value",
+                Modulate = Colors.White
             };
-            _nameLabel.AddThemeFontSizeOverride("font_size", 13);
-            _nameLabel.AddThemeColorOverride("font_color", new Color(0.9f, 0.9f, 1.0f));
-            AddChild(_nameLabel);
+            _label.AddThemeFontSizeOverride("font_size", 12);
+            _label.AddThemeColorOverride("font_color", new Color(0.9f, 0.9f, 0.9f));
+            AddChild(_label);
             
-            // Glow panel behind slider
-            _glowPanel = new Panel
-            {
-                CustomMinimumSize = new Vector2(0, 32),
-                Modulate = new Color(1, 1, 1, 0) // Start invisible
-            };
-            
-            var glowStyle = new StyleBoxFlat();
-            glowStyle.BgColor = new Color(0.4f, 0.6f, 1.0f, 0.2f);
-            glowStyle.BorderColor = new Color(0.4f, 0.6f, 1.0f, 0.6f);
-            glowStyle.SetBorderWidthAll(2);
-            glowStyle.SetCornerRadiusAll(6);
-            glowStyle.ShadowColor = new Color(0.4f, 0.6f, 1.0f, 0.8f);
-            glowStyle.ShadowSize = 12;
-            _glowPanel.AddThemeStyleboxOverride("panel", glowStyle);
-            AddChild(_glowPanel);
-            
-            // Slider container
-            _sliderContainer = new HBoxContainer();
-            _sliderContainer.AddThemeConstantOverride("separation", 10);
-            _sliderContainer.Position = new Vector2(0, _glowPanel.Position.Y);
-            AddChild(_sliderContainer);
+            // Horizontal container for slider and value
+            var hbox = new HBoxContainer();
+            hbox.AddThemeConstantOverride("separation", 10);
+            AddChild(hbox);
             
             // Slider
             _slider = new HSlider
             {
                 MinValue = MinValue,
                 MaxValue = MaxValue,
-                Step = Step,
                 Value = CurrentValue,
+                Step = (MaxValue - MinValue) / 100f,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
-                CustomMinimumSize = new Vector2(200, 24)
+                CustomMinimumSize = new Vector2(280, 24)
             };
-            _slider.ValueChanged += OnSliderValueChanged;
-            _slider.DragStarted += OnDragStarted;
-            _slider.DragEnded += OnDragEnded;
-            _sliderContainer.AddChild(_slider);
             
-            // Value display
-            _valueLabel = new AnimatedValueLabel
+            // Style the slider
+            var grabberStyleBox = new StyleBoxFlat();
+            grabberStyleBox.BgColor = new Color(0.4f, 0.7f, 1.0f, 1.0f);
+            grabberStyleBox.SetCornerRadiusAll(6);
+            _slider.AddThemeStyleboxOverride("grabber_area", grabberStyleBox);
+            
+            _slider.ValueChanged += OnSliderValueChanged;
+            hbox.AddChild(_slider);
+            
+            // Value label
+            _valueLabel = new Label
             {
-                LabelText = "",
-                ValueFormat = ValueFormat,
-                ValueSuffix = ValueSuffix,
-                CustomMinimumSize = new Vector2(80, 0)
+                Text = $"{CurrentValue:F2}",
+                CustomMinimumSize = new Vector2(60, 24),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Modulate = new Color(0.7f, 1.0f, 0.8f)
             };
-            _valueLabel.SetValueInstant(CurrentValue);
-            _sliderContainer.AddChild(_valueLabel);
+            _valueLabel.AddThemeFontSizeOverride("font_size", 12);
+            _valueLabel.AddThemeColorOverride("font_color", Colors.White);
+            hbox.AddChild(_valueLabel);
         }
-        
+
         private void OnSliderValueChanged(double value)
         {
             CurrentValue = (float)value;
-            _valueLabel.SetValue(CurrentValue);
-            ValueChanged?.Invoke(CurrentValue);
+            _valueLabel.Text = $"{CurrentValue:F2}";
             
-            // Pulse glow on change
-            AnimateGlow();
-        }
-        
-        private void OnDragStarted()
-        {
-            // Show strong glow when dragging
-            var tween = CreateTween();
-            tween.TweenProperty(_glowPanel, "modulate:a", 1.0f, 0.2);
-        }
-        
-        private void OnDragEnded(bool valueChanged)
-        {
-            // Fade glow when done dragging
-            var tween = CreateTween();
-            tween.TweenProperty(_glowPanel, "modulate:a", 0.0f, 0.5);
-        }
-        
-        private void AnimateGlow()
-        {
-            _glowPanel.Modulate = new Color(1, 1, 1, 0.8f);
+            // Color code based on range
+            float normalized = (CurrentValue - MinValue) / (MaxValue - MinValue);
+            Color valueColor;
+            if (normalized < 0.33f)
+                valueColor = new Color(0.3f, 0.8f, 0.5f); // Green
+            else if (normalized < 0.66f)
+                valueColor = new Color(0.8f, 0.8f, 0.3f); // Yellow
+            else
+                valueColor = new Color(0.8f, 0.3f, 0.3f); // Red
+                
+            _valueLabel.Modulate = valueColor;
             
-            var tween = CreateTween();
-            tween.TweenProperty(_glowPanel, "modulate:a", 0.0f, 0.4);
+            ValueChanged?.Invoke(value);
         }
-        
-        public void SetValue(float value)
+
+        public void SetLabel(string text)
         {
-            _slider.Value = value;
-            CurrentValue = value;
-            _valueLabel.SetValueInstant(value);
+            if (_label != null) _label.Text = text;
         }
     }
 }

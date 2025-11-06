@@ -202,7 +202,7 @@ namespace DigSim3D.App
             _digSimUI.SetHeatMapStatus(false);
             _digSimUI.SetInitialVolume(500f);
             _digSimUI.SetVehicles(_vehicles);
-            _digSimUI.SetTerrain(_terrain); // Pass terrain for thumbnail
+            _digSimUI.SetTerrain(_terrain);
 
             GD.Print("[Director] DigSimUIv3_Premium initialized successfully");
 
@@ -503,33 +503,34 @@ namespace DigSim3D.App
 
         private bool IsMouseOverUI()
         {
-            if (_digSimUI == null) return false;
+            if (_digSimUI == null || !_digSimUI.Visible) return false;
             
             var mousePos = GetViewport().GetMousePosition();
             
-            // Recursively check all Control children
-            return IsPointInControl(this, mousePos);
+            // Check if mouse is over the UI panel or any of its children
+            return IsPointInControl(_digSimUI, mousePos);
         }
         
-        private bool IsPointInControl(Node node, Vector2 point)
+        private bool IsPointInControl(Control control, Vector2 point)
         {
-            foreach (var child in node.GetChildren())
+            if (!control.Visible) return false;
+            
+            // Check if point is in this control's rectangle
+            var rect = control.GetGlobalRect();
+            if (rect.HasPoint(point))
             {
-                if (child is Control childControl && childControl.Visible)
+                return true;
+            }
+            
+            // Recursively check all Control children
+            foreach (var child in control.GetChildren())
+            {
+                if (child is Control childControl && IsPointInControl(childControl, point))
                 {
-                    var rect = childControl.GetGlobalRect();
-                    if (rect.HasPoint(point))
-                    {
-                        return true;
-                    }
-                    
-                    // Recursively check children
-                    if (IsPointInControl(childControl, point))
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
+            
             return false;
         }
     }

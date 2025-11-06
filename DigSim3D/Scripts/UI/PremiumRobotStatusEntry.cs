@@ -1,204 +1,106 @@
 using Godot;
 using System;
-using System.Collections.Generic;
 
 namespace DigSim3D.UI
 {
     /// <summary>
-    /// Premium robot status entry with charts, animations, and color coding
+    /// Premium robot status panel with mini chart
     /// </summary>
     public partial class PremiumRobotStatusEntry : PanelContainer
     {
         private int _robotId;
-        private Color _robotColor;
-        
-        // UI Elements
         private Label _nameLabel = null!;
-        private AnimatedValueLabel _payloadLabel = null!;
-        private AnimatedValueLabel _speedLabel = null!;
+        private ProgressBar _payloadBar = null!;
         private Label _statusLabel = null!;
-        private MiniChart _speedChart = null!;
-        private MiniChart _payloadChart = null!;
-        private Button _collapseButton = null!;
-        private VBoxContainer _detailsContainer = null!;
-        
-        private bool _isCollapsed = false;
-        private float _lastUpdateTime = 0f;
-        
+        private Color _robotColor;
+        private MiniChart _chart = null!;
+
         public PremiumRobotStatusEntry(int id, string name, Color color)
         {
             _robotId = id;
             _robotColor = color;
-            CustomMinimumSize = new Vector2(380, 160);
+            CustomMinimumSize = new Vector2(380, 120);
             MouseFilter = MouseFilterEnum.Stop;
             
-            SetupStyles();
-            CreateContent(name);
-        }
-        
-        private void SetupStyles()
-        {
+            // Style with glassmorphism
             var styleBox = new StyleBoxFlat();
-            styleBox.BgColor = new Color(0.12f, 0.12f, 0.18f, 0.85f);
-            styleBox.BorderColor = _robotColor;
+            styleBox.BgColor = new Color(0.12f, 0.12f, 0.18f, 0.9f);
+            styleBox.BorderColor = color;
             styleBox.SetBorderWidthAll(2);
             styleBox.SetCornerRadiusAll(8);
-            
-            // Glow effect
-            styleBox.ShadowColor = new Color(_robotColor.R, _robotColor.G, _robotColor.B, 0.3f);
-            styleBox.ShadowSize = 6;
-            styleBox.ShadowOffset = new Vector2(0, 2);
-            
+            styleBox.ShadowColor = new Color(color.R, color.G, color.B, 0.3f);
+            styleBox.ShadowSize = 4;
             AddThemeStyleboxOverride("panel", styleBox);
         }
-        
-        private void CreateContent(string name)
+
+        public override void _Ready()
         {
-            var mainContainer = new VBoxContainer();
-            mainContainer.AddThemeConstantOverride("separation", 8);
-            AddChild(mainContainer);
+            var vbox = new VBoxContainer();
+            vbox.AddThemeConstantOverride("separation", 6);
+            AddChild(vbox);
             
-            // Header with name and collapse button
-            var header = new HBoxContainer();
-            header.AddThemeConstantOverride("separation", 8);
-            mainContainer.AddChild(header);
-            
+            // Name with icon
             _nameLabel = new Label
             {
-                Text = $"🤖 {name}",
-                Modulate = _robotColor,
-                SizeFlagsHorizontal = SizeFlags.ExpandFill
+                Text = $"🤖 Robot {_robotId}",
+                Modulate = _robotColor
             };
             _nameLabel.AddThemeFontSizeOverride("font_size", 14);
             _nameLabel.AddThemeColorOverride("font_color", Colors.White);
-            header.AddChild(_nameLabel);
+            vbox.AddChild(_nameLabel);
             
-            _collapseButton = new Button
+            // Payload bar
+            _payloadBar = new ProgressBar
             {
-                Text = "▼",
-                CustomMinimumSize = new Vector2(32, 32)
+                MinValue = 0,
+                MaxValue = 100,
+                Value = 0,
+                CustomMinimumSize = new Vector2(350, 20),
+                ShowPercentage = false
             };
-            _collapseButton.Pressed += ToggleCollapse;
-            header.AddChild(_collapseButton);
             
-            // Details container (collapsible)
-            _detailsContainer = new VBoxContainer();
-            _detailsContainer.AddThemeConstantOverride("separation", 6);
-            mainContainer.AddChild(_detailsContainer);
+            var barStyleBox = new StyleBoxFlat();
+            barStyleBox.BgColor = new Color(0.2f, 0.2f, 0.3f, 0.6f);
+            barStyleBox.SetCornerRadiusAll(4);
+            _payloadBar.AddThemeStyleboxOverride("background", barStyleBox);
             
-            // Status label
+            var barFillStyleBox = new StyleBoxFlat();
+            barFillStyleBox.BgColor = _robotColor;
+            barFillStyleBox.SetCornerRadiusAll(4);
+            _payloadBar.AddThemeStyleboxOverride("fill", barFillStyleBox);
+            
+            vbox.AddChild(_payloadBar);
+            
+            // Status
             _statusLabel = new Label
             {
-                Text = "Status: Idle",
-                Modulate = new Color(0.8f, 0.8f, 0.9f)
+                Text = "Status: Idle | (0.0, 0.0)",
+                Modulate = Colors.White
             };
-            _statusLabel.AddThemeFontSizeOverride("font_size", 11);
-            _detailsContainer.AddChild(_statusLabel);
+            _statusLabel.AddThemeFontSizeOverride("font_size", 10);
+            _statusLabel.AddThemeColorOverride("font_color", new Color(0.8f, 0.8f, 0.9f));
+            vbox.AddChild(_statusLabel);
             
-            // Animated value labels
-            _payloadLabel = new AnimatedValueLabel
-            {
-                LabelText = "Payload",
-                ValueFormat = "F0",
-                ValueSuffix = "%"
-            };
-            _payloadLabel.SetColorRanges(0, 100, 40, 80);
-            _detailsContainer.AddChild(_payloadLabel);
-            
-            _speedLabel = new AnimatedValueLabel
-            {
-                LabelText = "Speed",
-                ValueFormat = "F2",
-                ValueSuffix = " m/s"
-            };
-            _speedLabel.SetColorRanges(0f, 2f, 0.4f, 0.8f);
-            _detailsContainer.AddChild(_speedLabel);
-            
-            // Charts container
-            var chartsContainer = new HBoxContainer();
-            chartsContainer.AddThemeConstantOverride("separation", 8);
-            _detailsContainer.AddChild(chartsContainer);
-            
-            // Speed chart
-            var speedChartContainer = new VBoxContainer();
-            speedChartContainer.AddThemeConstantOverride("separation", 2);
-            chartsContainer.AddChild(speedChartContainer);
-            
-            var speedLabel = new Label { Text = "Speed History" };
-            speedLabel.AddThemeFontSizeOverride("font_size", 9);
-            speedLabel.AddThemeColorOverride("font_color", new Color(0.7f, 0.7f, 0.8f));
-            speedChartContainer.AddChild(speedLabel);
-            
-            _speedChart = new MiniChart
-            {
-                ChartTitle = "Speed",
-                CustomMinimumSize = new Vector2(170, 60)
-            };
-            _speedChart.SetValueRange(0, 1);
-            _speedChart.SetColor(new Color(0.4f, 0.8f, 1.0f), new Color(0.4f, 0.8f, 1.0f, 0.2f));
-            speedChartContainer.AddChild(_speedChart);
-            
-            // Payload chart
-            var payloadChartContainer = new VBoxContainer();
-            payloadChartContainer.AddThemeConstantOverride("separation", 2);
-            chartsContainer.AddChild(payloadChartContainer);
-            
-            var payloadLabelChart = new Label { Text = "Payload History" };
-            payloadLabelChart.AddThemeFontSizeOverride("font_size", 9);
-            payloadLabelChart.AddThemeColorOverride("font_color", new Color(0.7f, 0.7f, 0.8f));
-            payloadChartContainer.AddChild(payloadLabelChart);
-            
-            _payloadChart = new MiniChart
-            {
-                ChartTitle = "Payload",
-                CustomMinimumSize = new Vector2(170, 60)
-            };
-            _payloadChart.SetValueRange(0, 100);
-            _payloadChart.SetColor(new Color(1.0f, 0.6f, 0.3f), new Color(1.0f, 0.6f, 0.3f, 0.2f));
-            payloadChartContainer.AddChild(_payloadChart);
+            // Mini chart
+            _chart = new MiniChart();
+            vbox.AddChild(_chart);
         }
-        
-        public void UpdateStatus(float payloadPercent, string status, Vector3 position, float speed)
+
+        public void UpdatePayload(float payloadPercent, string status, Vector3 position)
         {
-            _payloadLabel.SetValue(payloadPercent * 100f);
-            _speedLabel.SetValue(speed);
-            _statusLabel.Text = $"{status} | ({position.X:F1}, {position.Z:F1})";
-            
-            // Update charts every 0.2 seconds
-            float currentTime = Time.GetTicksMsec() / 1000f;
-            if (currentTime - _lastUpdateTime > 0.2f)
+            if (_payloadBar != null)
             {
-                _speedChart.AddDataPoint(speed);
-                _payloadChart.AddDataPoint(payloadPercent * 100f);
-                _lastUpdateTime = currentTime;
+                _payloadBar.Value = payloadPercent * 100f;
             }
-        }
-        
-        private void ToggleCollapse()
-        {
-            _isCollapsed = !_isCollapsed;
-            _collapseButton.Text = _isCollapsed ? "▶" : "▼";
             
-            // Animate collapse/expand
-            var tween = CreateTween();
-            if (_isCollapsed)
+            if (_statusLabel != null)
             {
-                tween.TweenProperty(_detailsContainer, "scale:y", 0.0f, 0.2f);
-                tween.TweenProperty(_detailsContainer, "modulate:a", 0.0f, 0.2f);
-                tween.Finished += () => _detailsContainer.Visible = false;
-                
-                CustomMinimumSize = new Vector2(380, 50);
+                _statusLabel.Text = $"{status} | ({position.X:F1}, {position.Z:F1})";
             }
-            else
+            
+            if (_chart != null)
             {
-                _detailsContainer.Visible = true;
-                _detailsContainer.Scale = new Vector2(1, 0);
-                _detailsContainer.Modulate = new Color(1, 1, 1, 0);
-                
-                tween.TweenProperty(_detailsContainer, "scale:y", 1.0f, 0.2f);
-                tween.TweenProperty(_detailsContainer, "modulate:a", 1.0f, 0.2f);
-                
-                CustomMinimumSize = new Vector2(380, 160);
+                _chart.AddDataPoint(payloadPercent);
             }
         }
     }

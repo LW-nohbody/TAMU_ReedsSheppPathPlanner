@@ -1,161 +1,94 @@
 using Godot;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace DigSim3D.UI
 {
     /// <summary>
-    /// Premium draggable UI panel with glassmorphism effect
+    /// Premium panel with glassmorphism and draggable support
     /// </summary>
     public partial class PremiumUIPanel : Control
     {
-        private Panel _backgroundPanel = null!;
-        private Control _contentContainer = null!;
-        private Label _titleLabel = null!;
-        private bool _isDragging = false;
-        private Vector2 _dragOffset;
-        
-        // Glassmorphism colors
-        private Color _glassColor = new Color(0.1f, 0.1f, 0.15f, 0.75f);
-        private Color _borderColor = new Color(0.4f, 0.6f, 0.9f, 0.8f);
-        private Color _glowColor = new Color(0.4f, 0.6f, 1.0f, 0.3f);
-        
         public string Title { get; set; } = "Panel";
-        public bool IsDraggable { get; set; } = true;
         
+        private Panel _panel = null!;
+        private VBoxContainer _contentContainer = null!;
+
         public override void _Ready()
         {
-            MouseFilter = MouseFilterEnum.Pass;
+            MouseFilter = MouseFilterEnum.Stop;
+            CustomMinimumSize = new Vector2(380, 500);
             
-            // Create glassmorphic background panel
-            _backgroundPanel = new Panel
+            // Main panel with glassmorphism
+            _panel = new Panel
             {
+                CustomMinimumSize = CustomMinimumSize,
                 MouseFilter = MouseFilterEnum.Stop
             };
             
             var styleBox = new StyleBoxFlat();
-            styleBox.BgColor = _glassColor;
-            styleBox.BorderColor = _borderColor;
-            styleBox.SetBorderWidthAll(2);
+            styleBox.BgColor = new Color(0.08f, 0.08f, 0.12f, 0.9f);
+            styleBox.BorderColor = new Color(0.4f, 0.6f, 1.0f, 0.8f);
+            styleBox.SetBorderWidthAll(3);
             styleBox.SetCornerRadiusAll(12);
-            
-            // Add subtle shadow/glow effect
-            styleBox.ShadowColor = _glowColor;
+            styleBox.ShadowColor = new Color(0.4f, 0.6f, 1.0f, 0.4f);
             styleBox.ShadowSize = 8;
-            styleBox.ShadowOffset = new Vector2(0, 2);
+            _panel.AddThemeStyleboxOverride("panel", styleBox);
             
-            _backgroundPanel.AddThemeStyleboxOverride("panel", styleBox);
-            AddChild(_backgroundPanel);
+            AddChild(_panel);
             
-            // Resize background to match container
-            _backgroundPanel.SetAnchorsPreset(LayoutPreset.FullRect);
+            // Title bar
+            var titleBar = new PanelContainer
+            {
+                CustomMinimumSize = new Vector2(380, 40),
+                MouseFilter = MouseFilterEnum.Stop
+            };
+            var titleStyleBox = new StyleBoxFlat();
+            titleStyleBox.BgColor = new Color(0.15f, 0.15f, 0.2f, 0.95f);
+            titleStyleBox.SetCornerRadiusAll(12);
+            titleStyleBox.CornerRadiusBottomLeft = 0;
+            titleStyleBox.CornerRadiusBottomRight = 0;
+            titleBar.AddThemeStyleboxOverride("panel", titleStyleBox);
+            _panel.AddChild(titleBar);
             
-            // Create title bar for dragging
-            CreateTitleBar();
+            var titleLabel = new Label
+            {
+                Text = Title,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Modulate = new Color(0.7f, 0.9f, 1.0f)
+            };
+            titleLabel.AddThemeFontSizeOverride("font_size", 16);
+            titleLabel.AddThemeColorOverride("font_color", Colors.White);
+            titleBar.AddChild(titleLabel);
             
-            // Create content container with padding
+            // Content container
             var margin = new MarginContainer();
-            margin.AddThemeConstantOverride("margin_left", 15);
-            margin.AddThemeConstantOverride("margin_right", 15);
-            margin.AddThemeConstantOverride("margin_top", 45); // Space for title bar
-            margin.AddThemeConstantOverride("margin_bottom", 15);
-            margin.SetAnchorsPreset(LayoutPreset.FullRect);
-            margin.MouseFilter = MouseFilterEnum.Ignore;
-            AddChild(margin);
+            margin.AddThemeConstantOverride("margin_left", 20);
+            margin.AddThemeConstantOverride("margin_right", 20);
+            margin.AddThemeConstantOverride("margin_top", 50);
+            margin.AddThemeConstantOverride("margin_bottom", 20);
+            _panel.AddChild(margin);
             
             _contentContainer = new VBoxContainer
             {
-                MouseFilter = MouseFilterEnum.Pass
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                SizeFlagsVertical = SizeFlags.ExpandFill
             };
             _contentContainer.AddThemeConstantOverride("separation", 10);
             margin.AddChild(_contentContainer);
         }
-        
-        private void CreateTitleBar()
+
+        public void SetContent(Node content)
         {
-            var titleBar = new Control
+            if (_contentContainer != null)
             {
-                CustomMinimumSize = new Vector2(0, 40)
-            };
-            titleBar.SetAnchorsAndOffsetsPreset(LayoutPreset.TopWide);
-            titleBar.OffsetBottom = 40;
-            titleBar.MouseFilter = MouseFilterEnum.Stop;
-            AddChild(titleBar);
-            
-            // Title label
-            _titleLabel = new Label
-            {
-                Text = Title,
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Modulate = Colors.White
-            };
-            _titleLabel.AddThemeFontSizeOverride("font_size", 16);
-            _titleLabel.AddThemeColorOverride("font_color", Colors.White);
-            _titleLabel.SetAnchorsPreset(LayoutPreset.FullRect);
-            _titleLabel.MouseFilter = MouseFilterEnum.Ignore;
-            titleBar.AddChild(_titleLabel);
-            
-            // Connect drag events to title bar
-            titleBar.GuiInput += OnTitleBarInput;
-        }
-        
-        private void OnTitleBarInput(InputEvent @event)
-        {
-            if (!IsDraggable) return;
-            
-            if (@event is InputEventMouseButton mouseButton)
-            {
-                if (mouseButton.ButtonIndex == MouseButton.Left)
+                // Clear existing
+                foreach (var child in _contentContainer.GetChildren())
                 {
-                    if (mouseButton.Pressed)
-                    {
-                        _isDragging = true;
-                        _dragOffset = mouseButton.Position;
-                    }
-                    else
-                    {
-                        _isDragging = false;
-                    }
+                    _contentContainer.RemoveChild(child);
                 }
+                _contentContainer.AddChild(content);
             }
-        }
-        
-        public override void _Process(double delta)
-        {
-            if (_isDragging)
-            {
-                var mousePos = GetViewport().GetMousePosition();
-                Position = mousePos - _dragOffset;
-                
-                // Keep panel within viewport bounds
-                var viewportSize = GetViewportRect().Size;
-                Position = new Vector2(
-                    Mathf.Clamp(Position.X, 0, viewportSize.X - Size.X),
-                    Mathf.Clamp(Position.Y, 0, viewportSize.Y - Size.Y)
-                );
-            }
-        }
-        
-        public Control GetContentContainer() => _contentContainer;
-        
-        public void AddContent(Control child)
-        {
-            _contentContainer.AddChild(child);
-        }
-        
-        // Animate panel entrance
-        public async void AnimateIn()
-        {
-            Modulate = new Color(1, 1, 1, 0);
-            Scale = new Vector2(0.9f, 0.9f);
-            
-            var tween = CreateTween();
-            tween.SetParallel(true);
-            tween.TweenProperty(this, "modulate:a", 1.0f, 0.3);
-            tween.TweenProperty(this, "scale", Vector2.One, 0.3).SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
-            await ToSignal(tween, Tween.SignalName.Finished);
         }
     }
 }
