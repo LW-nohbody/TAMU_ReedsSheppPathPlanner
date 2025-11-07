@@ -280,6 +280,7 @@ namespace DigSim3D.App
         /// <summary>
         /// Reduce terrain height at specific grid indices by the given amount.
         /// Call Rebuild() after modifications to update the mesh.
+        /// Clamps to not go below FloorY.
         /// </summary>
         public void ReduceHeightAt(int gridI, int gridJ, float amount)
         {
@@ -288,7 +289,8 @@ namespace DigSim3D.App
 
             if (!float.IsNaN(_heights[gridI, gridJ]))
             {
-                _heights[gridI, gridJ] = Mathf.Max(-Amplitude * 2f, _heights[gridI, gridJ] - amount);
+                float newHeight = _heights[gridI, gridJ] - amount;
+                _heights[gridI, gridJ] = Mathf.Max(newHeight, FloorY);
             }
         }
 
@@ -337,6 +339,7 @@ namespace DigSim3D.App
         /// Lower terrain height in a circular area (for digging/excavation).
         /// Directly modifies _heights and rebuilds only the mesh (preserves modifications).
         /// This is efficient for real-time terrain deformation.
+        /// Clamps terrain to not go below FloorY.
         /// </summary>
         public void LowerArea(Vector3 worldXZ, float radius, float deltaHeight)
         {
@@ -360,7 +363,9 @@ namespace DigSim3D.App
 
                     if (dx * dx + dz * dz <= radius * radius)
                     {
-                        _heights[i, j] = _heights[i, j] - deltaHeight;
+                        // Lower terrain but clamp to FloorY to prevent digging through the floor
+                        float newHeight = _heights[i, j] - deltaHeight;
+                        _heights[i, j] = Mathf.Max(newHeight, FloorY);
                     }
                 }
             }
