@@ -42,6 +42,12 @@ namespace DigSim3D.App
         /// <summary> Accumulated dig time at current site (seconds) </summary>
         private float _digTimeAccumulated = 0f;
 
+        /// <summary> Time since last check for better dig site (seconds) </summary>
+        private float _timeSinceLastSiteCheck = 0f;
+        
+        /// <summary> How often to check for better dig sites (seconds) </summary>
+        private const float SiteCheckInterval = 0.5f; // Check every 0.5 seconds
+
         /// <summary> List of recently visited dig locations to prevent revisiting </summary>
         private System.Collections.Generic.List<Vector3> _recentDigLocations = new();
         
@@ -104,19 +110,78 @@ namespace DigSim3D.App
                     {
                         DigState.State = DigState.TaskState.Digging;
                         _digTimeAccumulated = 0f;
+                        _timeSinceLastSiteCheck = 0f; // Reset site check timer when starting to dig
                     }
                     break;
 
                 case DigState.TaskState.Digging:
-                    // Dig at current site
+                    // Dig one frame at current site FIRST
                     PerformDigging(deltaSeconds);
 
                     // Check if payload is full
                     if (DigState.IsPayloadFull)
                     {
+                        GD.Print($"[VehicleBrain] {Agent.Name} payload full ({DigState.CurrentPayload:F2}/{DigState.MaxPayload:F2}), going to dump");
                         DigState.State = DigState.TaskState.TravelingToDump;
                         PlanPathToDump();
+                        break;
                     }
+                    
+                    // Increment timer for site checking
+                    _timeSinceLastSiteCheck += deltaSeconds;
+                    
+                    // Check for better sites every interval (0.5 seconds)
+                    if (_timeSinceLastSiteCheck >= SiteCheckInterval)
+                    {
+                        _timeSinceLastSiteCheck = 0f; // Reset timer
+                        
+                        GD.Print($"[VehicleBrain] {Agent.Name} checking for better dig sites... (current payload: {DigState.CurrentPayload:F2}/{DigState.MaxPayload:F2})");
+                        
+                        // After digging, check for better dig site (terrain has been updated)
+                        Vector3 betterDigSite = FindBestDigInSector();
+                        
+                        // If no valid site found, mark as complete
+                        if (betterDigSite.Y < 0f)
+                        {
+                            GD.Print($"[VehicleBrain] {Agent.Name} no more valid dig sites in sector, marking complete");
+                            DigState.State = DigState.TaskState.Complete;
+                            break;
+                        }
+                        
+                        // If we found a better site and it's not the current one, move to it
+                        if (!IsSameDigSite(betterDigSite, DigState.CurrentDigTarget))
+                        {
+                            // Get updated height at current location from terrain
+                            float currentHeight = GetTerrainHeightAt(DigState.CurrentDigTarget);
+                            float betterHeight = betterDigSite.Y;
+                            
+                            GD.Print($"[VehicleBrain] {Agent.Name} comparing sites: current={currentHeight:F3}m at ({DigState.CurrentDigTarget.X:F1},{DigState.CurrentDigTarget.Z:F1}), better={betterHeight:F3}m at ({betterDigSite.X:F1},{betterDigSite.Z:F1})");
+                            
+                            // Only move if the new site is higher (even slightly) - removed 5cm threshold
+                            if (betterHeight > currentHeight + 0.01f) // 1cm threshold - very sensitive
+                            {
+                                GD.Print($"[VehicleBrain] {Agent.Name} found better dig site (height {betterHeight:F2}m vs current {currentHeight:F2}m), moving from ({DigState.CurrentDigTarget.X:F1}, {DigState.CurrentDigTarget.Z:F1}) to ({betterDigSite.X:F1}, {betterDigSite.Z:F1})");
+                                
+                                // Calculate approach yaw for new site
+                                Vector3 toCenter = (Vector3.Zero - betterDigSite).WithY(0).Normalized();
+                                float approachYaw = Mathf.Atan2(toCenter.Z, toCenter.X);
+                                
+                                // Set new dig target and plan path
+                                SetDigTarget(betterDigSite, approachYaw);
+                                PlanPathToDigSite(betterDigSite, approachYaw);
+                                break;
+                            }
+                            else
+                            {
+                                GD.Print($"[VehicleBrain] {Agent.Name} staying at current site (height difference {betterHeight - currentHeight:F3}m below threshold)");
+                            }
+                        }
+                        else
+                        {
+                            GD.Print($"[VehicleBrain] {Agent.Name} best site is current site, continuing to dig");
+                        }
+                    }
+                    // Continue digging at current site if no better site found or not time to check yet
                     break;
 
                 case DigState.TaskState.TravelingToDump:
@@ -236,8 +301,8 @@ namespace DigSim3D.App
                 {
                     float height = _terrain.HeightGrid[i, j];
                     
-                    // Accept any height >= 0.2m
-                    if (float.IsNaN(height) || height < 0.2f) continue;
+                    // Accept any positive height (removed 0.2m minimum constraint)
+                    if (float.IsNaN(height) || height <= 0f) continue;
 
                     // Convert grid indices to world position
                     float worldX = (i - resolution / 2f) * gridStep;
@@ -287,15 +352,9 @@ namespace DigSim3D.App
                     }
                     if (tooCloseToObstacle) continue;
 
-                    // SIMPLIFIED SCORING: Just prioritize height
-                    Vector3 robotPos = Agent.GlobalTransform.Origin;
-                    float distFromRobot = candidate.DistanceTo(robotPos);
-                    
-                    // Base score: height is most important (tallest points first)
-                    float score = height * 10.0f;
-                    
-                    // Small penalty for being very far from robot (prefer closer targets when equal height)
-                    score -= distFromRobot * 0.05f;
+                    // PURE HEIGHT SCORING: ONLY prioritize height (no distance penalty)
+                    // This ensures robots always move to the tallest point in their sector
+                    float score = height;
 
                     if (score > bestScore)
                     {
@@ -384,8 +443,8 @@ namespace DigSim3D.App
                 {
                     float height = _terrain.HeightGrid[i, j];
                     
-                    // Accept any height >= 0.2m
-                    if (float.IsNaN(height) || height < 0.2f) continue;
+                    // Accept any positive height (removed 0.2m minimum constraint)
+                    if (float.IsNaN(height) || height <= 0f) continue;
 
                     // Convert grid indices to world position
                     float worldX = (i - resolution / 2f) * gridStep;
@@ -553,6 +612,54 @@ namespace DigSim3D.App
             DigState.CurrentDigTarget = digPos;
             DigState.CurrentDigYaw = approachYaw;
             DigState.State = DigState.TaskState.TravelingToDigSite;
+        }
+
+        /// <summary>
+        /// Check if two dig sites are essentially the same location (within 1 meter).
+        /// </summary>
+        private bool IsSameDigSite(Vector3 site1, Vector3 site2)
+        {
+            return site1.DistanceTo(site2) < 1.0f;
+        }
+
+        /// <summary>
+        /// Get the current terrain height at a specific location.
+        /// </summary>
+        private float GetTerrainHeightAt(Vector3 position)
+        {
+            if (_terrain == null || _terrain.HeightGrid == null)
+                return 0f;
+                
+            int resolution = _terrain.GridResolution;
+            float gridStep = _terrain.GridStep;
+            
+            // Convert world position to grid indices
+            int i = (int)((position.X / gridStep) + resolution / 2f);
+            int j = (int)((position.Z / gridStep) + resolution / 2f);
+            
+            // Check bounds
+            if (i < 0 || i >= resolution || j < 0 || j >= resolution)
+                return 0f;
+                
+            float height = _terrain.HeightGrid[i, j];
+            return float.IsNaN(height) ? 0f : height;
+        }
+
+        /// <summary>
+        /// Calculate dig site score based on height and distance from robot.
+        /// </summary>
+        private float GetDigSiteScore(Vector3 digSite)
+        {
+            Vector3 robotPos = Agent.GlobalTransform.Origin;
+            float distFromRobot = digSite.DistanceTo(robotPos);
+            
+            // Base score: height is most important (tallest points first)
+            float score = digSite.Y * 10.0f;
+            
+            // Small penalty for being very far from robot (prefer closer targets when equal height)
+            score -= distFromRobot * 0.05f;
+            
+            return score;
         }
     }
 }
