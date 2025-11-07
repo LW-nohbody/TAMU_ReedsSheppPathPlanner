@@ -8,13 +8,13 @@ namespace DigSim3D.Domain
     public sealed class DigConfig
     {
         /// <summary> Dig rate (m³/second) </summary>
-        public float DigRatePerSecond = 2.0f;  // Increased for more visible progress
+        public float DigRatePerSecond = 2.0f;  // Balanced rate for strategic digging
 
         /// <summary> Radius of excavation cone (meters) </summary>
-        public float DigRadius = 1.2f;  // Reduced to prevent overlap between robots
+        public float DigRadius = 1.2f;  // Smaller radius for more precise digging
 
         /// <summary> Depth of excavation cone (meters) </summary>
-        public float DigDepth = 0.3f;  // Per-frame depth
+        public float DigDepth = 0.3f;  // Original per-frame depth
 
         /// <summary> Distance threshold to consider "at dig site" (meters) </summary>
         public float AtSiteThreshold = 0.5f;

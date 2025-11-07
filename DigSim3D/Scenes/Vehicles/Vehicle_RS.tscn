@@ -1,7 +1,7 @@
 [gd_scene load_steps=8 format=3 uid="uid://bjwl37wdxs6ua"]
 
-[ext_resource type="Script" uid="uid://bphtvec6igp6u" path="res://Scripts/App/VehicleVisualizer.cs" id="1_andsp"]
-[ext_resource type="ArrayMesh" uid="uid://hcn7bpngoe57" path="res://Scenes/Vehicles/Vehicle_Mesh_3.res" id="2_qufrh"]
+[ext_resource type="Script" uid="uid://1oh75ncnk7ov" path="res://Scripts/App/VehicleVisualizer.cs" id="1_andsp"]
+[ext_resource type="ArrayMesh" uid="uid://boq17dbwo452g" path="res://Scenes/Vehicles/Vehicle_Mesh_3.res" id="2_qufrh"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_0xm2m"]
 size = Vector3(0.5, 0.5, 0.75)

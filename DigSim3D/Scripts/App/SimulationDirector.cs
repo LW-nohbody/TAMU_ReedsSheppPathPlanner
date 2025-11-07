@@ -67,9 +67,9 @@ namespace DigSim3D.App
         private DigService _digService = null!;
         private DigConfig _digConfig = new DigConfig 
         { 
-            DigRadius = 0.8f,  // Smaller radius for more precise digging
-            DigDepth = 0.3f,
-            DigRatePerSecond = 2.0f,
+            DigRadius = 1.2f,  // Smaller radius for more precise digging
+            DigDepth = 0.3f,   // Original depth
+            DigRatePerSecond = 2.0f,  // Balanced rate for strategic digging
             AtSiteThreshold = 0.5f,
             AtDumpThreshold = 0.5f,
             MinHeightChange = 0.01f
