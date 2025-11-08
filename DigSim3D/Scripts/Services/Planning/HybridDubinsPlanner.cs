@@ -56,7 +56,7 @@ namespace DigSim3D.Services
             GD.Print($"[HybridDubinsPlanner] Goal Pos: ({goalPos.X}, {goalPos.Z}) and orientation: {goal.Yaw}");
 
             var rsPts = rsPoints.ToList();
-            if (obstacles.Count == 0 || PathIsValid(rsPts, obstacles, goal.Yaw, world.Terrain.Radius))
+            if (obstacles.Count == 0 || PathIsValid(rsPts, obstacles, goal.Yaw, spec.TurnRadius, world.Terrain.Radius))
             {
                 //GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
 #if DEBUG
@@ -168,14 +168,14 @@ namespace DigSim3D.Services
 
                     var (dTest, dTestGears) = DAdapter.ComputePath3D(segStart, prevYaw, segEnd, segYaw, turnRadius, world.Terrain.Radius, _sampleStep);
 
-                    if (dTest.Length == 0 || !PathIsValid(dTest.ToList(), obstacles, segYaw, world.Terrain.Radius))
+                    if (dTest.Length == 0 || !PathIsValid(dTest.ToList(), obstacles, segYaw, turnRadius, world.Terrain.Radius))
                     {
                         //If shortest path cannot reach, check all other Dubins paths
                         
                         var (dTests, dTestsGears) = DAdapter.ComputeAllPath3D(segStart, prevYaw, segEnd, segYaw, turnRadius, world.Terrain.Radius, _sampleStep);
                         foreach (var test in dTests)
                         {
-                            if(test.Length > 0 && PathIsValid(test.ToList(), obstacles, segYaw, world.Terrain.Radius))
+                            if(test.Length > 0 && PathIsValid(test.ToList(), obstacles, segYaw, turnRadius, world.Terrain.Radius))
                             {
                                 farthestReachable = j;
                                 AStarValid = true;
@@ -207,7 +207,7 @@ namespace DigSim3D.Services
                     Vector3 nextDirVec = target - segStart;
                     targetYaw = Math.Atan2(nextDirVec.Z, nextDirVec.X);
                 }
-                // GD.Print($"[HybridDubinsPlanner] Target: {target.X}, {target.Z}, farthestReachable: {farthestReachable}");
+                GD.Print($"[HybridDubinsPlanner] Target: {target.X}, {target.Z}, farthestReachable: {farthestReachable}");
 
                 // Get Dubins path to the nearest reachable A* point, angled to follow the rest of A*
                 // GD.Print("[HybridDubinsPlanner] Generating A* based Dubins path");
@@ -238,19 +238,19 @@ namespace DigSim3D.Services
                     double yawDiff = Math.Max(-Math.PI, Math.Min(Math.PI, midYaw - prevYaw));
                     if(Math.Abs(yawDiff) > maxYaw)
                     {
-                        // GD.PrintErr("[HybridDubinsPlanner] Exceeded max yaw");
+                        GD.PrintErr("[HybridDubinsPlanner] Exceeded max yaw");
                         midYaw = prevYaw + (yawDiff / Math.Abs(yawDiff) * Math.Min(Math.Abs(yawDiff), maxYaw));
                     }
 
-                    // GD.Print($"[HybridDubinsPlanner] Running Lerp with new target: ({mid.X}, {mid.Z})");
+                    GD.Print($"[HybridDubinsPlanner] Running Lerp with new target: ({mid.X}, {mid.Z})");
 
                     var (listD1, listD1Gears) = DAdapter.ComputeAllPath3D(segStart, prevYaw, mid, midYaw, turnRadius, world.Terrain.Radius, _sampleStep);
 
                     foreach (var d1 in listD1)
                     {
-                        if (d1.Length > 0 && PathIsValid(d1.ToList(), obstacles, midYaw, world.Terrain.Radius))
+                        if (d1.Length > 0 && PathIsValid(d1.ToList(), obstacles, midYaw, turnRadius, world.Terrain.Radius))
                         {
-                            // GD.Print("[HybridDubinsPlanner] Found viable lerp path");
+                            GD.Print("[HybridDubinsPlanner] Found viable lerp path");
                             mergedPoints.AddRange(d1.Skip(1));
                             mergedGears.AddRange(listD1Gears[1].Skip(1));
                             pathFound = true;
@@ -295,7 +295,7 @@ namespace DigSim3D.Services
 
                 if (AStarValid)
                 {
-                    if (!PathIsValid(dSegment.ToList(), obstacles, targetYaw, world.Terrain.Radius))
+                    if (!PathIsValid(dSegment.ToList(), obstacles, targetYaw, turnRadius, world.Terrain.Radius))
                     {
                         GD.Print("[HybridDubinsPlanner] A*-based path is invalid");
                     }
@@ -379,7 +379,7 @@ namespace DigSim3D.Services
                 return (null, null);
 
             var (dSegment, dGears) = DAdapter.ComputePath3D(start, startYaw, end, endYaw, turnRadius, world.Terrain.Radius, _sampleStep);
-            if (dSegment.Length > 0 && PathIsValid(dSegment.ToList(), obstacles, endYaw, world.Terrain.Radius))
+            if (dSegment.Length > 0 && PathIsValid(dSegment.ToList(), obstacles, endYaw, turnRadius, world.Terrain.Radius))
                 return (dSegment.ToList(), dGears.ToList());
 
             // Subdivide at midpoint
@@ -412,7 +412,7 @@ namespace DigSim3D.Services
             return path;
         }
 
-        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, double endYaw, double radius)
+        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, double endYaw, double radius, double worldRadius)
         {
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
 
@@ -448,7 +448,15 @@ namespace DigSim3D.Services
                         //            $"dist={Math.Sqrt(distSq):F2} < min={minDist:F2}");
                         return false;
                     }
-                    
+
+                }
+                double r = Math.Sqrt(p.X * p.X + p.Y * p.Y);
+                double d = worldRadius - r;
+                double angleToWall = Math.Atan2(p.Y, p.X);
+                double angleWallDist = Math.Abs(angleToWall - endYaw);
+                if(angleWallDist < 0.48 && d < radius)
+                {
+                    return false;
                 }
             }
 
