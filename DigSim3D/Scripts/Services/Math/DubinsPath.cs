@@ -25,7 +25,7 @@ using System.Security.Cryptography;
 //         return angle;
 //     }
 
-//     public static (double rho, double theta) PolarConversion(double x, double y)
+//     public static (double rho, double theta) R(double x, double y)
 //     {
 //         double rho = Math.Sqrt(x * x + y * y);
 //         double theta = M(Math.Atan2(y, x));
@@ -56,14 +56,29 @@ namespace DigSim3D.Services
         public static List<PathElement> Path1(double x, double y, double phi)
         {
             phi = Utils.M(phi);
+            // var path = new List<PathElement>();
+            // var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
+            // if (rho <= 4.0)
+            // {
+            //     double a = Math.Acos(rho / 4.0);
+            //     double t = Utils.M(t1 + Math.PI / 2.0 - a);
+            //     double u = Utils.M(Math.PI - 2.0 * a);
+            //     double v = Utils.M(phi - t - u);
+            //     path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
+            //     path.Add(PathElement.Create(u, Steering.RIGHT, Gear.FORWARD));
+            //     path.Add(PathElement.Create(v, Steering.LEFT, Gear.FORWARD));
+            // }
+            // return path;
             var path = new List<PathElement>();
-            var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
+            double xi = x - Math.Sin(phi);
+            double eta = y - 1 + Math.Cos(phi);
+            var (rho, theta) = Utils.R(xi, eta);
             if (rho <= 4.0)
             {
-                double a = Math.Acos(rho / 4.0);
-                double u = Utils.M(Math.PI - 2.0 * a);
-                double t = Utils.M(t1 + Math.PI / 2.0 - a);
-                double v = Utils.M(phi - t - u);
+                double A = Math.Acos(Math.Max(-1.0, Math.Min(1.0, rho / 4.0)));
+                double t = Utils.M(theta + Math.PI / 2.0 - A);
+                double u = Utils.M(Math.PI - 2.0 * A);
+                double v = Utils.M(phi - t + u);
                 path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
                 path.Add(PathElement.Create(u, Steering.RIGHT, Gear.FORWARD));
                 path.Add(PathElement.Create(v, Steering.LEFT, Gear.FORWARD));
@@ -73,17 +88,32 @@ namespace DigSim3D.Services
 
         public static List<PathElement> Path2(double x, double y, double phi)
         {
-            y = -y;
-            phi = -phi;
+            // y = -y;
+            // phi = -phi;
             phi = Utils.M(phi);
+            // var path = new List<PathElement>();
+            // var (rho, t1) = Utils.R(x - Math.Sin(phi), y - 1 + Math.Cos(phi));
+            // if (rho <= 4.0)
+            // {
+            //     double a = Math.Acos(rho / 4.0);
+            //     double u = Utils.M(Math.PI - 2.0 * a);
+            //     double t = Utils.M(t1 - Math.PI / 2.0 + a);
+            //     double v = Utils.M(phi - t - u);
+            //     path.Add(PathElement.Create(t, Steering.RIGHT, Gear.FORWARD));
+            //     path.Add(PathElement.Create(u, Steering.LEFT, Gear.FORWARD));
+            //     path.Add(PathElement.Create(v, Steering.RIGHT, Gear.FORWARD));
+            // }
+            // return path;
             var path = new List<PathElement>();
-            var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
+            double xi = x + Math.Sin(phi);
+            double eta = -y - 1 + Math.Cos(phi);
+            var (rho, theta) = Utils.R(xi, eta);
             if (rho <= 4.0)
             {
-                double a = Math.Acos(rho / 4.0);
-                double u = Utils.M(Math.PI - 2.0 * a);
-                double t = Utils.M(t1 - Math.PI / 2.0 + a);
-                double v = Utils.M(phi - t - u);
+                double A = Math.Acos(Math.Max(-1.0, Math.Min(1.0, rho / 4.0)));
+                double t = Utils.M(theta - Math.PI / 2.0 + A);
+                double u = Utils.M(Math.PI - 2.0 * A);
+                double v = Utils.M(phi - t + u);
                 path.Add(PathElement.Create(t, Steering.RIGHT, Gear.FORWARD));
                 path.Add(PathElement.Create(u, Steering.LEFT, Gear.FORWARD));
                 path.Add(PathElement.Create(v, Steering.RIGHT, Gear.FORWARD));
