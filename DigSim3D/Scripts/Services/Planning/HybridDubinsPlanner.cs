@@ -207,7 +207,7 @@ namespace DigSim3D.Services
                     Vector3 nextDirVec = target - segStart;
                     targetYaw = Math.Atan2(nextDirVec.Z, nextDirVec.X);
                 }
-                // GD.Print($"[HybridDubinsPlanner] Target: {target.X}, {target.Z}");
+                // GD.Print($"[HybridDubinsPlanner] Target: {target.X}, {target.Z}, farthestReachable: {farthestReachable}");
 
                 // Get Dubins path to the nearest reachable A* point, angled to follow the rest of A*
                 // GD.Print("[HybridDubinsPlanner] Generating A* based Dubins path");
@@ -221,10 +221,11 @@ namespace DigSim3D.Services
 
                 //If path to next A* point isn't valid, split path into multiple Dubins paths up to 5 times
                 int subdiv = 0;
-                while ((!AStarValid) && subdiv < 5)
+                while ((!AStarValid) && subdiv < 3)
                 {
                     bool pathFound = false;
-                    GD.Print("[HybridDubinsPlanner] Running Lerp for loop");
+                    // farthestReachable--;
+                    
                     subdiv++;
                     Vector3 mid = segStart.Lerp(target, 0.5f);
                     // Vector3 mid = target - segStart;
@@ -232,6 +233,16 @@ namespace DigSim3D.Services
                     // mid.Z = mid.Z / MathF.Pow(2, subdiv);
                     // mid = mid + segStart;
                     double midYaw = Math.Atan2((mid - segStart).Z, (mid - segStart).X); //TODO: Redo so the midYaw is angled to follow the rest of the path
+                    double distToMid = Math.Sqrt(Math.Pow(mid.X - segStart.X, 2) + Math.Pow(mid.Z - segStart.Z, 2));
+                    double maxYaw = distToMid / world.Terrain.Radius;
+                    double yawDiff = Math.Max(-Math.PI, Math.Min(Math.PI, midYaw - prevYaw));
+                    if(Math.Abs(yawDiff) > maxYaw)
+                    {
+                        // GD.PrintErr("[HybridDubinsPlanner] Exceeded max yaw");
+                        midYaw = prevYaw + (yawDiff / Math.Abs(yawDiff) * Math.Min(Math.Abs(yawDiff), maxYaw));
+                    }
+
+                    // GD.Print($"[HybridDubinsPlanner] Running Lerp with new target: ({mid.X}, {mid.Z})");
 
                     var (listD1, listD1Gears) = DAdapter.ComputeAllPath3D(segStart, prevYaw, mid, midYaw, turnRadius, world.Terrain.Radius, _sampleStep);
 
@@ -239,15 +250,16 @@ namespace DigSim3D.Services
                     {
                         if (d1.Length > 0 && PathIsValid(d1.ToList(), obstacles, midYaw, world.Terrain.Radius))
                         {
+                            // GD.Print("[HybridDubinsPlanner] Found viable lerp path");
                             mergedPoints.AddRange(d1.Skip(1));
-                            // mergedGears.AddRange(dGears1.Skip(1));
-                            farthestReachable--;
+                            mergedGears.AddRange(listD1Gears[1].Skip(1));
                             pathFound = true;
                             break;
                         }
                     }
                     if (pathFound) { break; }
-                    else{ GD.Print("[HybridDubinsPlanner] Lerp failed");  }
+                    else { GD.Print("[HybridDubinsPlanner] Lerp failed"); target = mid;}
+                    
 
                     // var (d1, dGears1) = DAdapter.ComputePath3D(segStart, prevYaw, mid, midYaw, turnRadius, world.Terrain.Radius, _sampleStep);
 
@@ -278,7 +290,7 @@ namespace DigSim3D.Services
                     prevYaw = targetYaw;
                     // dSegment = new Vector3[] { };
                     // GD.Print($"[HyrbridDubinsPLanner] dSegment.Length: {dSegment.Length}");
-                    break;
+                    // break;
                 }
 
                 if (AStarValid)
@@ -426,7 +438,10 @@ namespace DigSim3D.Services
                     //     GD.Print($"   sample ({p.X:F2},{p.Z:F2}) → obs ({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}), " +
                     //             $"dist={Math.Sqrt(distSq):F2}, min={minDist:F2}");
                     // }
-
+                    // if(angleDist < 0.48 && distSq < turnDistSq)
+                    // {
+                    //     GD.PrintErr($"Dubins path stuck at obstacle, angleDist: {angleDist}, distSq: {distSq}");
+                    // }
                     if (distSq < minDistSq || (angleDist < 0.48 && distSq < turnDistSq))
                     {
                         //GD.PrintErr($"❌ RS path collision: sample=({p.X:F2},{p.Z:F2}) obs=({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}) " +
