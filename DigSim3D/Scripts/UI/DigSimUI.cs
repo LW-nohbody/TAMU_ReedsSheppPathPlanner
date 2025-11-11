@@ -13,7 +13,7 @@ namespace DigSim3D.UI
     public partial class DigSimUI : Control
     {
         private VBoxContainer _leftPanelContainer = null!;
-        private Dictionary<int, PremiumRobotStatusEntry> _robotEntries = new();
+        private List<PremiumRobotStatusEntry> _robotEntries = new();
         private AnimatedValueLabel _remainingDirtLabel = null!;
         private ProgressBar _overallProgressBar = null!;
         private AnimatedValueLabel _overallProgressLabel = null!;
@@ -343,16 +343,20 @@ namespace DigSim3D.UI
             
             var robotPanel = new PremiumRobotStatusEntry(robotId, color);
             _leftPanelContainer.AddChild(robotPanel);
-            _robotEntries[index] = robotPanel;
+            _robotEntries.Add(robotPanel);
             GD.Print($"[DigSimUI] Added DigSimUI robot panel {robotId}");
         }
 
-        public void UpdateRobotPayload(int robotId, float payloadPercent, Vector3 position, string status)
+        public void UpdateRobotPayload(int index, float payloadPercent, Vector3 position, string status)
         {
-            if (_robotEntries.TryGetValue(robotId, out var entry))
+            if (index >= 0 && index < _robotEntries.Count)
             {
+                var entry = _robotEntries[index];
                 entry.UpdatePayload(payloadPercent, status, position);
             }
+            // {
+            //     entry.UpdatePayload(payloadPercent, status, position);
+            // }
         }
 
         public void UpdateTerrainProgress(float remainingVolume, float initialVolume)
