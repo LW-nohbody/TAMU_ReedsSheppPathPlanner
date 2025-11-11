@@ -141,7 +141,7 @@ namespace DigSim3D.UI
             
             _overallProgressLabel = new AnimatedValueLabel
             {
-                Text = "Dirt Remaining Progress Bar",
+                Text = "Overall Dirt Removed Progress Bar",
                 SizeFlagsHorizontal = SizeFlags.ExpandFill
             };
             _overallProgressLabel.SetFontSize(14);
@@ -335,16 +335,16 @@ namespace DigSim3D.UI
             vbox.AddChild(radiusSlider);
         }
 
-        public void AddRobot(int robotId, string name, Color color)
+        public void AddRobot(int index, string robotId, Color color)
         {
             // Add spacing before each robot panel
             var spacer = new Control { CustomMinimumSize = new Vector2(0, 8) };
             _leftPanelContainer.AddChild(spacer);
             
-            var robotPanel = new PremiumRobotStatusEntry(robotId, name, color);
+            var robotPanel = new PremiumRobotStatusEntry(robotId, color);
             _leftPanelContainer.AddChild(robotPanel);
-            _robotEntries[robotId] = robotPanel;
-            GD.Print($"[DigSimUI] Added DigSimUI robot panel {robotId}: {name}");
+            _robotEntries[index] = robotPanel;
+            GD.Print($"[DigSimUI] Added DigSimUI robot panel {robotId}");
         }
 
         public void UpdateRobotPayload(int robotId, float payloadPercent, Vector3 position, string status)
@@ -362,6 +362,7 @@ namespace DigSim3D.UI
             
             float progress = initialVolume > 0 ? ((initialVolume - remainingVolume) / initialVolume) * 100f : 0f;
             progress = Mathf.Clamp(progress, 0f, 100f);
+            _overallProgressBar.Value = progress;
             
             // Update Dirt Remaining Progress Bar bar (100% to 0% - inverse of progress)
             float dirtRemaining = 100f - progress;

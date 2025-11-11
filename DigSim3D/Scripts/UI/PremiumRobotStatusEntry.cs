@@ -8,14 +8,14 @@ namespace DigSim3D.UI
     /// </summary>
     public partial class PremiumRobotStatusEntry : PanelContainer
     {
-        private int _robotId;
+        private string _robotId;
         private Label _nameLabel = null!;
         private ProgressBar _payloadBar = null!;
         private Label _statusLabel = null!;
         private Color _robotColor;
         private MiniChart _chart = null!;
 
-        public PremiumRobotStatusEntry(int id, string name, Color color)
+        public PremiumRobotStatusEntry(string id, Color color)
         {
             _robotId = id;
             _robotColor = color;
@@ -49,7 +49,7 @@ namespace DigSim3D.UI
             // Name with icon
             _nameLabel = new Label
             {
-                Text = $"🤖 Robot {_robotId}",
+                Text = $"🤖 {_robotId}",
                 Modulate = _robotColor
             };
             _nameLabel.AddThemeFontSizeOverride("font_size", 12);

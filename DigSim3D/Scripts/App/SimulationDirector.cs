@@ -126,11 +126,12 @@ namespace DigSim3D.App
 
                 car.Wheelbase = VehicleLength;
                 car.TrackWidth = VehicleWidth;
+                car._vehicleID = $"RS-{(i + 1):00}";
 
                 _vehicles.Add(car);
 
                 // Add nameplate
-                var id = $"RS-{(i + 1):00}";
+                var id = car._vehicleID;
                 var nameplate = new Nameplate3D
                 {
                     Text = id,
@@ -245,7 +246,8 @@ namespace DigSim3D.App
             // Add robots to UI
             for (int i = 0; i < _robotBrains.Count; i++)
             {
-                _digSimUI.AddRobot(i, $"Robot_{i}", new Color((float)i / _robotBrains.Count, 0.6f, 1.0f));
+                var car = _vehicles[i];
+                _digSimUI.AddRobot(i, car._vehicleID, new Color((float)i / _robotBrains.Count, 0.6f, 1.0f));
             }
 
             // Calculate and store initial terrain volume
