@@ -61,12 +61,14 @@ namespace DigSim3D.App
         private float lift = 0.04f;
 
         [Export] public NodePath ObstacleManagerPath = null!;
+        [Export] public NodePath DynamicObstacleManagerPath = null!;
         private ObstacleManager _obstacleManager = null!;
+        private DynamicObstacleManager _dynamicObstacleManager = null!;
 
         // === Dig System ===
         private DigService _digService = null!;
-        private DigConfig _digConfig = new DigConfig 
-        { 
+        private DigConfig _digConfig = new DigConfig
+        {
             DigRadius = 0.8f,  // Smaller radius for more precise digging
             DigDepth = 0.3f,
             DigRatePerSecond = 2.0f,
@@ -104,6 +106,12 @@ namespace DigSim3D.App
                 GD.PushError("SimulationDirector: ObstacleManagerPath not set or not found.");
                 return;
             }
+            _dynamicObstacleManager = GetNodeOrNull<DynamicObstacleManager>(DynamicObstacleManagerPath);
+            if (_dynamicObstacleManager == null)
+            {
+                GD.PushError("SimulationDirector: DynamicObstacleManagerPath not set or not found.");
+                return;
+            }
 
             // Build global static navigation grid from obstacles BEFORE spawning vehicles
             var obstacleList = _obstacleManager.GetObstacles();
@@ -128,6 +136,8 @@ namespace DigSim3D.App
                 car.TrackWidth = VehicleWidth;
 
                 _vehicles.Add(car);
+
+                _dynamicObstacleManager.RegisterDynamicObstacle(car);
 
                 // Add nameplate
                 var id = $"RS-{(i + 1):00}";
@@ -156,11 +166,11 @@ namespace DigSim3D.App
 
             // === Initialize Dig Service ===
             _digService = new DigService(_terrain, _digConfig);
-            
+
             // Create dig visualizer
             _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
             AddChild(_digVisualizer);
-            
+
             // Create sector visualizer to show robot sectors
             _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
             AddChild(_sectorVisualizer);
@@ -237,7 +247,7 @@ namespace DigSim3D.App
             var uiLayer = new CanvasLayer { Layer = 100 };
             AddChild(uiLayer);
             GD.Print($"[Director] Created CanvasLayer for UI");
-            
+
             _digSimUI = new DigSim3D.UI.DigSimUI();
             uiLayer.AddChild(_digSimUI);
             GD.Print($"[Director] Added DigSimUI to CanvasLayer");
@@ -257,7 +267,7 @@ namespace DigSim3D.App
             _digSimUI.SetInitialVolume(_initialTerrainVolume);
             _digSimUI.SetVehicles(_vehicles);
             // Removed SetTerrain call - no longer needed without terrain thumbnail
-            
+
             // Initialize progress bars to 0% and 100%
             _digSimUI.UpdateTerrainProgress(_initialTerrainVolume, _initialTerrainVolume);
 
@@ -356,11 +366,11 @@ namespace DigSim3D.App
         private float CalculateTerrainVolume()
         {
             if (_terrain == null || _terrain.HeightGrid == null) return 0f;
-            
+
             float totalVolume = 0f;
             float gridStep = _terrain.GridStep;
             float cellArea = gridStep * gridStep;
-            
+
             for (int i = 0; i < _terrain.GridResolution; i++)
             {
                 for (int j = 0; j < _terrain.GridResolution; j++)
@@ -372,7 +382,7 @@ namespace DigSim3D.App
                     }
                 }
             }
-            
+
             return totalVolume;
         }
 
@@ -382,6 +392,43 @@ namespace DigSim3D.App
             foreach (var brain in _robotBrains)
             {
                 brain.UpdateDigBehavior((float)delta);
+
+                // if (_dynamicObstacleManager != null && _dynamicObstacleManager.IsNearDynamicObstacle(brain.Agent.GlobalTransform.Origin, brain.Agent))
+                // {
+                //     //tell brain to replan path
+
+                //     //debug print robot number near dynamic obstacle
+                //     GD.Print($"[Director] Robot near dynamic obstacle: {_robotBrains.IndexOf(brain)}");
+                // }
+                if (_dynamicObstacleManager != null)
+                {
+                    int myIndex = _robotBrains.IndexOf(brain);
+                    bool shouldPause = false;
+
+                    foreach (var other in _robotBrains)
+                    {
+                        if (other == brain) continue;
+
+                        int otherIndex = _robotBrains.IndexOf(other);
+                        float dist = brain.Agent.GlobalTransform.Origin.DistanceTo(other.Agent.GlobalTransform.Origin);
+
+                        if (dist < _dynamicObstacleManager.AvoidanceRadius)
+                        {
+                            // If there's *any* higher-priority robot nearby, we must wait
+                            if (otherIndex > myIndex)
+                            {
+                                shouldPause = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    brain.Agent.SetPhysicsProcess(!shouldPause);
+
+                    //if (shouldPause)
+                        //GD.Print($"[Director] Robot {myIndex} waiting for higher-priority robot nearby.");
+                
+                }
             }
 
             // Update UI with robot stats
