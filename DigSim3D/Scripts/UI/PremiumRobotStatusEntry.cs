@@ -4,7 +4,7 @@ using System;
 namespace DigSim3D.UI
 {
     /// <summary>
-    /// Premium robot status panel with mini chart
+    /// Agent status monitoring panel with payload and position tracking
     /// </summary>
     public partial class PremiumRobotStatusEntry : PanelContainer
     {
@@ -19,17 +19,16 @@ namespace DigSim3D.UI
         {
             _robotId = id;
             _robotColor = color;
-            CustomMinimumSize = new Vector2(0, 80); // Don't set fixed width
-            SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            CustomMinimumSize = new Vector2(380, 85);
             MouseFilter = MouseFilterEnum.Stop;
             
-            // Professional, academic styling
+            // Dark theme panel with subtle border
             var styleBox = new StyleBoxFlat();
-            styleBox.BgColor = new Color(0.16f, 0.18f, 0.22f, 0.94f);
-            styleBox.BorderColor = new Color(color.R * 0.7f, color.G * 0.7f, color.B * 0.7f, 0.8f);
+            styleBox.BgColor = new Color(0.16f, 0.17f, 0.19f, 1.0f); // Slightly lighter than main panel
+            styleBox.BorderColor = new Color(0.25f, 0.27f, 0.30f, 1.0f); // Subtle border
             styleBox.SetBorderWidthAll(1);
-            styleBox.SetCornerRadiusAll(6);
-            styleBox.ShadowColor = new Color(0.0f, 0.0f, 0.0f, 0.4f);
+            styleBox.SetCornerRadiusAll(5);
+            styleBox.ShadowColor = new Color(0.0f, 0.0f, 0.0f, 0.2f);
             styleBox.ShadowSize = 4;
             styleBox.ShadowOffset = new Vector2(0, 2);
             AddThemeStyleboxOverride("panel", styleBox);
@@ -38,59 +37,61 @@ namespace DigSim3D.UI
         public override void _Ready()
         {
             var margin = new MarginContainer();
-            margin.AddThemeConstantOverride("margin_left", 10);
-            margin.AddThemeConstantOverride("margin_right", 10);
-            margin.AddThemeConstantOverride("margin_top", 8);
-            margin.AddThemeConstantOverride("margin_bottom", 8);
+            margin.AddThemeConstantOverride("margin_left", 8);
+            margin.AddThemeConstantOverride("margin_right", 8);
+            margin.AddThemeConstantOverride("margin_top", 6);
+            margin.AddThemeConstantOverride("margin_bottom", 6);
             AddChild(margin);
             
             var vbox = new VBoxContainer();
-            vbox.AddThemeConstantOverride("separation", 4);
+            vbox.AddThemeConstantOverride("separation", 3);
             margin.AddChild(vbox);
             
-            // Professional name label
+            // Name label - orange accent
             _nameLabel = new Label
             {
-                Text = $"Unit {_robotId}",
-                Modulate = new Color(0.85f, 0.88f, 0.92f)
+                Text = $"Agent {_robotId}",
             };
             _nameLabel.AddThemeFontSizeOverride("font_size", 12);
-            _nameLabel.AddThemeColorOverride("font_color", Colors.White);
+            _nameLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.65f, 0.20f, 1.0f)); // Neon orange accent
             vbox.AddChild(_nameLabel);
             
-            // Professional payload bar
+            // Payload bar - dark theme
             _payloadBar = new ProgressBar
             {
                 MinValue = 0,
                 MaxValue = 100,
                 Value = 0,
-                CustomMinimumSize = new Vector2(380, 16),
+                CustomMinimumSize = new Vector2(350, 16),
                 ShowPercentage = false
             };
             
             var barStyleBox = new StyleBoxFlat();
-            barStyleBox.BgColor = new Color(0.18f, 0.20f, 0.24f, 0.9f);
-            barStyleBox.BorderColor = new Color(0.25f, 0.28f, 0.32f, 0.8f);
+            barStyleBox.BgColor = new Color(0.10f, 0.11f, 0.13f, 1.0f); // Very dark background
+            barStyleBox.SetCornerRadiusAll(3);
+            barStyleBox.BorderColor = new Color(0.22f, 0.24f, 0.27f, 1.0f);
             barStyleBox.SetBorderWidthAll(1);
-            barStyleBox.SetCornerRadiusAll(4);
             _payloadBar.AddThemeStyleboxOverride("background", barStyleBox);
             
             var barFillStyleBox = new StyleBoxFlat();
-            barFillStyleBox.BgColor = new Color(_robotColor.R * 0.8f, _robotColor.G * 0.8f, _robotColor.B * 0.8f, 1.0f);
+            barFillStyleBox.BgColor = _robotColor; // Keep robot's unique color
             barFillStyleBox.SetCornerRadiusAll(3);
             _payloadBar.AddThemeStyleboxOverride("fill", barFillStyleBox);
             
             vbox.AddChild(_payloadBar);
             
-            // Professional status label
+            // Status label - light gray
             _statusLabel = new Label
             {
-                Text = "Status: Standby | Pos: (0.0, 0.0)",
-                Modulate = Colors.White
+                Text = "State: Idle | Position: (0.0, 0.0)"
             };
-            _statusLabel.AddThemeFontSizeOverride("font_size", 10);
-            _statusLabel.AddThemeColorOverride("font_color", new Color(0.70f, 0.73f, 0.80f));
+            _statusLabel.AddThemeFontSizeOverride("font_size", 9);
+            _statusLabel.AddThemeColorOverride("font_color", new Color(0.65f, 0.68f, 0.72f, 1.0f)); // Light gray text
             vbox.AddChild(_statusLabel);
+            
+            // Mini chart
+            _chart = new MiniChart();
+            vbox.AddChild(_chart);
         }
 
         public void UpdatePayload(float payloadPercent, string status, Vector3 position)
@@ -102,17 +103,12 @@ namespace DigSim3D.UI
             
             if (_statusLabel != null)
             {
-                // Professional status formatting (no emojis)
-                string statusText = status switch
-                {
-                    "ToDigSite" => "En Route to Site",
-                    "Digging" => "Excavating",
-                    "ToDumpSite" => "Transporting",
-                    "Dumping" => "Unloading",
-                    _ => "Standby"
-                };
-                
-                _statusLabel.Text = $"{statusText} | Pos: ({position.X:F1}, {position.Z:F1}) | Load: {payloadPercent:P0}";
+                _statusLabel.Text = $"State: {status} | Position: ({position.X:F1}, {position.Z:F1})";
+            }
+            
+            if (_chart != null)
+            {
+                _chart.AddDataPoint(payloadPercent);
             }
         }
     }

@@ -16,7 +16,7 @@ namespace DigSim3D.UI
         public override void _Ready()
         {
             AddThemeConstantOverride("separation", 8);
-            CustomMinimumSize = new Vector2(380, 36);
+            CustomMinimumSize = new Vector2(350, 35);
         }
 
         public void AddPreset(string label, float value)
@@ -24,34 +24,24 @@ namespace DigSim3D.UI
             var button = new Button
             {
                 Text = label,
-                CustomMinimumSize = new Vector2(90, 32),
+                CustomMinimumSize = new Vector2(80, 30),
                 SizeFlagsHorizontal = SizeFlags.ExpandFill
             };
             
-            // Professional button styling
+            // Style
             var styleBox = new StyleBoxFlat();
-            styleBox.BgColor = new Color(0.20f, 0.22f, 0.28f, 0.9f);
-            styleBox.BorderColor = new Color(0.30f, 0.34f, 0.40f, 0.9f);
+            styleBox.BgColor = new Color(0.2f, 0.3f, 0.5f, 0.8f);
+            styleBox.BorderColor = new Color(0.4f, 0.6f, 0.8f, 1.0f);
             styleBox.SetBorderWidthAll(1);
             styleBox.SetCornerRadiusAll(4);
             button.AddThemeStyleboxOverride("normal", styleBox);
             
             var styleBoxHover = new StyleBoxFlat();
-            styleBoxHover.BgColor = new Color(0.28f, 0.32f, 0.38f, 1.0f);
-            styleBoxHover.BorderColor = new Color(0.45f, 0.55f, 0.65f, 1.0f);
-            styleBoxHover.SetBorderWidthAll(1);
+            styleBoxHover.BgColor = new Color(0.3f, 0.4f, 0.6f, 0.9f);
+            styleBoxHover.BorderColor = new Color(0.5f, 0.7f, 1.0f, 1.0f);
+            styleBoxHover.SetBorderWidthAll(2);
             styleBoxHover.SetCornerRadiusAll(4);
             button.AddThemeStyleboxOverride("hover", styleBoxHover);
-            
-            var styleBoxPressed = new StyleBoxFlat();
-            styleBoxPressed.BgColor = new Color(0.35f, 0.75f, 0.45f, 0.9f);
-            styleBoxPressed.BorderColor = new Color(0.40f, 0.85f, 0.50f, 1.0f);
-            styleBoxPressed.SetBorderWidthAll(1);
-            styleBoxPressed.SetCornerRadiusAll(4);
-            button.AddThemeStyleboxOverride("pressed", styleBoxPressed);
-            
-            button.AddThemeColorOverride("font_color", new Color(0.85f, 0.88f, 0.92f));
-            button.AddThemeFontSizeOverride("font_size", 11);
             
             button.Pressed += () => OnPresetPressed(value);
             AddChild(button);
