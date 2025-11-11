@@ -60,7 +60,7 @@ namespace DigSim3D.UI
             _payloadBar = new ProgressBar
             {
                 MinValue = 0,
-                MaxValue = 100,
+                MaxValue = 95,
                 Value = 0,
                 CustomMinimumSize = new Vector2(350, 14),
                 ShowPercentage = false

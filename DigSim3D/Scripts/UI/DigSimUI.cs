@@ -8,7 +8,7 @@ using DigSim3D.App;
 namespace DigSim3D.UI
 {
     /// <summary>
-    /// Premium DigSim3D UI with glassmorphism, animations, and advanced features
+    ///  DigSimUI with glassmorphism, animations, and advanced features
     /// </summary>
     public partial class DigSimUI : Control
     {
@@ -17,7 +17,8 @@ namespace DigSim3D.UI
         private AnimatedValueLabel _remainingDirtLabel = null!;
         private ProgressBar _overallProgressBar = null!;
         private AnimatedValueLabel _overallProgressLabel = null!;
-        private Label _heatMapStatusLabel = null!;
+        // private Label _heatMapStatusLabel = null!;
+        private AnimatedValueLabel _dirtRemainingLabel = null!;
         private ProgressBar _dirtRemainingBar = null!;  // Changed from thumbnail to progress bar
 
         private DigConfig _digConfig = null!;
@@ -36,7 +37,7 @@ namespace DigSim3D.UI
 
         public override void _Ready()
         {
-            GD.Print("[DigSimUI] Initializing premium UI...");
+            GD.Print("[DigSimUI] Initializing DigSimUI...");
 
             // Root setup
             Visible = true;
@@ -51,7 +52,7 @@ namespace DigSim3D.UI
             CreateLeftPanel();
             CreateSettingsPanel();
             
-            GD.Print("[DigSimUI] ✅ Premium UI initialized!");
+            GD.Print("[DigSimUI] ✅ DigSimUI initialized!");
         }
 
         private void CreateLeftPanel()
@@ -140,12 +141,12 @@ namespace DigSim3D.UI
             
             _overallProgressLabel = new AnimatedValueLabel
             {
-                Text = "Progress: 0%",
+                Text = "Dirt Remaining Progress Bar",
                 SizeFlagsHorizontal = SizeFlags.ExpandFill
             };
             _overallProgressLabel.SetFontSize(14);
-            _overallProgressLabel.SetColor(new Color(0.7f, 1.0f, 0.8f));
-            progressHbox.AddChild(_overallProgressLabel);
+            _overallProgressLabel.SetColor(new Color(0.8f, 0.8f, 1.0f));
+            _leftPanelContainer.AddChild(_overallProgressLabel);
 
             // Progress bar with gradient
             _overallProgressBar = new ProgressBar
@@ -178,19 +179,28 @@ namespace DigSim3D.UI
             _remainingDirtLabel.SetColor(new Color(1.0f, 0.9f, 0.7f));
             _leftPanelContainer.AddChild(_remainingDirtLabel);
 
-            // Heat map status with icon
-            _heatMapStatusLabel = new Label
-            {
-                Text = "🌡️ Heat Map: OFF",
-                Modulate = Colors.White
-            };
-            _heatMapStatusLabel.AddThemeFontSizeOverride("font_size", 11);
-            _heatMapStatusLabel.AddThemeColorOverride("font_color", new Color(0.8f, 0.8f, 1.0f));
-            _leftPanelContainer.AddChild(_heatMapStatusLabel);
+            // Heat map status with icon <-- Edit to turn on.off later
+            // _heatMapStatusLabel = new Label
+            // {
+            //     Text = "🌡️ Heat Map: OFF",
+            //     Modulate = Colors.White
+            // };
+            // _heatMapStatusLabel.AddThemeFontSizeOverride("font_size", 11);
+            // _heatMapStatusLabel.AddThemeColorOverride("font_color", new Color(0.8f, 0.8f, 1.0f));
+            // _leftPanelContainer.AddChild(_heatMapStatusLabel);
             
             // Add spacing before dirt remaining bar
             var spacer1 = new Control { CustomMinimumSize = new Vector2(0, 10) };
             _leftPanelContainer.AddChild(spacer1);
+
+            _dirtRemainingLabel = new AnimatedValueLabel
+            {
+                Text = "Dirt Remaining Progress Bar",
+                SizeFlagsHorizontal = SizeFlags.ExpandFill
+            };
+            _dirtRemainingLabel.SetFontSize(14);
+            _dirtRemainingLabel.SetColor(new Color(0.8f, 0.8f, 1.0f));
+            _leftPanelContainer.AddChild(_dirtRemainingLabel);
             
             // Dirt remaining progress bar (starts at 100%, decreases to 0%)
             _dirtRemainingBar = new ProgressBar
@@ -334,7 +344,7 @@ namespace DigSim3D.UI
             var robotPanel = new PremiumRobotStatusEntry(robotId, name, color);
             _leftPanelContainer.AddChild(robotPanel);
             _robotEntries[robotId] = robotPanel;
-            GD.Print($"[DigSimUI] Added premium robot panel {robotId}: {name}");
+            GD.Print($"[DigSimUI] Added DigSimUI robot panel {robotId}: {name}");
         }
 
         public void UpdateRobotPayload(int robotId, float payloadPercent, Vector3 position, string status)
@@ -347,28 +357,25 @@ namespace DigSim3D.UI
 
         public void UpdateTerrainProgress(float remainingVolume, float initialVolume)
         {
+            // Update Dirt Remaing for OVerall Progress Bar
             _remainingDirtLabel.SetText($"Remaining: {remainingVolume:F2} m³");
             
             float progress = initialVolume > 0 ? ((initialVolume - remainingVolume) / initialVolume) * 100f : 0f;
             progress = Mathf.Clamp(progress, 0f, 100f);
             
-            // Update overall progress bar (0% to 100%)
-            _overallProgressBar.Value = progress;
-            _overallProgressLabel.SetText($"Progress: {progress:F0}%");
-            
-            // Update dirt remaining bar (100% to 0% - inverse of progress)
+            // Update Dirt Remaining Progress Bar bar (100% to 0% - inverse of progress)
             float dirtRemaining = 100f - progress;
             _dirtRemainingBar.Value = dirtRemaining;
         }
 
         public void SetDigConfig(DigConfig config) => _digConfig = config;
         
-        public void SetHeatMapStatus(bool enabled)
-        {
-            string icon = enabled ? "🔥" : "🌡️";
-            string status = enabled ? "ON" : "OFF";
-            _heatMapStatusLabel.Text = $"{icon} Heat Map: {status}";
-        }
+        // public void SetHeatMapStatus(bool enabled)
+        // {
+        //     string icon = enabled ? "🔥" : "🌡️";
+        //     string status = enabled ? "ON" : "OFF";
+        //     _heatMapStatusLabel.Text = $"{icon} Heat Map: {status}";
+        // }
 
         public void SetInitialVolume(float volume) => _initialTerrainVolume = volume;
         

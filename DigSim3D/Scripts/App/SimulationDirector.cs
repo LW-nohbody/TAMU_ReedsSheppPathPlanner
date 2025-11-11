@@ -253,7 +253,7 @@ namespace DigSim3D.App
             GD.Print($"[Director] Initial terrain volume: {_initialTerrainVolume:F2} m³");
 
             _digSimUI.SetDigConfig(_digConfig);
-            _digSimUI.SetHeatMapStatus(false);
+            // _digSimUI.SetHeatMapStatus(false);
             _digSimUI.SetInitialVolume(_initialTerrainVolume);
             _digSimUI.SetVehicles(_vehicles);
             // Removed SetTerrain call - no longer needed without terrain thumbnail
