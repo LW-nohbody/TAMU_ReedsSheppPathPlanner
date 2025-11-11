@@ -19,17 +19,21 @@ namespace DigSim3D.UI
         private AnimatedValueLabel _overallProgressLabel = null!;
         private Label _heatMapStatusLabel = null!;
         private ProgressBar _dirtRemainingBar = null!;  // Changed from thumbnail to progress bar
+        private PremiumSlider _depthSlider = null!;
+        private PremiumSlider _radiusSlider = null!;
+
+        private bool _syncingFromConfig = false;
 
         private DigConfig _digConfig = null!;
         private float _initialTerrainVolume = 0f;
         private PremiumUIPanel _settingsPanel = null!;
         private List<VehicleVisualizer> _vehicles = new();
-        
+
         // Draggable state
         private bool _isDraggingLeftPanel = false;
         private Vector2 _dragOffset = Vector2.Zero;
         private Control _leftPanel = null!;
-        
+
         // Animation
         private float _glowIntensity = 0f;
         private bool _glowIncreasing = true;
@@ -43,14 +47,14 @@ namespace DigSim3D.UI
             Modulate = new Color(1, 1, 1, 1);
             ZIndex = 100;
             MouseFilter = MouseFilterEnum.Ignore; // Let clicks pass through to children
-            
+
             // Fill entire viewport
             AnchorRight = 1.0f;
             AnchorBottom = 1.0f;
 
             CreateLeftPanel();
             CreateSettingsPanel();
-            
+
             GD.Print("[DigSimUI] ✅ Premium UI initialized!");
         }
 
@@ -61,7 +65,7 @@ namespace DigSim3D.UI
             {
                 MouseFilter = MouseFilterEnum.Stop
             };
-            
+
             // Position at top-left
             _leftPanel.AnchorLeft = 0.0f;
             _leftPanel.AnchorTop = 0.0f;
@@ -71,7 +75,7 @@ namespace DigSim3D.UI
             _leftPanel.OffsetTop = 15.0f;
             _leftPanel.OffsetRight = 435.0f; // 420px width
             _leftPanel.OffsetBottom = 715.0f; // 700px height
-            
+
             AddChild(_leftPanel);
 
             // Glassmorphism panel with blur effect
@@ -84,7 +88,7 @@ namespace DigSim3D.UI
             panelStyleBox.ShadowColor = new Color(0.4f, 0.6f, 1.0f, 0.4f);
             panelStyleBox.ShadowSize = 8;
             panelStyleBox.ShadowOffset = new Vector2(0, 2);
-            
+
             var panel = new Panel
             {
                 CustomMinimumSize = new Vector2(420, 700),
@@ -92,7 +96,7 @@ namespace DigSim3D.UI
             };
             panel.AddThemeStyleboxOverride("panel", panelStyleBox);
             _leftPanel.AddChild(panel);
-            
+
             // Title bar for dragging
             var titleBar = new PanelContainer
             {
@@ -106,7 +110,7 @@ namespace DigSim3D.UI
             titleStyleBox.CornerRadiusBottomRight = 0;
             titleBar.AddThemeStyleboxOverride("panel", titleStyleBox);
             panel.AddChild(titleBar);
-            
+
             var titleLabel = new Label
             {
                 Text = "🚀 DigSim3D - Robot Status",
@@ -117,7 +121,7 @@ namespace DigSim3D.UI
             titleLabel.AddThemeFontSizeOverride("font_size", 18);
             titleLabel.AddThemeColorOverride("font_color", Colors.White);
             titleBar.AddChild(titleLabel);
-            
+
             // Content container
             var margin = new MarginContainer();
             margin.AddThemeConstantOverride("margin_left", 20);
@@ -125,7 +129,7 @@ namespace DigSim3D.UI
             margin.AddThemeConstantOverride("margin_top", 50);
             margin.AddThemeConstantOverride("margin_bottom", 20);
             panel.AddChild(margin);
-            
+
             _leftPanelContainer = new VBoxContainer
             {
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
@@ -137,7 +141,7 @@ namespace DigSim3D.UI
             // Overall Progress with animation
             var progressHbox = new HBoxContainer();
             _leftPanelContainer.AddChild(progressHbox);
-            
+
             _overallProgressLabel = new AnimatedValueLabel
             {
                 Text = "Progress: 0%",
@@ -156,17 +160,17 @@ namespace DigSim3D.UI
                 CustomMinimumSize = new Vector2(380, 20),
                 MouseFilter = MouseFilterEnum.Stop
             };
-            
+
             var progressStyleBox = new StyleBoxFlat();
             progressStyleBox.BgColor = new Color(0.2f, 0.2f, 0.3f, 0.6f);
             progressStyleBox.SetCornerRadiusAll(6);
             _overallProgressBar.AddThemeStyleboxOverride("background", progressStyleBox);
-            
+
             var progressFillStyleBox = new StyleBoxFlat();
             progressFillStyleBox.BgColor = new Color(0.3f, 0.8f, 0.5f, 1.0f); // Green
             progressFillStyleBox.SetCornerRadiusAll(6);
             _overallProgressBar.AddThemeStyleboxOverride("fill", progressFillStyleBox);
-            
+
             _leftPanelContainer.AddChild(_overallProgressBar);
 
             // Remaining dirt with animation
@@ -187,11 +191,11 @@ namespace DigSim3D.UI
             _heatMapStatusLabel.AddThemeFontSizeOverride("font_size", 11);
             _heatMapStatusLabel.AddThemeColorOverride("font_color", new Color(0.8f, 0.8f, 1.0f));
             _leftPanelContainer.AddChild(_heatMapStatusLabel);
-            
+
             // Add spacing before dirt remaining bar
             var spacer1 = new Control { CustomMinimumSize = new Vector2(0, 10) };
             _leftPanelContainer.AddChild(spacer1);
-            
+
             // Dirt remaining progress bar (starts at 100%, decreases to 0%)
             _dirtRemainingBar = new ProgressBar
             {
@@ -202,17 +206,17 @@ namespace DigSim3D.UI
                 MouseFilter = MouseFilterEnum.Stop,
                 ShowPercentage = true
             };
-            
+
             var dirtProgressStyleBox = new StyleBoxFlat();
             dirtProgressStyleBox.BgColor = new Color(0.2f, 0.2f, 0.3f, 0.6f);
             dirtProgressStyleBox.SetCornerRadiusAll(6);
             _dirtRemainingBar.AddThemeStyleboxOverride("background", dirtProgressStyleBox);
-            
+
             var dirtProgressFillStyleBox = new StyleBoxFlat();
             dirtProgressFillStyleBox.BgColor = new Color(0.8f, 0.5f, 0.3f, 1.0f); // Orange/brown for dirt
             dirtProgressFillStyleBox.SetCornerRadiusAll(6);
             _dirtRemainingBar.AddThemeStyleboxOverride("fill", dirtProgressFillStyleBox);
-            
+
             _leftPanelContainer.AddChild(_dirtRemainingBar);
 
             // Add spacing after dirt remaining bar
@@ -227,11 +231,11 @@ namespace DigSim3D.UI
             sepStyleBox.ContentMarginBottom = 1;
             separator.AddThemeStyleboxOverride("separator", sepStyleBox);
             _leftPanelContainer.AddChild(separator);
-            
+
             // Add extra spacing after separator (before robot panels)
             var spacer3 = new Control { CustomMinimumSize = new Vector2(0, 15) };
             _leftPanelContainer.AddChild(spacer3);
-            
+
             GD.Print("[DigSimUI] Left panel created with glassmorphism");
         }
 
@@ -242,7 +246,7 @@ namespace DigSim3D.UI
                 Title = "⚙️ Advanced Settings",
                 CustomMinimumSize = new Vector2(380, 500)
             };
-            
+
             // Position at top-right
             _settingsPanel.AnchorLeft = 1.0f;
             _settingsPanel.AnchorTop = 0.0f;
@@ -252,12 +256,12 @@ namespace DigSim3D.UI
             _settingsPanel.OffsetTop = 15;
             _settingsPanel.OffsetRight = -15;
             _settingsPanel.OffsetBottom = 515;
-            
+
             AddChild(_settingsPanel);
-            
+
             // Add settings content
             AddSettingsContent();
-            
+
             GD.Print("[DigSimUI] Settings panel created at top-right");
         }
 
@@ -266,12 +270,12 @@ namespace DigSim3D.UI
             var vbox = new VBoxContainer();
             vbox.AddThemeConstantOverride("separation", 15);
             _settingsPanel.SetContent(vbox);
-            
+
             // Speed control with preset buttons
             var speedLabel = new Label { Text = "🚗 Robot Speed", Modulate = Colors.White };
             speedLabel.AddThemeFontSizeOverride("font_size", 14);
             vbox.AddChild(speedLabel);
-            
+
             var speedPresets = new PresetButtonGroup();
             speedPresets.AddPreset("Slow", 0.5f);
             speedPresets.AddPreset("Medium", 1.5f);
@@ -279,7 +283,7 @@ namespace DigSim3D.UI
             speedPresets.AddPreset("Turbo", 5.0f);
             speedPresets.PresetSelected += OnSpeedPresetSelected;
             vbox.AddChild(speedPresets);
-            
+
             var speedSlider = new PremiumSlider
             {
                 MinValue = 0.1f,
@@ -288,41 +292,41 @@ namespace DigSim3D.UI
             };
             speedSlider.ValueChanged += (value) => OnSpeedChanged(value);
             vbox.AddChild(speedSlider);
-            
+
             // Dig depth
             var depthLabel = new Label { Text = "⛏️ Excavation Depth", Modulate = Colors.White };
             depthLabel.AddThemeFontSizeOverride("font_size", 14);
             vbox.AddChild(depthLabel);
-            
+
             var depthPresets = new PresetButtonGroup();
             depthPresets.AddPreset("Shallow", 0.1f);
             depthPresets.AddPreset("Medium", 0.3f);
             depthPresets.AddPreset("Deep", 0.6f);
             depthPresets.PresetSelected += OnDepthPresetSelected;
             vbox.AddChild(depthPresets);
-            
-            var depthSlider = new PremiumSlider
+
+            _depthSlider = new PremiumSlider
             {
                 MinValue = 0.05f,
                 MaxValue = 1.0f,
-                Value = 0.05f  // Start at minimum
+                Value = 0.05f // placeholder; will be synced in SetDigConfig
             };
-            depthSlider.ValueChanged += (value) => OnDigDepthChanged(value);
-            vbox.AddChild(depthSlider);
-            
+            _depthSlider.ValueChanged += (value) => OnDigDepthChanged(value);
+            vbox.AddChild(_depthSlider);
+
             // Dig radius
             var radiusLabel = new Label { Text = "📊 Excavation Radius", Modulate = Colors.White };
             radiusLabel.AddThemeFontSizeOverride("font_size", 14);
             vbox.AddChild(radiusLabel);
-            
-            var radiusSlider = new PremiumSlider
+
+            _radiusSlider = new PremiumSlider
             {
                 MinValue = 0.5f,
                 MaxValue = 5.0f,
-                Value = 0.5f  // Start at minimum
+                Value = 0.5f // placeholder; will be synced in SetDigConfig
             };
-            radiusSlider.ValueChanged += (value) => OnDigRadiusChanged(value);
-            vbox.AddChild(radiusSlider);
+            _radiusSlider.ValueChanged += (value) => OnDigRadiusChanged(value);
+            vbox.AddChild(_radiusSlider);
         }
 
         public void AddRobot(int robotId, string name, Color color)
@@ -330,7 +334,7 @@ namespace DigSim3D.UI
             // Add spacing before each robot panel
             var spacer = new Control { CustomMinimumSize = new Vector2(0, 8) };
             _leftPanelContainer.AddChild(spacer);
-            
+
             var robotPanel = new PremiumRobotStatusEntry(robotId, name, color);
             _leftPanelContainer.AddChild(robotPanel);
             _robotEntries[robotId] = robotPanel;
@@ -348,21 +352,52 @@ namespace DigSim3D.UI
         public void UpdateTerrainProgress(float remainingVolume, float initialVolume)
         {
             _remainingDirtLabel.SetText($"Remaining: {remainingVolume:F2} m³");
-            
+
             float progress = initialVolume > 0 ? ((initialVolume - remainingVolume) / initialVolume) * 100f : 0f;
             progress = Mathf.Clamp(progress, 0f, 100f);
-            
+
             // Update overall progress bar (0% to 100%)
             _overallProgressBar.Value = progress;
             _overallProgressLabel.SetText($"Progress: {progress:F0}%");
-            
+
             // Update dirt remaining bar (100% to 0% - inverse of progress)
             float dirtRemaining = 100f - progress;
             _dirtRemainingBar.Value = dirtRemaining;
         }
 
-        public void SetDigConfig(DigConfig config) => _digConfig = config;
-        
+        public void SetDigConfig(DigConfig config)
+        {
+            _digConfig = config;
+            if (_digConfig == null) return;
+
+            _syncingFromConfig = true;
+
+            if (_depthSlider != null)
+            {
+                float d = _digConfig.DigDepth > 0 ? _digConfig.DigDepth : 0.3f;
+
+                float min = 0.05f;
+                float max = MathF.Max(5.0f, d * 1.5f); // up to you
+
+                _depthSlider.Apply(min, max, d);
+                _depthSlider.SetLabel("⛏️ Target depth per site (m)");
+            }
+
+            if (_radiusSlider != null)
+            {
+                float r = _digConfig.DigRadius > 0 ? _digConfig.DigRadius : 0.5f;
+
+                float min = 0.1f;
+                float max = MathF.Max(5.0f, r * 1.5f);
+
+                _radiusSlider.Apply(min, max, r);
+                _radiusSlider.SetLabel("📊 Excavation radius (m)");
+            }
+
+            _syncingFromConfig = false;
+        }
+
+
         public void SetHeatMapStatus(bool enabled)
         {
             string icon = enabled ? "🔥" : "🌡️";
@@ -371,7 +406,7 @@ namespace DigSim3D.UI
         }
 
         public void SetInitialVolume(float volume) => _initialTerrainVolume = volume;
-        
+
         public void SetVehicles(List<VehicleVisualizer> vehicles) => _vehicles = vehicles;
 
         // Preset callbacks
@@ -380,10 +415,16 @@ namespace DigSim3D.UI
             OnSpeedChanged((double)value);
             GD.Print($"[Settings] Speed preset selected: {value} m/s");
         }
-        
+
         private void OnDepthPresetSelected(float value)
         {
-            OnDigDepthChanged((double)value);
+            if (_depthSlider == null) return;
+
+            _syncingFromConfig = true;
+            _depthSlider.Value = value;   // visually move the knob
+            _syncingFromConfig = false;
+
+            OnDigDepthChanged(value);     // apply to config
             GD.Print($"[Settings] Depth preset selected: {value} m");
         }
 
@@ -398,24 +439,20 @@ namespace DigSim3D.UI
             GD.Print($"[Settings] ⚡ Robot speed changed to {speed:F2} m/s");
         }
 
+        // Value change callbacks
         private void OnDigDepthChanged(double value)
         {
-            float depth = (float)value;
-            if (_digConfig != null)
-            {
-                _digConfig.DigDepth = depth;
-            }
-            GD.Print($"[Settings] ⛏️ Dig depth changed to {depth:F2} m");
+            if (_syncingFromConfig || _digConfig == null) return;
+
+            _digConfig.DigDepth = (float)value;
+            GD.Print($"[Settings] ⛏️ Target depth set to {_digConfig.DigDepth:F2} m");
         }
 
         private void OnDigRadiusChanged(double value)
         {
-            float radius = (float)value;
-            if (_digConfig != null)
-            {
-                _digConfig.DigRadius = radius;
-            }
-            GD.Print($"[Settings] 📊 Dig radius changed to {radius:F2} m");
+            if (_syncingFromConfig || _digConfig == null) return;
+            _digConfig.DigRadius = (float)value;
+            GD.Print($"[Settings] 📏 Radius changed to {(float)value:F3} m");
         }
 
         public override void _Process(double delta)
@@ -440,7 +477,7 @@ namespace DigSim3D.UI
                     _glowIncreasing = true;
                 }
             }
-            
+
             // Update border glow
             // Note: In production you'd update the StyleBox color here
         }
