@@ -1,11 +1,11 @@
 [gd_scene load_steps=20 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
-[ext_resource type="Script" uid="uid://bjy5klmfh1o1x" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
+[ext_resource type="Script" uid="uid://y3xj5surludi" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
 [ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://Scenes/Vehicles/Vehicle_RS.tscn" id="2_q02dg"]
-[ext_resource type="Script" uid="uid://crlual7ri4lci" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
+[ext_resource type="Script" uid="uid://ytlhjpjwably" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
 [ext_resource type="Material" uid="uid://d0aiqbs32qvub" path="res://Materials/concrete.tres" id="3_qfmbg"]
-[ext_resource type="Script" uid="uid://dijjqekvx8xfe" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
+[ext_resource type="Script" uid="uid://b13ashnn4eika" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tjpb3"]
 sky_top_color = Color(0.361634, 0.42475, 0.999998, 1)
@@ -86,7 +86,7 @@ CameraChasePath = NodePath("Cameras/CameraChase")
 CameraFreePath = NodePath("Cameras/CameraFree")
 CameraOrbitPath = NodePath("Cameras/CameraOrbit")
 TerrainPath = NodePath("Terrain")
-VehicleCount = 20
+VehicleCount = 10
 VehicleLength = 0.75
 VehicleWidth = 0.5
 GoalAdvance = 10.0
@@ -107,7 +107,7 @@ shadow_enabled = true
 [node name="Cameras" type="Node3D" parent="."]
 
 [node name="CameraTop" type="Camera3D" parent="Cameras"]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 20, 0)
+transform = Transform3D(1.0138, -0.0559882, -2.44732e-09, 0, -4.43822e-08, 1.01535, -0.0559882, -1.0138, -4.43147e-08, 0, 23.7706, 0)
 current = true
 
 [node name="CameraChase" type="Camera3D" parent="Cameras"]
@@ -118,6 +118,15 @@ transform = Transform3D(-4.37114e-08, -0.5, 0.866025, 0, 0.866025, 0.5, -1, 2.18
 
 [node name="CameraOrbit" type="Camera3D" parent="Cameras"]
 transform = Transform3D(1.01535, 0, 0, 0, 0.999925, 0.176314, 0, -0.176314, 0.999925, 0, 6, 17)
+
+[node name="Terrain" parent="." instance=ExtResource("1_rtcuc")]
+transform = Transform3D(0.999996, -0.00255967, 0.000692282, 0.00255972, 0.999997, -8.11034e-05, -0.000692072, 8.2874e-05, 1, 0, 0, 0)
+Radius = 15.2
+Frequency = 0.15
+Octaves = 2
+Smooth = 0.9
+FloorY = -0.492442
+FloorNodePath = NodePath("../Tank_Outer/Tank_Floor")
 
 [node name="Tank_Outer" type="CSGCylinder3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
@@ -139,15 +148,6 @@ radius = 15.3
 height = 0.3
 sides = 48
 material = ExtResource("3_qfmbg")
-
-[node name="Terrain" parent="." instance=ExtResource("1_rtcuc")]
-transform = Transform3D(0.999996, -0.00255967, 0.000692282, 0.00255972, 0.999997, -8.11034e-05, -0.000692072, 8.2874e-05, 1, 0, 0, 0)
-Radius = 15.2
-Frequency = 0.15
-Octaves = 2
-Smooth = 0.9
-FloorY = -0.492442
-FloorNodePath = NodePath("../Tank_Outer/Tank_Floor")
 
 [node name="ObstacleManager" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
