@@ -45,7 +45,20 @@ namespace DigSim3D.Services
             var obstacles = world?.Obstacles?.OfType<CylinderObstacle>().ToList() ?? new List<CylinderObstacle>();
 
             // 1️⃣ Direct Reeds–Shepp path
-            var (rsPoints, dGears) = DAdapter.ComputePath3D(
+            double r = Math.Sqrt(Math.Pow(goalPos.X, 2) + Math.Pow(goalPos.Z, 2));
+            double d = world.Terrain.Radius - r;
+            float angleToWall = MathF.Atan2(goalPos.Z, goalPos.X);
+            float angleWallDiff = angleToWall - (float)goal.Yaw;
+            float angleWallDist = MathF.Atan2(MathF.Sin(angleWallDiff), MathF.Cos(angleWallDiff));
+
+            if(Math.Abs(angleWallDist) < 0.48 && d < spec.TurnRadius+0.75)
+            {
+                GD.Print("[HybridDubinsPlanner] Reassigning goal orientation to avoid wall");
+                var yawSign = angleWallDiff / Math.Abs(angleWallDiff);
+                goal = new Pose(goal.X, goal.Z, angleToWall - yawSign * 0.48);
+            }
+
+            var (dPoints, dGears) = DAdapter.ComputePath3D(
                 startPos, start.Yaw,
                 goalPos, goal.Yaw,
                 turnRadiusMeters: spec.TurnRadius,
@@ -55,7 +68,7 @@ namespace DigSim3D.Services
 
             GD.Print($"[HybridDubinsPlanner] Goal Pos: ({goalPos.X}, {goalPos.Z}) and orientation: {goal.Yaw}");
 
-            var rsPts = rsPoints.ToList();
+            var rsPts = dPoints.ToList();
             if (obstacles.Count == 0 || PathIsValid(rsPts, obstacles, goal.Yaw, spec.TurnRadius, world.Terrain.Radius))
             {
                 //GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
@@ -361,44 +374,8 @@ namespace DigSim3D.Services
         }
 
 
-        private Godot.Vector3 DubinsToGodot(Vector3 p){ return new Vector3(p.X, p.Y, -p.Z);  }
+        // private Godot.Vector3 DubinsToGodot(Vector3 p){ return new Vector3(p.X, p.Y, -p.Z);  }
 
-        // Recursive RS computation with midpoint subdivision
-        private (List<Vector3>, List<int>) ComputeRSWithSubdivision(
-            Vector3 start,
-            Vector3 end,
-            double startYaw,
-            double endYaw,
-            double turnRadius,
-            List<CylinderObstacle> obstacles,
-            int depth,
-            WorldState world,
-            int maxDepth)
-        {
-            if (depth > maxDepth)
-                return (null, null);
-
-            var (dSegment, dGears) = DAdapter.ComputePath3D(start, startYaw, end, endYaw, turnRadius, world.Terrain.Radius, _sampleStep);
-            if (dSegment.Length > 0 && PathIsValid(dSegment.ToList(), obstacles, endYaw, turnRadius, world.Terrain.Radius))
-                return (dSegment.ToList(), dGears.ToList());
-
-            // Subdivide at midpoint
-            Vector3 mid = start.Lerp(end, 0.5f);
-            double midYaw = Math.Atan2((mid - start).Z, (mid - start).X);
-
-            var (firstHalf, gears1) = ComputeRSWithSubdivision(start, mid, startYaw, midYaw, turnRadius, obstacles, depth + 1, world, maxDepth);
-            var (secondHalf, gears2) = ComputeRSWithSubdivision(mid, end, midYaw, endYaw, turnRadius, obstacles, depth + 1, world, maxDepth);
-
-            if (firstHalf == null || secondHalf == null)
-                return (null, null);
-
-            // Merge, skip duplicate midpoint
-            var merged = new List<Vector3>(firstHalf);
-            merged.AddRange(secondHalf.Skip(1));
-            var mergedGears = new List<int>(gears1);
-            mergedGears.AddRange(gears2.Skip(1));
-            return (merged, mergedGears);
-        }
 
 
         // ================================================================
@@ -450,9 +427,9 @@ namespace DigSim3D.Services
                     }
 
                 }
-                double r = Math.Sqrt(p.X * p.X + p.Y * p.Y);
+                double r = Math.Sqrt(p.X * p.X + p.Z * p.Z);
                 double d = worldRadius - r;
-                double angleToWall = Math.Atan2(p.Y, p.X);
+                double angleToWall = Math.Atan2(p.Z, p.X);
                 double angleWallDist = Math.Abs(angleToWall - endYaw);
                 if(angleWallDist < 0.48 && d < radius)
                 {
