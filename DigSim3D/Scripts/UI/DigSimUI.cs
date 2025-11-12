@@ -460,12 +460,12 @@ namespace DigSim3D.UI
         }
 
 
-        public void SetHeatMapStatus(bool enabled)
-        {
-            string icon = enabled ? "🔥" : "🌡️";
-            string status = enabled ? "ON" : "OFF";
-            _heatMapStatusLabel.Text = $"{icon} Heat Map: {status}";
-        }
+        // public void SetHeatMapStatus(bool enabled)
+        // {
+        //     string icon = enabled ? "🔥" : "🌡️";
+        //     string status = enabled ? "ON" : "OFF";
+        //     _heatMapStatusLabel.Text = $"{icon} Heat Map: {status}";
+        // }
 
         public void SetInitialVolume(float volume) => _initialTerrainVolume = volume;
 
