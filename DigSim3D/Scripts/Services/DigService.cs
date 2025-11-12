@@ -12,38 +12,53 @@ namespace DigSim3D.Services
     public sealed class DigService
     {
         private TerrainDisk _terrain;
-        private DigConfig _config;
+        private DigConfig _digConfig;
         private float _totalTerrainVolumeRemoved = 0f;
 
         public DigService(TerrainDisk terrain, DigConfig config)
         {
             _terrain = terrain ?? throw new ArgumentNullException(nameof(terrain));
-            _config = config ?? DigConfig.Default;
+            _digConfig = config ?? DigConfig.Default;
         }
 
         /// <summary>
         /// Perform excavation at the given world position for the given time duration.
         /// Returns the volume of dirt excavated (m³).
         /// </summary>
-        public float DigAtPosition(Vector3 worldPos, float digDurationSeconds)
+        public float DigAtPosition(Vector3 pos, float deltaSeconds, float remainingCapacity)
         {
-            if (_terrain == null) return 0f;
+            float r = MathF.Max(0f, _digConfig.DigRadius);
+            float depthRate = MathF.Max(0f, _digConfig.DepthRatePerSecond);
+            float swell = MathF.Max(1f, _digConfig.SwellFactor);
 
-            // Calculate volume based on dig rate and duration
-            float volumePerSecond = _config.DigRatePerSecond;
-            float volumeToRemove = volumePerSecond * digDurationSeconds;
+            if (r <= 0f || depthRate <= 0f || remainingCapacity <= 0f || deltaSeconds <= 0f)
+                return 0f;
 
-            // Convert volume to depth (assuming circular excavation)
-            // Volume = π * r² * depth
-            // depth = Volume / (π * r²)
-            float digRadius = _config.DigRadius;
-            float depthToRemove = volumeToRemove / (Mathf.Pi * digRadius * digRadius);
+            // How much vertical cut we try this frame
+            float maxDepthThisFrame = depthRate * deltaSeconds;
+            if (maxDepthThisFrame <= 0f)
+                return 0f;
 
-            // Lower the terrain at this position (this calls RebuildMeshOnly internally)
-            _terrain.LowerArea(worldPos, digRadius, depthToRemove);
+            // Capacity-based clamp: how much depth fits in remainingCapacity
+            float effArea = MathF.PI * r * r;
+            float capLimitedDepth = remainingCapacity / (swell * effArea);
 
-            _totalTerrainVolumeRemoved += volumeToRemove;
-            return volumeToRemove;
+            float depthToApply = MathF.Min(maxDepthThisFrame, capLimitedDepth);
+            if (depthToApply <= 0f)
+                return 0f;
+
+            // Actually lower terrain and get REAL in-situ volume removed
+            float removedInSitu = _terrain.LowerAreaAndReturnRemovedVolume(pos, r, depthToApply);
+            if (removedInSitu <= 0f)
+                return 0f;
+
+            float carried = removedInSitu * swell;
+
+            // Safety clamp for floating point
+            if (carried > remainingCapacity)
+                carried = remainingCapacity;
+
+            return carried; // robot adds this to CurrentPayload
         }
 
         /// <summary>
