@@ -27,11 +27,20 @@ namespace DigSim3D.Domain
         /// <summary> Current dig target position in world space </summary>
         public Vector3 CurrentDigTarget { get; set; } = Vector3.Zero;
 
-        /// <summary> Approach yaw for the dig target </summary>
-        public float CurrentDigYaw { get; set; } = 0f;
+    /// <summary> Approach yaw for the dig target </summary>
+    public float CurrentDigYaw { get; set; } = 0f;
 
-        /// <summary> Current state </summary>
-        public TaskState State { get; set; } = TaskState.Idle;
+    /// <summary> Initial terrain height when we started digging at current site (meters) </summary>
+    public float InitialDigHeight { get; set; } = 0f;
+
+    /// <summary> Volume excavated at the current dig site (in-situ m³, before swell) </summary>
+    public float CurrentSiteVolumeExcavated { get; set; } = 0f;
+
+    /// <summary> Is the current dig site fully excavated (volume target reached)? </summary>
+    public bool CurrentSiteComplete { get; set; } = false;
+
+    /// <summary> Current state </summary>
+    public TaskState State { get; set; } = TaskState.Idle;
 
         /// <summary> Total terrain volume removed in this session (m³) </summary>
         public float TotalDugVolume { get; set; } = 0f;

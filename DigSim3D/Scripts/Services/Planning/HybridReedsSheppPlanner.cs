@@ -45,6 +45,16 @@ namespace DigSim3D.Services
             
             // Get arena radius for wall boundary checking
             float arenaRadius = world?.Terrain?.Radius ?? float.PositiveInfinity;
+            
+            // Debug: Warn if terrain radius is not available
+            if (arenaRadius == float.PositiveInfinity)
+            {
+                GD.PrintErr("⚠️ [HybridReedsSheppPlanner] WARNING: Arena radius not available! Wall checking disabled!");
+            }
+            else
+            {
+                GD.Print($"🔍 [HybridReedsSheppPlanner] Planning path with arena radius: {arenaRadius:F2}m (wall buffer: 0.5m)");
+            }
 
             // 1️⃣ Direct Reeds–Shepp path
             var (rsPoints, rsGears) = RSAdapter.ComputePath3D(
@@ -300,7 +310,9 @@ namespace DigSim3D.Services
         {
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
 
-            const float WallBufferMeters = 0.5f; // Same 0.5m wall buffer as dig site selection
+            // Wall buffer must account for vehicle width and safety margin
+            // Original 0.5m + extra margin to prevent paths from going through walls
+            const float WallBufferMeters = 1.0f; // Increased from 0.5m to account for vehicle turning radius
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
             
             int hitCount = 0;
@@ -311,8 +323,8 @@ namespace DigSim3D.Services
                 float distFromCenter = Mathf.Sqrt(p.X * p.X + p.Z * p.Z);
                 if (distFromCenter > maxAllowedRadius)
                 {
-                    GD.PrintErr($"❌ RS path goes through wall buffer: point=({p.X:F2},{p.Z:F2}) " +
-                                $"distFromCenter={distFromCenter:F2} > maxAllowed={maxAllowedRadius:F2}");
+                    GD.PrintErr($"❌ [PathPlanner] Path goes through wall buffer: point=({p.X:F2},{p.Z:F2}) " +
+                                $"distFromCenter={distFromCenter:F2} > maxAllowed={maxAllowedRadius:F2} (arenaRadius={arenaRadius:F2}, buffer={WallBufferMeters:F2}m)");
                     return false;
                 }
                 

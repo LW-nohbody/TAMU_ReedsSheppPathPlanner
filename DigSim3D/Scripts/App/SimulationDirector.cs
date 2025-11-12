@@ -184,6 +184,7 @@ namespace DigSim3D.App
             {
                 int robotIndex = _robotBrains.IndexOf(brain);
                 int totalRobots = _robotBrains.Count;
+                GD.Print($"🎮 [Director] Initializing brain {robotIndex} with DigConfig.DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
                 brain.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, _digVisualizer, DrawPathProjectedToTerrain, robotIndex, totalRobots);
             }
 
@@ -247,6 +248,7 @@ namespace DigSim3D.App
             GD.Print($"[Director] Initial terrain volume: {_initialTerrainVolume:F2} m³");
 
             _digSimUI.SetDigConfig(_digConfig);
+            GD.Print($"🎮 [Director] Passed DigConfig to UI: DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
             // _digSimUI.SetHeatMapStatus(false);
             _digSimUI.SetInitialVolume(_initialTerrainVolume);
             _digSimUI.SetVehicles(_vehicles);
@@ -349,29 +351,37 @@ namespace DigSim3D.App
 
         private float CalculateTerrainVolume()
         {
-            if (_terrain == null || _terrain.HeightGrid == null) return 0f;
-            
-            float totalVolume = 0f;
+            if (_terrain == null || _terrain.HeightGrid == null)
+                return 0f;
+
+            double totalVolume = 0.0;
             float gridStep = _terrain.GridStep;
             float cellArea = gridStep * gridStep;
-            
+            float baseLevel = _terrain.FloorY;
+
             for (int i = 0; i < _terrain.GridResolution; i++)
             {
                 for (int j = 0; j < _terrain.GridResolution; j++)
                 {
                     float height = _terrain.HeightGrid[i, j];
-                    if (!float.IsNaN(height) && height > 0)
+                    if (!float.IsNaN(height))
                     {
-                        totalVolume += height * cellArea;
+                        float adjustedHeight = height - baseLevel;
+                        if (adjustedHeight > 0)
+                            totalVolume += adjustedHeight * cellArea;
                     }
                 }
             }
-            
-            return totalVolume;
+
+            return (float)totalVolume;
         }
+
 
         public override void _Process(double delta)
         {
+            // OPTIMIZATION: Update DigService to batch terrain mesh updates
+            _digService?.Update((float)delta);
+
             // Update robot dig behaviors
             foreach (var brain in _robotBrains)
             {
