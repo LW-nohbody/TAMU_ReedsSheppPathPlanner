@@ -507,7 +507,7 @@ namespace DigSim3D.UI
             if (_syncingFromConfig || _digConfig == null) return;
 
             _digConfig.DigDepth = (float)value;
-            GD.Print($"[Settings] ⛏️ Target depth set to {_digConfig.DigDepth:F2} m");
+            GD.Print($"🔧🔧🔧 [Settings] UI CHANGED DigConfig.DigDepth to {_digConfig.DigDepth:F2}m (config object hash: {_digConfig.GetHashCode()})");
         }
 
         private void OnDigRadiusChanged(double value)
