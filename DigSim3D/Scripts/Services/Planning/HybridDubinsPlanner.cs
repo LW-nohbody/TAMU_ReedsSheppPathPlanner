@@ -43,6 +43,9 @@ namespace DigSim3D.Services
             var goalPos = new Vector3((float)goal.X, 0, (float)goal.Z);
 
             var obstacles = world?.Obstacles?.OfType<CylinderObstacle>().ToList() ?? new List<CylinderObstacle>();
+            
+            // Get arena radius for wall boundary checking
+            float arenaRadius = world?.Terrain?.Radius ?? float.PositiveInfinity;
 
             // 1️⃣ Direct Reeds–Shepp path
             var (rsPoints, dGears) = DAdapter.ComputePath3D(
@@ -56,7 +59,7 @@ namespace DigSim3D.Services
             GD.Print($"[HybridDubinsPlanner] Goal Pos: ({goalPos.X}, {goalPos.Z}) and orientation: {goal.Yaw}");
 
             var rsPts = rsPoints.ToList();
-            if (obstacles.Count == 0 || PathIsValid(rsPts, obstacles))
+            if (obstacles.Count == 0 || PathIsValid(rsPts, obstacles, arenaRadius))
             {
                 //GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
 #if DEBUG
@@ -84,7 +87,7 @@ namespace DigSim3D.Services
 
             // Attempt to replan
             var merged = TryReplanWithMidpoints(startPos, goalPos, spec.TurnRadius, gridPath, obstacles, startGear: 1, world,
-    goal.Yaw, start.Yaw);
+    goal.Yaw, start.Yaw, arenaRadius);
 
             if (merged.points != null)
             {
@@ -112,7 +115,8 @@ namespace DigSim3D.Services
             int startGear,
             WorldState world,
             double goalYaw,
-            double startYaw)
+            double startYaw,
+            float arenaRadius)
         {
             if (gridPath == null || gridPath.Count < 2)
                 return (null, null);
@@ -165,7 +169,7 @@ namespace DigSim3D.Services
 
                     var (dTest, dTestGears) = DAdapter.ComputePath3D(segStart, prevYaw, segEnd, segYaw, turnRadius, world.Terrain.Radius, _sampleStep);
 
-                    if (dTest.Length == 0 || !PathIsValid(dTest.ToList(), obstacles)) continue;
+                    if (dTest.Length == 0 || !PathIsValid(dTest.ToList(), obstacles, arenaRadius)) continue;
                     else
                     {
                         farthestReachable = j;
@@ -207,7 +211,7 @@ namespace DigSim3D.Services
                     var (d2, dGears2) = DAdapter.ComputePath3D(mid, midYaw, target, targetYaw, turnRadius, world.Terrain.Radius, _sampleStep);
 
                     if (d1.Length == 0 || d2.Length == 0 ||
-                        !PathIsValid(d1.ToList(), obstacles) || !PathIsValid(d2.ToList(), obstacles))
+                        !PathIsValid(d1.ToList(), obstacles, arenaRadius) || !PathIsValid(d2.ToList(), obstacles, arenaRadius))
                     {
                         GD.Print("[HybridDubinsPlanner] Valid Lerp Path not found");
                         break;
@@ -226,7 +230,7 @@ namespace DigSim3D.Services
 
                 if (AStarValid)
                 {
-                    if (!PathIsValid(dSegment.ToList(), obstacles))
+                    if (!PathIsValid(dSegment.ToList(), obstacles, arenaRadius))
                     {
                         GD.Print("[HybridDubinsPlanner] A*-based path is invalid");
                     }
@@ -304,21 +308,22 @@ namespace DigSim3D.Services
             List<CylinderObstacle> obstacles,
             int depth,
             WorldState world,
-            int maxDepth)
+            int maxDepth,
+            float arenaRadius)
         {
             if (depth > maxDepth)
                 return (null, null);
 
             var (dSegment, dGears) = DAdapter.ComputePath3D(start, startYaw, end, endYaw, turnRadius, world.Terrain.Radius, _sampleStep);
-            if (dSegment.Length > 0 && PathIsValid(dSegment.ToList(), obstacles))
+            if (dSegment.Length > 0 && PathIsValid(dSegment.ToList(), obstacles, arenaRadius))
                 return (dSegment.ToList(), dGears.ToList());
 
             // Subdivide at midpoint
             Vector3 mid = start.Lerp(end, 0.5f);
             double midYaw = Math.Atan2((mid - start).Z, (mid - start).X);
 
-            var (firstHalf, gears1) = ComputeRSWithSubdivision(start, mid, startYaw, midYaw, turnRadius, obstacles, depth + 1, world, maxDepth);
-            var (secondHalf, gears2) = ComputeRSWithSubdivision(mid, end, midYaw, endYaw, turnRadius, obstacles, depth + 1, world, maxDepth);
+            var (firstHalf, gears1) = ComputeRSWithSubdivision(start, mid, startYaw, midYaw, turnRadius, obstacles, depth + 1, world, maxDepth, arenaRadius);
+            var (secondHalf, gears2) = ComputeRSWithSubdivision(mid, end, midYaw, endYaw, turnRadius, obstacles, depth + 1, world, maxDepth, arenaRadius);
 
             if (firstHalf == null || secondHalf == null)
                 return (null, null);
@@ -354,14 +359,27 @@ namespace DigSim3D.Services
             return path;
         }
 
-        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles)
+        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, float arenaRadius)
         {
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
 
+            const float WallBufferMeters = 0.5f; // Same 0.5m wall buffer as dig site selection
+            float maxAllowedRadius = arenaRadius - WallBufferMeters;
+            
             int hitCount = 0;
 
             foreach (var p in pathPoints)
             {
+                // Check arena boundary (wall buffer zone)
+                float distFromCenter = Mathf.Sqrt(p.X * p.X + p.Z * p.Z);
+                if (distFromCenter > maxAllowedRadius)
+                {
+                    GD.PrintErr($"❌ Dubins path goes through wall buffer: point=({p.X:F2},{p.Z:F2}) " +
+                                $"distFromCenter={distFromCenter:F2} > maxAllowed={maxAllowedRadius:F2}");
+                    return false;
+                }
+                
+                // Check obstacle collisions
                 foreach (var obs in obstacles)
                 {
                     var dx = p.X - obs.GlobalPosition.X;
@@ -384,6 +402,7 @@ namespace DigSim3D.Services
                         return false;
                     }
                 }
+                hitCount++;
             }
 
             //GD.Print("[HybridReedsSheppPlanner] PathIsValid → CLEAR");
