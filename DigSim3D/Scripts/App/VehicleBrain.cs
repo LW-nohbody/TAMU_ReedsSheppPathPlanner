@@ -54,6 +54,39 @@ namespace DigSim3D.App
         /// <summary> How often to update terrain mesh while digging (seconds) </summary>
         private const float MeshUpdateInterval = 0.1f; // Update mesh 10 times per second instead of every frame
 
+        /// <summary> Last known position of robot for stuck detection </summary>
+        private Vector3 _lastPosition = Vector3.Zero;
+
+        /// <summary> Time accumulated while robot hasn't moved significantly (seconds) </summary>
+        private float _stuckTime = 0f;
+
+        /// <summary> How long robot must be stuck before triggering recovery (seconds) </summary>
+        private const float StuckTimeThreshold = 3.0f; // 3 seconds
+
+        /// <summary> Minimum distance robot must move to be considered "moving" (meters) </summary>
+        private const float MinMovementThreshold = 0.1f; // 10cm
+
+        /// <summary> Distance to back up when stuck (meters) </summary>
+        private const float BackupDistance = 2.0f; // 2 meters
+
+        /// <summary> Number of consecutive stuck attempts at current target </summary>
+        private int _stuckAttempts = 0;
+
+        /// <summary> Maximum stuck attempts before abandoning current target </summary>
+        private const int MaxStuckAttempts = 3;
+
+        /// <summary> List of recently failed dig sites to avoid </summary>
+        private System.Collections.Generic.List<Vector3> _failedDigSites = new();
+
+        /// <summary> How long to remember failed sites (seconds) </summary>
+        private const float FailedSiteMemoryTime = 30f;
+
+        /// <summary> Time when each failed site was added </summary>
+        private System.Collections.Generic.Dictionary<Vector3, float> _failedSiteTimes = new();
+
+        /// <summary> Current game time for failed site tracking </summary>
+        private float _gameTime = 0f;
+
         public override void _Ready()
         {
             Agent = GetParent<VehicleVisualizer>();
@@ -80,6 +113,12 @@ namespace DigSim3D.App
             SectorIndex = sectorIndex;
             _totalSectors = totalSectors;
 
+            // Initialize position tracking for stuck detection
+            if (Agent != null)
+            {
+                _lastPosition = Agent.GlobalTransform.Origin;
+            }
+
             GD.Print($"[VehicleBrain] {Agent.Name} assigned to sector {SectorIndex}/{_totalSectors}");
             GD.Print($"🤖 [VehicleBrain] {Agent.Name} received DigConfig: DigDepth={_digConfig.DigDepth:F2}m, DigRadius={_digConfig.DigRadius:F2}m, DepthRate={_digConfig.DepthRatePerSecond:F2}m/s (config object hash: {_digConfig.GetHashCode()})");
         }
@@ -93,15 +132,92 @@ namespace DigSim3D.App
                 return;
 
             var robotPos = Agent.GlobalTransform.Origin;
+            
+            // Update game time for failed site tracking
+            _gameTime += deltaSeconds;
+            
+            // Clean up old failed sites (older than 30 seconds)
+            CleanupOldFailedSites();
 
             switch (DigState.State)
             {
                 case DigState.TaskState.Idle:
                     // Request new dig target
                     RequestNewDigTarget();
+                    _stuckTime = 0f; // Reset stuck timer when getting new target
+                    _stuckAttempts = 0; // Reset stuck attempts for new target
+                    _lastPosition = robotPos;
                     break;
 
                 case DigState.TaskState.TravelingToDigSite:
+                    // Check if robot is stuck (hasn't moved significantly)
+                    float distanceMoved = robotPos.DistanceTo(_lastPosition);
+                    if (distanceMoved < MinMovementThreshold)
+                    {
+                        // Robot hasn't moved much, accumulate stuck time
+                        _stuckTime += deltaSeconds;
+                        
+                        if (_stuckTime >= StuckTimeThreshold)
+                        {
+                            _stuckAttempts++;
+                            
+                            if (_stuckAttempts >= MaxStuckAttempts)
+                            {
+                                // Too many attempts at this target - abandon it
+                                GD.Print($"� [VehicleBrain] {Agent.Name} STUCK {_stuckAttempts} times at current target! Abandoning site and finding new target...");
+                                
+                                // Mark current site as failed
+                                MarkSiteAsFailed(DigState.CurrentDigTarget);
+                                
+                                // Reset stuck counters
+                                _stuckTime = 0f;
+                                _stuckAttempts = 0;
+                                
+                                // Find a completely new dig target
+                                DigState.State = DigState.TaskState.Idle;
+                                RequestNewDigTarget();
+                                break;
+                            }
+                            else
+                            {
+                                // Try backing up and replanning with randomization
+                                GD.Print($"🚨 [VehicleBrain] {Agent.Name} STUCK (attempt {_stuckAttempts}/{MaxStuckAttempts})! Backing up and replanning with offset...");
+                                
+                                // Back up in reverse direction
+                                var fwd = -Agent.GlobalTransform.Basis.Z;
+                                Vector3 backupTarget = robotPos - (fwd * BackupDistance);
+                                
+                                // Add random offset to avoid repeating same path
+                                var random = new Random();
+                                float randomOffsetX = (float)(random.NextDouble() - 0.5) * 2.0f; // ±1 meter
+                                float randomOffsetZ = (float)(random.NextDouble() - 0.5) * 2.0f;
+                                backupTarget += new Vector3(randomOffsetX, 0, randomOffsetZ);
+                                
+                                // Move robot backwards
+                                Agent.GlobalTransform = new Transform3D(Agent.GlobalTransform.Basis, backupTarget);
+                                
+                                // Reset stuck timer
+                                _stuckTime = 0f;
+                                _lastPosition = backupTarget;
+                                
+                                // Replan path with slightly different approach angle
+                                float angleVariation = (float)(random.NextDouble() - 0.5) * 0.5f; // ±0.25 radians (~14 degrees)
+                                float newApproachYaw = DigState.CurrentDigYaw + angleVariation;
+                                DigState.CurrentDigYaw = newApproachYaw;
+                                
+                                GD.Print($"🔄 [VehicleBrain] {Agent.Name} backed up with random offset, replanning with angle variation...");
+                                PlanPathToDigSite(DigState.CurrentDigTarget, newApproachYaw);
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Robot is moving, reset stuck timer (but keep attempt counter)
+                        _stuckTime = 0f;
+                        _lastPosition = robotPos;
+                    }
+                    
                     // Check if arrived at dig site
                     float distToDig = robotPos.DistanceTo(DigState.CurrentDigTarget);
                     if (distToDig < _digConfig.AtSiteThreshold)
@@ -109,6 +225,8 @@ namespace DigSim3D.App
                         DigState.State = DigState.TaskState.Digging;
                         _digTimeAccumulated = 0f;
                         _timeSinceLastSiteCheck = 0f; // Reset site check timer when starting to dig
+                        _stuckTime = 0f; // Reset stuck timer when arriving at site
+                        _stuckAttempts = 0; // Reset stuck attempts on successful arrival
                         
                         // Only reset volume tracker if this is a NEW site (not returning after dump)
                         if (DigState.CurrentSiteComplete)
@@ -202,7 +320,7 @@ namespace DigSim3D.App
                     if (!HasRemainingTerrain())
                     {
                         DigState.State = DigState.TaskState.Complete;
-                        GD.Print($"🏁 [VehicleBrain] {Agent.Name} ARENA COMPLETE - no dirt > 5cm remaining anywhere in arena!");
+                        GD.Print($"🏁 [VehicleBrain] {Agent.Name} ARENA COMPLETE - no dirt remaining anywhere in arena!");
                         break;
                     }
 
@@ -243,7 +361,7 @@ namespace DigSim3D.App
             // Check if there's dirt to dig in our sector
             if (!HasDiggableTerrainInSector())
             {
-                GD.Print($"🏁 [VehicleBrain] {Agent.Name} SECTOR {SectorIndex} COMPLETE - no dirt > 5cm remaining in assigned sector");
+                GD.Print($"🏁 [VehicleBrain] {Agent.Name} SECTOR {SectorIndex} COMPLETE - no dirt remaining in assigned sector");
                 DigState.State = DigState.TaskState.Complete;
                 return;
             }
@@ -319,8 +437,8 @@ namespace DigSim3D.App
                     // Using MAX instead of average prevents skipping sites with leftover dirt mounds
                     float maxHeight = GetMaxHeightInRadius(candidateXZ, _digConfig.DigRadius);
 
-                    // Accept dig sites with ANY dirt > 5cm in the radius
-                    if (maxHeight <= 0.05f) continue;
+                    // Accept dig sites with ANY dirt > 0cm in the radius
+                    if (maxHeight <= 0.0f) continue;
 
                     Vector3 candidate = new Vector3(worldX, maxHeight, worldZ);
 
@@ -366,6 +484,19 @@ namespace DigSim3D.App
                         }
                     }
                     if (tooCloseToObstacle) continue;
+
+                    // Check if this site is in the failed sites list (too close to a failed location)
+                    bool isFailedSite = false;
+                    foreach (var failedSite in _failedDigSites)
+                    {
+                        float distToFailed = candidate.WithY(0).DistanceTo(failedSite.WithY(0));
+                        if (distToFailed < _digConfig.DigRadius * 2f) // Avoid sites within 2x dig radius of failed sites
+                        {
+                            isFailedSite = true;
+                            break;
+                        }
+                    }
+                    if (isFailedSite) continue;
 
                     // PURE HEIGHT SCORING: ONLY prioritize height (no distance penalty)
                     // This ensures robots always move to the tallest point in their sector
@@ -456,8 +587,8 @@ namespace DigSim3D.App
                 {
                     float height = _terrain.HeightGrid[i, j];
 
-                    // Accept dirt > 5cm (same threshold as HasRemainingTerrain for consistency)
-                    if (float.IsNaN(height) || height <= 0.05f) continue;
+                    // Accept dirt > 0cm (same threshold as HasRemainingTerrain for consistency)
+                    if (float.IsNaN(height) || height <= 0.0f) continue;
 
                     // Convert grid indices to world position
                     float worldX = (i - resolution / 2f) * gridStep;
@@ -550,9 +681,9 @@ namespace DigSim3D.App
                 for (int j = 0; j < resolution; j++)
                 {
                     float height = _terrain.HeightGrid[i, j];
-                    // Threshold for "significant" dirt - lowered to 5cm to catch small mounds
+                    // Threshold for "significant" dirt - lowered to 0cm to catch any remaining dirt
                     // (was 30cm which caused robots to declare complete while dirt remained)
-                    if (!float.IsNaN(height) && height > 0.05f)
+                    if (!float.IsNaN(height) && height > 0.0f)
                     {
                         return true;
                     }
@@ -821,6 +952,39 @@ namespace DigSim3D.App
             score -= distFromRobot * 0.05f;
 
             return score;
+        }
+
+        /// <summary>
+        /// Mark a dig site as failed/unreachable and remember it for a while.
+        /// </summary>
+        private void MarkSiteAsFailed(Vector3 site)
+        {
+            if (!_failedDigSites.Contains(site))
+            {
+                _failedDigSites.Add(site);
+                _failedSiteTimes[site] = _gameTime;
+                GD.Print($"❌ [VehicleBrain] {Agent.Name} marked site ({site.X:F1}, {site.Z:F1}) as FAILED/UNREACHABLE");
+            }
+        }
+
+        /// <summary>
+        /// Remove failed sites that are older than the memory time.
+        /// </summary>
+        private void CleanupOldFailedSites()
+        {
+            // Remove sites older than 30 seconds
+            _failedDigSites.RemoveAll(site => 
+            {
+                if (_failedSiteTimes.TryGetValue(site, out float addTime))
+                {
+                    if (_gameTime - addTime > FailedSiteMemoryTime)
+                    {
+                        _failedSiteTimes.Remove(site);
+                        return true; // Remove from list
+                    }
+                }
+                return false;
+            });
         }
     }
 }
