@@ -4,26 +4,67 @@ using System;
 namespace DigSim3D.UI
 {
     /// <summary>
-    /// Premium slider with glow effect and color-coded values
+    /// Premium slider with glow effect and color-coded values.
+    /// Exposes MinValue/MaxValue/Value, and keeps the internal HSlider in sync.
     /// </summary>
     public partial class PremiumSlider : VBoxContainer
     {
         private Label _label = null!;
         private HSlider _slider = null!;
         private Label _valueLabel = null!;
-        
-        public float MinValue { get; set; } = 0f;
-        public float MaxValue { get; set; } = 100f;
-        public float Value { get; set; } = 50f;
+
+        private float _minValue = 0f;
+        private float _maxValue = 100f;
+        private float _value = 50f;
+
+        public float MinValue
+        {
+            get => _minValue;
+            set
+            {
+                _minValue = value;
+                if (_slider != null)
+                    _slider.MinValue = value;
+            }
+        }
+
+        public float MaxValue
+        {
+            get => _maxValue;
+            set
+            {
+                _maxValue = value;
+                if (_slider != null)
+                    _slider.MaxValue = value;
+            }
+        }
+
+        public float Value
+        {
+            get => _value;
+            set
+            {
+                _value = value;
+
+                if (_slider != null)
+                    _slider.Value = value;
+
+                CurrentValue = value;
+
+                if (_valueLabel != null)
+                    _valueLabel.Text = $"{CurrentValue:F2}";
+            }
+        }
+
         public float CurrentValue { get; private set; } = 50f;
-        
+
         public event Action<double>? ValueChanged;
 
         public override void _Ready()
         {
             CustomMinimumSize = new Vector2(350, 60);
             AddThemeConstantOverride("separation", 5);
-            
+
             // Label
             _label = new Label
             {
@@ -33,34 +74,33 @@ namespace DigSim3D.UI
             _label.AddThemeFontSizeOverride("font_size", 12);
             _label.AddThemeColorOverride("font_color", new Color(0.9f, 0.9f, 0.9f));
             AddChild(_label);
-            
-            // Horizontal container for slider and value
+
+            // Horizontal container
             var hbox = new HBoxContainer();
             hbox.AddThemeConstantOverride("separation", 10);
             AddChild(hbox);
-            
-            // Slider
+
+            // Slider (use backing fields so DigSimUI changes before/after _Ready work)
             _slider = new HSlider
             {
-                MinValue = MinValue,
-                MaxValue = MaxValue,
-                Value = Value,  // Use the Value property
-                Step = (MaxValue - MinValue) / 100f,
+                MinValue = _minValue,
+                MaxValue = _maxValue,
+                Value = _value,
+                Step = (_maxValue - _minValue) / 100f,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 CustomMinimumSize = new Vector2(280, 24)
             };
-            
-            CurrentValue = Value;  // Initialize CurrentValue
-            
-            // Style the slider
+
+            CurrentValue = _value;
+
             var grabberStyleBox = new StyleBoxFlat();
             grabberStyleBox.BgColor = new Color(0.4f, 0.7f, 1.0f, 1.0f);
             grabberStyleBox.SetCornerRadiusAll(6);
             _slider.AddThemeStyleboxOverride("grabber_area", grabberStyleBox);
-            
+
             _slider.ValueChanged += OnSliderValueChanged;
             hbox.AddChild(_slider);
-            
+
             // Value label
             _valueLabel = new Label
             {
@@ -76,27 +116,44 @@ namespace DigSim3D.UI
 
         private void OnSliderValueChanged(double value)
         {
+            
             CurrentValue = (float)value;
-            _valueLabel.Text = $"{CurrentValue:F2}";
-            
-            // Color code based on range
-            float normalized = (CurrentValue - MinValue) / (MaxValue - MinValue);
-            Color valueColor;
-            if (normalized < 0.33f)
-                valueColor = new Color(0.3f, 0.8f, 0.5f); // Green
-            else if (normalized < 0.66f)
-                valueColor = new Color(0.8f, 0.8f, 0.3f); // Yellow
-            else
-                valueColor = new Color(0.8f, 0.3f, 0.3f); // Red
-                
+            _value = CurrentValue;
+
+            if (_valueLabel != null)
+                _valueLabel.Text = $"{CurrentValue:F2}";
+
+            // Color based on current actual range
+            float min = (float)_slider.MinValue;
+            float max = (float)_slider.MaxValue;
+            float normalized = (CurrentValue - min) / (max - min);
+            normalized = Mathf.Clamp(normalized, 0f, 1f);
+
+            Color valueColor =
+                normalized < 0.33f ? new Color(0.3f, 0.8f, 0.5f) :
+                normalized < 0.66f ? new Color(0.8f, 0.8f, 0.3f) :
+                                     new Color(0.8f, 0.3f, 0.3f);
+
             _valueLabel.Modulate = valueColor;
-            
+
             ValueChanged?.Invoke(value);
         }
 
         public void SetLabel(string text)
         {
-            if (_label != null) _label.Text = text;
+            if (_label != null)
+                _label.Text = text;
+        }
+
+        /// <summary>
+        /// Convenience: set min/max/value in one shot.
+        /// Used by DigSimUI.SetDigConfig so the sliders reflect DigConfig on startup.
+        /// </summary>
+        public void Apply(float min, float max, float value)
+        {
+            MinValue = min;
+            MaxValue = max;
+            Value = Mathf.Clamp(value, min, max);
         }
     }
 }

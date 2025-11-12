@@ -44,16 +44,16 @@ namespace DigSim3D.App
 
         /// <summary> Time since last check for better dig site (seconds) </summary>
         private float _timeSinceLastSiteCheck = 0f;
-        
+
         /// <summary> How often to check for better dig sites (seconds) </summary>
         private const float SiteCheckInterval = 0.5f; // Check every 0.5 seconds
 
         /// <summary> List of recently visited dig locations to prevent revisiting </summary>
         private System.Collections.Generic.List<Vector3> _recentDigLocations = new();
-        
+
         /// <summary> Maximum number of recent dig locations to track </summary>
         private const int MaxRecentDigLocations = 10;
-        
+
         /// <summary> Minimum distance from recent dig locations (to prevent clustering) </summary>
         private const float MinDistanceFromRecentDigs = 3.0f;
 
@@ -65,7 +65,7 @@ namespace DigSim3D.App
         /// <summary>
         /// Initialize dig brain with external services and sector assignment.
         /// </summary>
-        public void InitializeDigBrain(DigService digService, TerrainDisk terrain, 
+        public void InitializeDigBrain(DigService digService, TerrainDisk terrain,
             RadialScheduler scheduler, DigConfig digConfig, HybridReedsSheppPlanner pathPlanner,
             WorldState worldState, DigVisualizer digVisualizer, System.Action<Vector3[], Color> drawPathCallback,
             int sectorIndex, int totalSectors)
@@ -78,11 +78,11 @@ namespace DigSim3D.App
             _worldState = worldState;
             _digVisualizer = digVisualizer;
             _drawPathCallback = drawPathCallback;
-            
+
             // Assign permanent sector
             SectorIndex = sectorIndex;
             _totalSectors = totalSectors;
-            
+
             GD.Print($"[VehicleBrain] {Agent.Name} assigned to sector {SectorIndex}/{_totalSectors}");
         }
 
@@ -126,20 +126,20 @@ namespace DigSim3D.App
                         PlanPathToDump();
                         break;
                     }
-                    
+
                     // Increment timer for site checking
                     _timeSinceLastSiteCheck += deltaSeconds;
-                    
+
                     // Check for better sites every interval (0.5 seconds)
                     if (_timeSinceLastSiteCheck >= SiteCheckInterval)
                     {
                         _timeSinceLastSiteCheck = 0f; // Reset timer
-                        
+
                         GD.Print($"[VehicleBrain] {Agent.Name} checking for better dig sites... (current payload: {DigState.CurrentPayload:F2}/{DigState.MaxPayload:F2})");
-                        
+
                         // After digging, check for better dig site (terrain has been updated)
                         Vector3 betterDigSite = FindBestDigInSector();
-                        
+
                         // If no valid site found, mark as complete
                         if (betterDigSite.Y < 0f)
                         {
@@ -147,25 +147,25 @@ namespace DigSim3D.App
                             DigState.State = DigState.TaskState.Complete;
                             break;
                         }
-                        
+
                         // If we found a better site and it's not the current one, move to it
                         if (!IsSameDigSite(betterDigSite, DigState.CurrentDigTarget))
                         {
                             // Get updated height at current location from terrain
                             float currentHeight = GetTerrainHeightAt(DigState.CurrentDigTarget);
                             float betterHeight = betterDigSite.Y;
-                            
+
                             GD.Print($"[VehicleBrain] {Agent.Name} comparing sites: current={currentHeight:F3}m at ({DigState.CurrentDigTarget.X:F1},{DigState.CurrentDigTarget.Z:F1}), better={betterHeight:F3}m at ({betterDigSite.X:F1},{betterDigSite.Z:F1})");
-                            
+
                             // Only move if the new site is higher (even slightly) - removed 5cm threshold
                             if (betterHeight > currentHeight + 0.01f) // 1cm threshold - very sensitive
                             {
                                 GD.Print($"[VehicleBrain] {Agent.Name} found better dig site (height {betterHeight:F2}m vs current {currentHeight:F2}m), moving from ({DigState.CurrentDigTarget.X:F1}, {DigState.CurrentDigTarget.Z:F1}) to ({betterDigSite.X:F1}, {betterDigSite.Z:F1})");
-                                
+
                                 // Calculate approach yaw for new site
                                 Vector3 toCenter = (Vector3.Zero - betterDigSite).WithY(0).Normalized();
                                 float approachYaw = Mathf.Atan2(toCenter.Z, toCenter.X);
-                                
+
                                 // Set new dig target and plan path
                                 SetDigTarget(betterDigSite, approachYaw);
                                 PlanPathToDigSite(betterDigSite, approachYaw);
@@ -197,7 +197,7 @@ namespace DigSim3D.App
                     // Unload and request next target
                     DigState.DumpCount++;
                     DigState.CurrentPayload = 0f;
-                    
+
                     // Check if there's still dirt to dig
                     if (HasRemainingTerrain())
                     {
@@ -240,7 +240,7 @@ namespace DigSim3D.App
 
             // Find best dig location in this robot's specific sector
             Vector3 digPos = FindBestDigInSector();
-            
+
             // Check if we got a valid position (negative Y means failure from FindBestDigInSector)
             if (digPos.Y < 0f)
             {
@@ -249,15 +249,15 @@ namespace DigSim3D.App
                 DigState.State = DigState.TaskState.Complete;
                 return;
             }
-            
+
             // Calculate approach yaw (face towards center from dig site)
             Vector3 toCenter = (Vector3.Zero - digPos).WithY(0).Normalized();
             float approachYaw = Mathf.Atan2(toCenter.Z, toCenter.X);
-            
+
             // Plan path to new dig target
             SetDigTarget(digPos, approachYaw);
             PlanPathToDigSite(digPos, approachYaw);
-            
+
             GD.Print($"[VehicleBrain] {Agent.Name} (sector {SectorIndex}) assigned new dig target at ({digPos.X:F1}, {digPos.Z:F1}), height {digPos.Y:F2}m");
         }
 
@@ -272,7 +272,7 @@ namespace DigSim3D.App
 
             float sectorStartAngle = SectorIndex * Mathf.Tau / _totalSectors;
             float sectorEndAngle = (SectorIndex + 1) * Mathf.Tau / _totalSectors;
-            
+
             // Add small inward buffer to avoid sector boundary issues (shrink sector by 2 degrees on each side)
             float bufferAngle = Mathf.DegToRad(2f);
             sectorStartAngle += bufferAngle;
@@ -280,7 +280,7 @@ namespace DigSim3D.App
 
             int resolution = _terrain.GridResolution;
             float gridStep = _terrain.GridStep;
-            
+
             Vector3 bestPos = Vector3.Zero;
             float bestScore = float.NegativeInfinity;
             int candidatesChecked = 0;
@@ -290,7 +290,7 @@ namespace DigSim3D.App
             float arenaRadius = _terrain.Radius;
             const float WallBufferMeters = 0.5f; // 0.5m wall buffer (user requested)
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
-            
+
             // Get obstacles from world state for manual checking
             const float ObstacleBufferMeters = 0.5f; // 0.5m obstacle buffer
 
@@ -300,7 +300,7 @@ namespace DigSim3D.App
                 for (int j = 0; j < resolution; j++)
                 {
                     float height = _terrain.HeightGrid[i, j];
-                    
+
                     // Accept any positive height (removed 0.2m minimum constraint)
                     if (float.IsNaN(height) || height <= 0f) continue;
 
@@ -308,7 +308,7 @@ namespace DigSim3D.App
                     float worldX = (i - resolution / 2f) * gridStep;
                     float worldZ = (j - resolution / 2f) * gridStep;
                     Vector3 candidate = new Vector3(worldX, height, worldZ);
-                    
+
                     candidatesChecked++;
 
                     // Check if too close to wall (arena boundary)
@@ -322,10 +322,10 @@ namespace DigSim3D.App
                     // Check if this point is in our sector using STRICT angle check
                     float angle = Mathf.Atan2(worldZ, worldX);
                     if (angle < 0) angle += Mathf.Tau; // Normalize to [0, 2π]
-                    
+
                     // STRICT sector boundary check
                     bool inSector = IsAngleInSector(angle, sectorStartAngle, sectorEndAngle);
-                    
+
                     if (!inSector) continue;
                     candidatesInSector++;
 
@@ -340,7 +340,7 @@ namespace DigSim3D.App
                                 Vector2 candidateXZ = new Vector2(candidate.X, candidate.Z);
                                 Vector2 obstacleXZ = new Vector2(cyl.GlobalPosition.X, cyl.GlobalPosition.Z);
                                 float distToObstacle = candidateXZ.DistanceTo(obstacleXZ);
-                                
+
                                 // Check if inside obstacle + buffer
                                 if (distToObstacle < (cyl.Radius + ObstacleBufferMeters))
                                 {
@@ -377,7 +377,7 @@ namespace DigSim3D.App
 
             return bestPos;
         }
-        
+
         /// <summary>
         /// Check if an angle (in radians, [0, 2π]) is within a sector defined by start and end angles.
         /// Handles wraparound correctly.
@@ -388,7 +388,7 @@ namespace DigSim3D.App
             angle = NormalizeAngle(angle);
             sectorStart = NormalizeAngle(sectorStart);
             sectorEnd = NormalizeAngle(sectorEnd);
-            
+
             if (sectorStart < sectorEnd)
             {
                 // Normal case: sector doesn't wrap around
@@ -400,7 +400,7 @@ namespace DigSim3D.App
                 return angle >= sectorStart || angle < sectorEnd;
             }
         }
-        
+
         /// <summary>
         /// Normalize angle to [0, 2π] range.
         /// </summary>
@@ -420,7 +420,7 @@ namespace DigSim3D.App
 
             float sectorStartAngle = SectorIndex * Mathf.Tau / _totalSectors;
             float sectorEndAngle = (SectorIndex + 1) * Mathf.Tau / _totalSectors;
-            
+
             // Add small inward buffer (same as FindBestDigInSector)
             float bufferAngle = Mathf.DegToRad(2f);
             sectorStartAngle += bufferAngle;
@@ -433,7 +433,7 @@ namespace DigSim3D.App
             float arenaRadius = _terrain.Radius;
             const float WallBufferMeters = 0.5f; // 0.5m wall buffer
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
-            
+
             const float ObstacleBufferMeters = 0.5f; // 0.5m obstacle buffer
 
             // Check if any grid cell in our sector has significant height
@@ -442,14 +442,14 @@ namespace DigSim3D.App
                 for (int j = 0; j < resolution; j++)
                 {
                     float height = _terrain.HeightGrid[i, j];
-                    
+
                     // Accept any positive height (removed 0.2m minimum constraint)
                     if (float.IsNaN(height) || height <= 0f) continue;
 
                     // Convert grid indices to world position
                     float worldX = (i - resolution / 2f) * gridStep;
                     float worldZ = (j - resolution / 2f) * gridStep;
-                    
+
                     // Check if too close to wall
                     float distFromCenter = Mathf.Sqrt(worldX * worldX + worldZ * worldZ);
                     if (distFromCenter > maxAllowedRadius) continue;
@@ -457,11 +457,11 @@ namespace DigSim3D.App
                     // Check if this point is in our sector using STRICT angle check
                     float angle = Mathf.Atan2(worldZ, worldX);
                     if (angle < 0) angle += Mathf.Tau;
-                    
+
                     bool inSector = IsAngleInSector(angle, sectorStartAngle, sectorEndAngle);
-                    
+
                     if (!inSector) continue;
-                    
+
                     // Manual obstacle check
                     bool tooCloseToObstacle = false;
                     if (_worldState?.Obstacles != null)
@@ -474,7 +474,7 @@ namespace DigSim3D.App
                                 Vector2 candidateXZ = new Vector2(candidate.X, candidate.Z);
                                 Vector2 obstacleXZ = new Vector2(cyl.GlobalPosition.X, cyl.GlobalPosition.Z);
                                 float distToObstacle = candidateXZ.DistanceTo(obstacleXZ);
-                                
+
                                 if (distToObstacle < (cyl.Radius + ObstacleBufferMeters))
                                 {
                                     tooCloseToObstacle = true;
@@ -484,7 +484,7 @@ namespace DigSim3D.App
                         }
                     }
                     if (tooCloseToObstacle) continue;
-                    
+
                     return true; // Found diggable terrain in sector
                 }
             }
@@ -503,10 +503,10 @@ namespace DigSim3D.App
             var robotPos = Agent.GlobalTransform.Origin;
             var fwd = -Agent.GlobalTransform.Basis.Z;
             float startYaw = Mathf.Atan2(fwd.Z, fwd.X);
-            
+
             // Create start pose
             var startPose = new Pose(robotPos.X, robotPos.Z, startYaw);
-            
+
             // Create goal pose at dig site
             var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
 
@@ -529,7 +529,7 @@ namespace DigSim3D.App
         private bool HasRemainingTerrain()
         {
             if (_terrain == null || _terrain.HeightGrid == null) return false;
-            
+
             // Check if any grid cell has significant height
             int resolution = _terrain.GridResolution;
             for (int i = 0; i < resolution; i++)
@@ -544,7 +544,7 @@ namespace DigSim3D.App
                     }
                 }
             }
-            
+
             return false;
         }
 
@@ -553,23 +553,18 @@ namespace DigSim3D.App
         /// </summary>
         private void PerformDigging(float deltaSeconds)
         {
-            _digTimeAccumulated += deltaSeconds;
+            var position = Agent.GlobalTransform.Origin;
+            float remainingCapacity = MathF.Max(0f, DigState.MaxPayload - DigState.CurrentPayload);
 
-            // REMOVED: Safety checks that were causing robots to skip valid dig targets
-            // The dig target selection already filters for valid heights and positions
+            float carriedThisFrame = _digService.DigAtPosition(position, deltaSeconds, remainingCapacity);
 
-            // Dig at the target position - LowerArea handles mesh rebuild automatically
-            float volumeDug = _digService.DigAtPosition(DigState.CurrentDigTarget, deltaSeconds);
+            DigState.CurrentPayload += carriedThisFrame;
 
-            // Add to payload
-            DigState.CurrentPayload += volumeDug;
-            DigState.TotalDugVolume += volumeDug;
-
-            // Visualize dig activity
-            if (_digVisualizer != null)
+            if (DigState.IsPayloadFull)
             {
-                _digVisualizer.DrawDigCone(DigState.CurrentDigTarget, 1.5f, 0.8f, new Color(1.0f, 0.5f, 0f, 0.5f));
-                _digVisualizer.DrawPayloadBar(Agent.GlobalTransform.Origin, DigState.CurrentPayload, DigState.MaxPayload);
+                GD.Print($"[VehicleBrain] {Agent.Name} payload full, going to dump");
+                DigState.State = DigState.TaskState.TravelingToDump;
+                PlanPathToDump();
             }
         }
 
@@ -584,10 +579,10 @@ namespace DigSim3D.App
             var robotPos = Agent.GlobalTransform.Origin;
             var fwd = -Agent.GlobalTransform.Basis.Z;
             float startYaw = Mathf.Atan2(fwd.Z, fwd.X);
-            
+
             // Create start pose
             var startPose = new Pose(robotPos.X, robotPos.Z, startYaw);
-            
+
             // Dump at origin with approach from current direction
             var goalPose = new Pose(0f, 0f, startYaw);
 
@@ -629,18 +624,18 @@ namespace DigSim3D.App
         {
             if (_terrain == null || _terrain.HeightGrid == null)
                 return 0f;
-                
+
             int resolution = _terrain.GridResolution;
             float gridStep = _terrain.GridStep;
-            
+
             // Convert world position to grid indices
             int i = (int)((position.X / gridStep) + resolution / 2f);
             int j = (int)((position.Z / gridStep) + resolution / 2f);
-            
+
             // Check bounds
             if (i < 0 || i >= resolution || j < 0 || j >= resolution)
                 return 0f;
-                
+
             float height = _terrain.HeightGrid[i, j];
             return float.IsNaN(height) ? 0f : height;
         }
@@ -652,13 +647,13 @@ namespace DigSim3D.App
         {
             Vector3 robotPos = Agent.GlobalTransform.Origin;
             float distFromRobot = digSite.DistanceTo(robotPos);
-            
+
             // Base score: height is most important (tallest points first)
             float score = digSite.Y * 10.0f;
-            
+
             // Small penalty for being very far from robot (prefer closer targets when equal height)
             score -= distFromRobot * 0.05f;
-            
+
             return score;
         }
     }

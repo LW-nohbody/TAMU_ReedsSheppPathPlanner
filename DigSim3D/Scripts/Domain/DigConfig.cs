@@ -7,22 +7,20 @@ namespace DigSim3D.Domain
     /// </summary>
     public sealed class DigConfig
     {
-        /// <summary> Dig rate (m³/second) </summary>
-        public float DigRatePerSecond = 2.0f;  // Balanced rate for strategic digging
+        /// <summary>Radius of excavation circle (m)</summary>
+        public float DigRadius = 1.0f;
 
-        /// <summary> Radius of excavation cone (meters) </summary>
-        public float DigRadius = 1.2f;  // Smaller radius for more precise digging
+        /// <summary>Desired depth per full dig at a site (m). Used for UI/estimates.</summary>
+        public float DigDepth = 1.0f;
 
-        /// <summary> Depth of excavation cone (meters) </summary>
-        public float DigDepth = 0.3f;  // Original per-frame depth
+        /// <summary>Vertical cut rate (m of depth per second within radius).</summary>
+        public float DepthRatePerSecond = 0.15f;
 
-        /// <summary> Distance threshold to consider "at dig site" (meters) </summary>
+        /// <summary>Swell factor (in-situ → loose volume)</summary>
+        public float SwellFactor = 1.25f;
+
         public float AtSiteThreshold = 0.5f;
-
-        /// <summary> Distance threshold to consider "at dump center" (meters) </summary>
         public float AtDumpThreshold = 0.5f;
-
-        /// <summary> Minimum height change to visualize (prevents over-smoothing) </summary>
         public float MinHeightChange = 0.01f;
 
         public static DigConfig Default => new DigConfig();
