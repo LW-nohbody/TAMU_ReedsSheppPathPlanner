@@ -25,7 +25,7 @@ namespace DigSim3D.App
         private RadialScheduler _scheduler = null!;
 
         /// <summary> Cached reference to path planner (set by SimulationDirector) </summary>
-        private HybridReedsSheppPlanner _pathPlanner = null!;
+        private IPathPlanner _pathPlanner = null!;
 
         /// <summary> Cached reference to world state (set by SimulationDirector) </summary>
         private WorldState _worldState = null!;
@@ -60,7 +60,7 @@ namespace DigSim3D.App
         /// Initialize dig brain with external services and sector assignment.
         /// </summary>
         public void InitializeDigBrain(DigService digService, TerrainDisk terrain, 
-            RadialScheduler scheduler, DigConfig digConfig, HybridReedsSheppPlanner pathPlanner,
+            RadialScheduler scheduler, DigConfig digConfig, IPathPlanner pathPlanner,
             WorldState worldState, DigVisualizer digVisualizer, System.Action<Vector3[], Color> drawPathCallback,
             int sectorIndex, int totalSectors)
         {
