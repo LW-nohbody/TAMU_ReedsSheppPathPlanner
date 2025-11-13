@@ -100,7 +100,7 @@ namespace DigSim3D.Services
 
             // Attempt to replan
             var merged = TryReplanWithMidpoints(startPos, goalPos, spec.TurnRadius, gridPath, obstacles, startGear: 1, world,
-    goal.Yaw, start.Yaw, arenaRadius);
+            goal.Yaw, start.Yaw, arenaRadius);
 
             if (merged.points != null)
             {
@@ -396,23 +396,11 @@ namespace DigSim3D.Services
         private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, double endYaw, double radius, double worldRadius)
         {
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
-
-            const float WallBufferMeters = 0.5f; // Same 0.5m wall buffer as dig site selection
-            float maxAllowedRadius = arenaRadius - WallBufferMeters;
             
             int hitCount = 0;
 
             foreach (var p in pathPoints)
-            {
-                // Check arena boundary (wall buffer zone)
-                float distFromCenter = Mathf.Sqrt(p.X * p.X + p.Z * p.Z);
-                if (distFromCenter > maxAllowedRadius)
-                {
-                    GD.PrintErr($"❌ Dubins path goes through wall buffer: point=({p.X:F2},{p.Z:F2}) " +
-                                $"distFromCenter={distFromCenter:F2} > maxAllowed={maxAllowedRadius:F2}");
-                    return false;
-                }
-                
+            {   
                 // Check obstacle collisions
                 foreach (var obs in obstacles)
                 {
@@ -426,20 +414,8 @@ namespace DigSim3D.Services
                     double turnDist = obs.Radius + radius;
                     double turnDistSq = turnDist * turnDist;
 
-                    // Optional: Print every ~10th point to not flood logs
-                    // if ((hitCount % 10 == 0) && distSq < minDistSq * 4)
-                    // {
-                    //     GD.Print($"   sample ({p.X:F2},{p.Z:F2}) → obs ({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}), " +
-                    //             $"dist={Math.Sqrt(distSq):F2}, min={minDist:F2}");
-                    // }
-                    // if(angleDist < 0.48 && distSq < turnDistSq)
-                    // {
-                    //     GD.PrintErr($"Dubins path stuck at obstacle, angleDist: {angleDist}, distSq: {distSq}");
-                    // }
                     if (distSq < minDistSq || (angleDist < 0.48 && distSq < turnDistSq))
                     {
-                        //GD.PrintErr($"❌ RS path collision: sample=({p.X:F2},{p.Z:F2}) obs=({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}) " +
-                        //            $"dist={Math.Sqrt(distSq):F2} < min={minDist:F2}");
                         return false;
                     }
 
