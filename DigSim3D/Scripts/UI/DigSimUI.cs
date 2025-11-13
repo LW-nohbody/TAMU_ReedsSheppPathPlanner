@@ -22,6 +22,7 @@ namespace DigSim3D.UI
         // private Label _heatMapStatusLabel = null!;
         private AnimatedValueLabel _dirtRemainingLabel = null!;
         private ProgressBar _dirtRemainingBar = null!;  // Changed from thumbnail to progress bar
+        private PremiumSlider _speedSlider = null!;
         private PremiumSlider _depthSlider = null!;
         private PremiumSlider _radiusSlider = null!;
 
@@ -349,14 +350,14 @@ namespace DigSim3D.UI
             speedPresets.PresetSelected += OnSpeedPresetSelected;
             vbox.AddChild(speedPresets);
 
-            var speedSlider = new PremiumSlider
+            _speedSlider = new PremiumSlider
             {
                 MinValue = 0.1f,
                 MaxValue = 5.0f,
                 Value = 0.1f  // Start at minimum
             };
-            speedSlider.ValueChanged += (value) => OnSpeedChanged(value);
-            vbox.AddChild(speedSlider);
+            _speedSlider.ValueChanged += (value) => OnSpeedChanged(value);
+            vbox.AddChild(_speedSlider);
 
             // Dig depth
             var depthLabel = new Label { Text = "Excavation Depth (m)", Modulate = new Color(0.90f, 0.92f, 0.95f, 1.0f) }; // Brighter
@@ -364,9 +365,9 @@ namespace DigSim3D.UI
             vbox.AddChild(depthLabel);
 
             var depthPresets = new PresetButtonGroup();
-            depthPresets.AddPreset("Shallow", 0.1f);
-            depthPresets.AddPreset("Medium", 0.3f);
-            depthPresets.AddPreset("Deep", 0.6f);
+            depthPresets.AddPreset("Shallow", 0.05f);  // Min value (matches slider min)
+            depthPresets.AddPreset("Medium", 2.5f);    // Mid-range value (halfway between 0.05 and 5.0)
+            depthPresets.AddPreset("Deep", 5.0f);      // Max value (matches slider max)
             depthPresets.PresetSelected += OnDepthPresetSelected;
             vbox.AddChild(depthPresets);
 
@@ -474,6 +475,12 @@ namespace DigSim3D.UI
         // Preset callbacks
         private void OnSpeedPresetSelected(float value)
         {
+            if (_speedSlider == null) return;
+
+            _syncingFromConfig = true;
+            _speedSlider.Value = value;   // visually move the knob
+            _syncingFromConfig = false;
+
             OnSpeedChanged((double)value);
             GD.Print($"[Settings] Speed preset selected: {value} m/s");
         }
@@ -493,6 +500,8 @@ namespace DigSim3D.UI
         // Value change callbacks
         private void OnSpeedChanged(double value)
         {
+            if (_syncingFromConfig) return;
+
             float speed = (float)value;
             foreach (var vehicle in _vehicles)
             {
