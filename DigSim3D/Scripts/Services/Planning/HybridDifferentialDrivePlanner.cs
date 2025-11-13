@@ -42,6 +42,9 @@ namespace DigSim3D.Services
             var goalPos = new Vector3((float)goal.X, 0, (float)goal.Z);
 
             var obstacles = world?.Obstacles?.OfType<CylinderObstacle>().ToList() ?? new List<CylinderObstacle>();
+            
+            // Get arena radius for wall boundary checking
+            float arenaRadius = world?.Terrain?.Radius ?? float.PositiveInfinity;
 
             // 1️⃣ Direct Reeds–Shepp path
             var (ddPoints, ddGears) = DDAdapter.ComputePath3D(
@@ -51,7 +54,7 @@ namespace DigSim3D.Services
             );
 
             var ddPts = ddPoints.ToList();
-            if (obstacles.Count == 0 || PathIsValid(ddPts, obstacles))
+            if (obstacles.Count == 0 || PathIsValid(ddPts, obstacles, arenaRadius))
             {
                 //GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
                 #if DEBUG
@@ -78,7 +81,7 @@ namespace DigSim3D.Services
 
             // Attempt to replan
             var merged = TryReplanWithMidpoints(startPos, goalPos, gridPath, obstacles, startGear: 1, 
-    goal.Yaw);
+    goal.Yaw, arenaRadius);
 
             if (merged.points != null)
             {
@@ -103,7 +106,8 @@ private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
     List<Vector3> gridPath,
     List<CylinderObstacle> obstacles,
     int startGear,
-    double goalYaw)
+    double goalYaw,
+    float arenaRadius)
 {
     if (gridPath == null || gridPath.Count < 2)
         return (null, null);
@@ -142,7 +146,7 @@ private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
             double segYaw = Math.Atan2((segEnd - segStart).Z, (segEnd - segStart).X);
 
             var (rsTest, rsGearsTest) = DDAdapter.ComputePath3D(segStart, prevYaw, segEnd, segYaw, _sampleStep);
-            if (rsTest.Length == 0 || !PathIsValid(rsTest.ToList(), obstacles))
+            if (rsTest.Length == 0 || !PathIsValid(rsTest.ToList(), obstacles, arenaRadius))
                 break;
 
             farthestReachable = j;
@@ -154,7 +158,7 @@ private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
         var (rsSegment, rsGears) = DDAdapter.ComputePath3D(segStart, prevYaw, target, targetYaw, _sampleStep);
 
         int subdiv = 0;
-        while ((rsSegment.Length == 0 || !PathIsValid(rsSegment.ToList(), obstacles)) && subdiv < 5)
+        while ((rsSegment.Length == 0 || !PathIsValid(rsSegment.ToList(), obstacles, arenaRadius)) && subdiv < 5)
         {
             subdiv++;
             Vector3 mid = segStart.Lerp(target, 0.5f);
@@ -164,7 +168,7 @@ private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
             var (rs2, rsGears2) = DDAdapter.ComputePath3D(mid, midYaw, target, targetYaw, _sampleStep);
 
             if (rs1.Length == 0 || rs2.Length == 0 ||
-                !PathIsValid(rs1.ToList(), obstacles) || !PathIsValid(rs2.ToList(), obstacles))
+                !PathIsValid(rs1.ToList(), obstacles, arenaRadius) || !PathIsValid(rs2.ToList(), obstacles, arenaRadius))
                 break;
 
             mergedPoints.AddRange(rs1.Skip(1));
@@ -199,7 +203,7 @@ private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
                                        (mergedPoints[j] - mergedPoints[cur]).X);
             var (rsTest, rsGearsTest) = DDAdapter.ComputePath3D(mergedPoints[cur], prevYaw,
                                                                 mergedPoints[j], segYaw, _sampleStep);
-            if (rsTest.Length > 0 && PathIsValid(rsTest.ToList(), obstacles))
+            if (rsTest.Length > 0 && PathIsValid(rsTest.ToList(), obstacles, arenaRadius))
             {
                 farthest = j;
                 break;
@@ -239,21 +243,22 @@ private (List<Vector3>, List<int>) ComputeRSWithSubdivision(
     double endYaw,
     List<CylinderObstacle> obstacles,
     int depth,
-    int maxDepth)
+    int maxDepth,
+    float arenaRadius)
 {
     if (depth > maxDepth)
         return (null, null);
 
     var (rsSegment, rsGears) = DDAdapter.ComputePath3D(start, startYaw, end, endYaw, _sampleStep);
-    if (rsSegment.Length > 0 && PathIsValid(rsSegment.ToList(), obstacles))
+    if (rsSegment.Length > 0 && PathIsValid(rsSegment.ToList(), obstacles, arenaRadius))
         return (rsSegment.ToList(), rsGears.ToList());
 
     // Subdivide at midpoint
     Vector3 mid = start.Lerp(end, 0.5f);
     double midYaw = Math.Atan2((mid - start).Z, (mid - start).X);
 
-    var (firstHalf, gears1) = ComputeRSWithSubdivision(start, mid, startYaw, midYaw, obstacles, depth + 1, maxDepth);
-    var (secondHalf, gears2) = ComputeRSWithSubdivision(mid, end, midYaw, endYaw, obstacles, depth + 1, maxDepth);
+    var (firstHalf, gears1) = ComputeRSWithSubdivision(start, mid, startYaw, midYaw, obstacles, depth + 1, maxDepth, arenaRadius);
+    var (secondHalf, gears2) = ComputeRSWithSubdivision(mid, end, midYaw, endYaw, obstacles, depth + 1, maxDepth, arenaRadius);
 
     if (firstHalf == null || secondHalf == null)
         return (null, null);
@@ -287,43 +292,55 @@ private (List<Vector3>, List<int>) ComputeRSWithSubdivision(
             path.Points.AddRange(pts);
             path.Gears.AddRange(gears);
             return path;
-        }
-
-        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles)
-{
-    //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
-
-    int hitCount = 0;
-
-    foreach (var p in pathPoints)
-    {
-        foreach (var obs in obstacles)
+        }        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, float arenaRadius)
         {
-            var dx = p.X - obs.GlobalPosition.X;
-            var dz = p.Z - obs.GlobalPosition.Z;
-            var distSq = dx * dx + dz * dz;
-            var minDist = obs.Radius + _obstacleBuffer;
-            var minDistSq = minDist * minDist;
+            //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
 
-            // Optional: Print every ~10th point to not flood logs
-            if ((hitCount % 10 == 0) && distSq < minDistSq * 4)
+            const float WallBufferMeters = 0.5f; // Same 0.5m wall buffer as dig site selection
+            float maxAllowedRadius = arenaRadius - WallBufferMeters;
+            
+            int hitCount = 0;
+
+            foreach (var p in pathPoints)
             {
-                //GD.Print($"   sample ({p.X:F2},{p.Z:F2}) → obs ({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}), " +
-                //         $"dist={Math.Sqrt(distSq):F2}, min={minDist:F2}");
+                // Check arena boundary (wall buffer zone)
+                float distFromCenter = Mathf.Sqrt(p.X * p.X + p.Z * p.Z);
+                if (distFromCenter > maxAllowedRadius)
+                {
+                    GD.PrintErr($"❌ DD path goes through wall buffer: point=({p.X:F2},{p.Z:F2}) " +
+                                $"distFromCenter={distFromCenter:F2} > maxAllowed={maxAllowedRadius:F2}");
+                    return false;
+                }
+                
+                // Check obstacle collisions
+                foreach (var obs in obstacles)
+                {
+                    var dx = p.X - obs.GlobalPosition.X;
+                    var dz = p.Z - obs.GlobalPosition.Z;
+                    var distSq = dx * dx + dz * dz;
+                    var minDist = obs.Radius + _obstacleBuffer;
+                    var minDistSq = minDist * minDist;
+
+                    // Optional: Print every ~10th point to not flood logs
+                    if ((hitCount % 10 == 0) && distSq < minDistSq * 4)
+                    {
+                        //GD.Print($"   sample ({p.X:F2},{p.Z:F2}) → obs ({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}), " +
+                        //         $"dist={Math.Sqrt(distSq):F2}, min={minDist:F2}");
+                    }
+
+                    if (distSq < minDistSq)
+                    {
+                        //GD.PrintErr($"❌ RS path collision: sample=({p.X:F2},{p.Z:F2}) obs=({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}) " +
+                        //            $"dist={Math.Sqrt(distSq):F2} < min={minDist:F2}");
+                        return false;
+                    }
+                }
+                hitCount++;
             }
 
-            if (distSq < minDistSq)
-            {
-                //GD.PrintErr($"❌ RS path collision: sample=({p.X:F2},{p.Z:F2}) obs=({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}) " +
-                //            $"dist={Math.Sqrt(distSq):F2} < min={minDist:F2}");
-                return false;
-            }
+            //GD.Print("[HybridReedsSheppPlanner] PathIsValid → CLEAR");
+            return true;
         }
-    }
-
-    //GD.Print("[HybridReedsSheppPlanner] PathIsValid → CLEAR");
-    return true;
-}
 
 
 

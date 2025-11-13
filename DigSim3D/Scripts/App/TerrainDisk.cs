@@ -37,6 +37,11 @@ namespace DigSim3D.App
         private int _N;
         private float _step;         // world spacing between grid verts
 
+        // Public accessors for external terrain modification
+        public float[,] HeightGrid => _heights;
+        public int GridResolution => _N;
+        public float GridStep => _step;
+
         public override void _Ready()
         {
             EnsureChildren();
@@ -270,6 +275,200 @@ namespace DigSim3D.App
         }
 
         // -------------------------------------------------------------------------
+        // Terrain deformation: reduce height at grid points (for excavation)
+        // -------------------------------------------------------------------------
+        /// <summary>
+        /// Reduce terrain height at specific grid indices by the given amount.
+        /// Call Rebuild() after modifications to update the mesh.
+        /// Clamps to not go below FloorY.
+        /// </summary>
+        public void ReduceHeightAt(int gridI, int gridJ, float amount)
+        {
+            if (_heights == null || gridI < 0 || gridI >= _N || gridJ < 0 || gridJ >= _N)
+                return;
+
+            if (!float.IsNaN(_heights[gridI, gridJ]))
+            {
+                float newHeight = _heights[gridI, gridJ] - amount;
+                _heights[gridI, gridJ] = Mathf.Max(newHeight, FloorY);
+            }
+        }
+
+        /// <summary>
+        /// Reduce terrain height in a circular region around a world position.
+        /// </summary>
+        public void ReduceHeightCircle(Vector3 worldCenter, float radiusMeters, float depthMeters)
+        {
+            if (_heights == null) return;
+
+            Vector3 local = ToLocal(worldCenter);
+            float cx = local.X;
+            float cz = local.Z;
+
+            float fx = (cx + Radius) / _step;
+            float fz = (cz + Radius) / _step;
+
+            int ci = Mathf.FloorToInt(fx);
+            int cj = Mathf.FloorToInt(fz);
+
+            int radiusInCells = Mathf.CeilToInt(radiusMeters / _step) + 1;
+
+            for (int i = Mathf.Max(0, ci - radiusInCells); i <= Mathf.Min(_N - 1, ci + radiusInCells); i++)
+            {
+                for (int j = Mathf.Max(0, cj - radiusInCells); j <= Mathf.Min(_N - 1, cj + radiusInCells); j++)
+                {
+                    if (float.IsNaN(_heights[i, j])) continue;
+
+                    float xi = -Radius + i * _step;
+                    float zj = -Radius + j * _step;
+                    float dist = Mathf.Sqrt((xi - cx) * (xi - cx) + (zj - cz) * (zj - cz));
+
+                    if (dist <= radiusMeters)
+                    {
+                        // Falloff: stronger at center, weaker at edges
+                        float falloff = 1f - (dist / radiusMeters);
+                        falloff = falloff * falloff;  // quadratic
+
+                        ReduceHeightAt(i, j, depthMeters * falloff);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Lower terrain height in a circular area (for digging/excavation).
+        /// Directly modifies _heights and rebuilds only the mesh (preserves modifications).
+        /// This is efficient for real-time terrain deformation.
+        /// Clamps terrain to not go below FloorY.
+        /// </summary>
+        public void LowerArea(Vector3 worldXZ, float radius, float deltaHeight)
+        {
+            if (_heights == null) return;
+
+            // Convert to local coordinates used by _heights
+            Vector3 local = ToLocal(worldXZ);
+            float cx = local.X, cz = local.Z;
+
+            // Iterate grid and subtract deltaHeight where within radius
+            for (int j = 0; j < _N; j++)
+            {
+                float z = -Radius + j * _step;
+                for (int i = 0; i < _N; i++)
+                {
+                    float x = -Radius + i * _step;
+                    if (float.IsNaN(_heights[i, j])) continue;
+
+                    float dx = x - cx;
+                    float dz = z - cz;
+
+                    if (dx * dx + dz * dz <= radius * radius)
+                    {
+                        // Lower terrain but clamp to FloorY to prevent digging through the floor
+                        float newHeight = _heights[i, j] - deltaHeight;
+                        _heights[i, j] = Mathf.Max(newHeight, FloorY);
+                    }
+                }
+            }
+
+            // Rebuild mesh ONLY (preserves modified heights)
+            RebuildMeshOnly();
+        }
+
+        /// <summary>
+        /// Rebuild mesh after height modifications.
+        /// Recomputes normals and updates geometry without regenerating the entire terrain.
+        /// Much faster than Rebuild() for real-time updates.
+        /// </summary>
+        public void RebuildMeshOnly()
+        {
+            if (_heights == null || _norms == null) return;
+
+            // Recompute normals based on current heights
+            for (int j = 0; j < _N; j++)
+            {
+                for (int i = 0; i < _N; i++)
+                {
+                    if (float.IsNaN(_heights[i, j])) { _norms[i, j] = Vector3.Up; continue; }
+
+                    int il = Math.Max(0, i - 1), ir = Math.Min(_N - 1, i + 1);
+                    int jd = Math.Max(0, j - 1), ju = Math.Min(_N - 1, j + 1);
+
+                    float hL = _heights[il, j]; if (float.IsNaN(hL)) hL = _heights[i, j];
+                    float hR = _heights[ir, j]; if (float.IsNaN(hR)) hR = _heights[i, j];
+                    float hD = _heights[i, jd]; if (float.IsNaN(hD)) hD = _heights[i, j];
+                    float hU = _heights[i, ju]; if (float.IsNaN(hU)) hU = _heights[i, j];
+
+                    Vector3 dx = new Vector3(2f * _step, hR - hL, 0f);
+                    Vector3 dz = new Vector3(0f, hU - hD, 2f * _step);
+
+                    _norms[i, j] = dz.Cross(dx).Normalized();
+                }
+            }
+
+            // Rebuild mesh with updated heights and normals
+            var st = new SurfaceTool();
+            st.Begin(Mesh.PrimitiveType.Triangles);
+
+            for (int j = 0; j < _N - 1; j++)
+            {
+                float z0 = -Radius + j * _step;
+                float z1 = z0 + _step;
+
+                for (int i = 0; i < _N - 1; i++)
+                {
+                    float x0 = -Radius + i * _step;
+                    float x1 = x0 + _step;
+
+                    if (float.IsNaN(_heights[i, j]) || float.IsNaN(_heights[i + 1, j]) ||
+                        float.IsNaN(_heights[i, j + 1]) || float.IsNaN(_heights[i + 1, j + 1]))
+                        continue;
+
+                    Vector3 v00 = new Vector3(x0, _heights[i, j], z0);
+                    Vector3 v10 = new Vector3(x1, _heights[i + 1, j], z0);
+                    Vector3 v01 = new Vector3(x0, _heights[i, j + 1], z1);
+                    Vector3 v11 = new Vector3(x1, _heights[i + 1, j + 1], z1);
+
+                    Vector2 uv00 = new((float)i / (_N - 1), (float)j / (_N - 1));
+                    Vector2 uv10 = new((float)(i + 1) / (_N - 1), (float)j / (_N - 1));
+                    Vector2 uv01 = new((float)i / (_N - 1), (float)(j + 1) / (_N - 1));
+                    Vector2 uv11 = new((float)(i + 1) / (_N - 1), (float)(j + 1) / (_N - 1));
+
+                    bool flip = ((i + j) & 1) == 1;
+
+                    if (!flip)
+                    {
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
+
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
+                    }
+                    else
+                    {
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                        st.SetUV(uv01); st.SetNormal(_norms[i, j + 1]); st.AddVertex(v01);
+
+                        st.SetUV(uv00); st.SetNormal(_norms[i, j]); st.AddVertex(v00);
+                        st.SetUV(uv10); st.SetNormal(_norms[i + 1, j]); st.AddVertex(v10);
+                        st.SetUV(uv11); st.SetNormal(_norms[i + 1, j + 1]); st.AddVertex(v11);
+                    }
+                }
+            }
+
+            st.Index();
+            st.GenerateTangents();
+
+            var mesh = st.Commit();
+            _meshMI.Mesh = mesh;
+
+            if (MaterialOverride != null)
+                _meshMI.SetSurfaceOverrideMaterial(0, MaterialOverride);
+        }
+
+        // -------------------------------------------------------------------------
         // Internals
         // -------------------------------------------------------------------------
         private void EnsureChildren()
@@ -303,6 +502,129 @@ namespace DigSim3D.App
             // top cap world Y = centerY + (height/2) * worldScaleY
             float scaleY = cyl.GlobalTransform.Basis.Y.Length();
             FloorY = cyl.GlobalTransform.Origin.Y + 0.5f * cyl.Height * scaleY;
+        }
+
+        public float LowerAreaAndReturnRemovedVolume(Vector3 worldXZ, float radiusMeters, float maxDeltaHeight)
+        {
+            if (_heights == null) return 0f;
+            if (maxDeltaHeight <= 0f || radiusMeters <= 0f) return 0f;
+
+            // Convert world point to this node's local space
+            Vector3 local = ToLocal(worldXZ);
+            float cx = local.X;
+            float cz = local.Z;
+
+            // Quick out: if outside disk, nothing to remove
+            if ((cx * cx + cz * cz) > (Radius * Radius))
+                return 0f;
+
+            // Center cell in grid space
+            float fx = (cx + Radius) / _step;
+            float fz = (cz + Radius) / _step;
+            int ci = Mathf.Clamp(Mathf.FloorToInt(fx), 0, _N - 1);
+            int cj = Mathf.Clamp(Mathf.FloorToInt(fz), 0, _N - 1);
+
+            // Iterate only a small window around the circle
+            int radiusInCells = Mathf.CeilToInt(radiusMeters / _step) + 1;
+            int i0 = Mathf.Max(0, ci - radiusInCells);
+            int i1 = Mathf.Min(_N - 1, ci + radiusInCells);
+            int j0 = Mathf.Max(0, cj - radiusInCells);
+            int j1 = Mathf.Min(_N - 1, cj + radiusInCells);
+
+            float r2 = radiusMeters * radiusMeters;
+            float cellArea = _step * _step;
+            float removedVolume = 0f;
+
+            for (int i = i0; i <= i1; i++)
+            {
+                float x = -Radius + i * _step; // cell center X (local)
+                for (int j = j0; j <= j1; j++)
+                {
+                    float z = -Radius + j * _step; // cell center Z (local)
+                    if (float.IsNaN(_heights[i, j])) continue;
+
+                    float dx = x - cx;
+                    float dz = z - cz;
+                    if ((dx * dx + dz * dz) > r2) continue;
+
+                    // Lower this cell, clamp at FloorY
+                    float hOld = _heights[i, j];
+                    float hNew = MathF.Max(FloorY, hOld - maxDeltaHeight);
+                    float dh = hOld - hNew;
+                    if (dh <= 0f) continue;
+
+                    _heights[i, j] = hNew;
+                    removedVolume += dh * cellArea;
+                }
+            }
+
+            // Update normals/mesh for current heights
+            RebuildMeshOnly();
+
+            return removedVolume; // in-situ m³ actually removed
+        }
+
+        /// <summary>
+        /// OPTIMIZED VERSION: Lower terrain in circular area WITHOUT rebuilding mesh.
+        /// Mesh update must be called separately (allows batching multiple dig operations).
+        /// Returns the actual volume removed (in-situ, not swelled).
+        /// </summary>
+        public float LowerAreaWithoutMeshUpdate(Vector3 worldXZ, float radiusMeters, float maxDeltaHeight)
+        {
+            if (_heights == null) return 0f;
+            if (maxDeltaHeight <= 0f || radiusMeters <= 0f) return 0f;
+
+            // Convert world point to this node's local space
+            Vector3 local = ToLocal(worldXZ);
+            float cx = local.X;
+            float cz = local.Z;
+
+            // Quick out: if outside disk, nothing to remove
+            if ((cx * cx + cz * cz) > (Radius * Radius))
+                return 0f;
+
+            // Center cell in grid space
+            float fx = (cx + Radius) / _step;
+            float fz = (cz + Radius) / _step;
+            int ci = Mathf.Clamp(Mathf.FloorToInt(fx), 0, _N - 1);
+            int cj = Mathf.Clamp(Mathf.FloorToInt(fz), 0, _N - 1);
+
+            // Iterate only a small window around the circle
+            int radiusInCells = Mathf.CeilToInt(radiusMeters / _step) + 1;
+            int i0 = Mathf.Max(0, ci - radiusInCells);
+            int i1 = Mathf.Min(_N - 1, ci + radiusInCells);
+            int j0 = Mathf.Max(0, cj - radiusInCells);
+            int j1 = Mathf.Min(_N - 1, cj + radiusInCells);
+
+            float r2 = radiusMeters * radiusMeters;
+            float cellArea = _step * _step;
+            float removedVolume = 0f;
+
+            for (int i = i0; i <= i1; i++)
+            {
+                float x = -Radius + i * _step; // cell center X (local)
+                for (int j = j0; j <= j1; j++)
+                {
+                    float z = -Radius + j * _step; // cell center Z (local)
+                    if (float.IsNaN(_heights[i, j])) continue;
+
+                    float dx = x - cx;
+                    float dz = z - cz;
+                    if ((dx * dx + dz * dz) > r2) continue;
+
+                    // Lower this cell, clamp at FloorY
+                    float hOld = _heights[i, j];
+                    float hNew = MathF.Max(FloorY, hOld - maxDeltaHeight);
+                    float dh = hOld - hNew;
+                    if (dh <= 0f) continue;
+
+                    _heights[i, j] = hNew;
+                    removedVolume += dh * cellArea;
+                }
+            }
+
+            // NOTE: Mesh update is NOT called here - caller must call RebuildMeshOnly() when ready
+            return removedVolume; // in-situ m³ actually removed
         }
     }
 }

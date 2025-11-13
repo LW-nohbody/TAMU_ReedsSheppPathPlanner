@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Runtime;
+using DigSim3D.UI;
 
 using DigSim3D.Domain;
 using DigSim3D.Services;
@@ -38,6 +39,8 @@ namespace DigSim3D.App
         [Export] public float ZoomSensitivity = 1.0f;
         [Export] public float ChaseLerp = 8.0f;
         [Export] public Vector3 ChaseOffset = new(0, 2.5f, 5.5f);
+        [Export] public float FreeMoveSpeed = 12.0f;   // world-relative m/s
+        [Export] public float FreeMoveSpeedFast = 18.0f;
 
         // Debug
         [Export] public bool DebugPathOnTop = true;
@@ -47,6 +50,10 @@ namespace DigSim3D.App
         private readonly List<VehicleVisualizer> _vehicles = new();
 
         private Camera3D _camTop = null!, _camChase = null!, _camFree = null!, _camOrbit = null!;
+        private enum CameraMode { Free, Orbit, TopDown, VehicleFollow }
+        private CameraMode _mode = CameraMode.TopDown;
+        private int _followIndex = 0;
+
         private bool _usingTop = true;
         private bool _movingFreeCam = false, _rotatingFreeCam = false, _rotatingOrbitCam = false;
         private float _freePitch = 0f, _freeYaw = 0f, _orbitPitch = 0, _orbitYaw = 0, Distance = 15.0f;
@@ -56,6 +63,18 @@ namespace DigSim3D.App
         [Export] public NodePath ObstacleManagerPath = null!;
         private ObstacleManager _obstacleManager = null!;
 
+        // === Dig System ===
+        private DigService _digService = null!;
+        private DigConfig _digConfig = DigConfig.Default;
+        private DigVisualizer _digVisualizer = null!;
+        private SectorVisualizer _sectorVisualizer = null!;
+        private BufferVisualizer _bufferVisualizer = null!;
+        private List<VehicleBrain> _robotBrains = new();
+        private float _initialTerrainVolume = 0f;  // Store initial volume at startup
+
+        // === UI ===
+        private DigSim3D.UI.DigSimUI _digSimUI = null!;
+        // private SimpleTestUI _testUI = null!;
 
         public override void _Ready()
         {
@@ -80,7 +99,7 @@ namespace DigSim3D.App
 
             // Build global static navigation grid from obstacles BEFORE spawning vehicles
             var obstacleList = _obstacleManager.GetObstacles();
-            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 1.0f);
+            GridPlannerPersistent.BuildGrid(obstacleList, gridSize: 0.25f, gridExtent: 60, obstacleBufferMeters: 0.5f);  // 0.5m obstacle buffer
 
             // Spawn on ring
             int N = Math.Max(1, VehicleCount);
@@ -99,28 +118,90 @@ namespace DigSim3D.App
 
                 car.Wheelbase = VehicleLength;
                 car.TrackWidth = VehicleWidth;
+                car._vehicleID = $"RS-{(i + 1):00}";
 
-                _vehicles.Add(car);                    // <-- put this back
+                _vehicles.Add(car);
+
+                // Add nameplate
+                var id = car._vehicleID;
+                var nameplate = new Nameplate3D
+                {
+                    Text = id,
+                    HeightOffset = 0.5f,
+                    FontColor = Colors.White,
+                    YBillboardOnly = false,
+                    FixedSize = true,
+                    FontSize = 64,
+                    PixelSize = 0.0005f,
+                };
+                car.AddChild(nameplate);
             }
 
             // === PLAN FIRST DIG TARGETS (after all cars exist) ===
             var scheduler = new RadialScheduler();
-            var brains = new List<VehicleBrain>(_vehicles.Count);
+            _robotBrains = new List<VehicleBrain>(_vehicles.Count);
             foreach (var v in _vehicles)
             {
                 var brain = new VehicleBrain();
                 v.AddChild(brain);
-                brains.Add(brain);
+                _robotBrains.Add(brain);
+            }
+
+            // === Initialize Dig Service ===
+            _digService = new DigService(_terrain, _digConfig);
+            
+            // Create dig visualizer
+            _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
+            AddChild(_digVisualizer);
+            
+            // Create sector visualizer to show robot sectors
+            _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
+            AddChild(_sectorVisualizer);
+            float arenaRadius = _terrain.GridResolution * _terrain.GridStep / 2f;
+            _sectorVisualizer.Initialize(_vehicles.Count, arenaRadius);
+            GD.Print($"[Director] SectorVisualizer created with {_vehicles.Count} sectors, radius {arenaRadius:F1}m");
+
+            // Create buffer visualizer to show obstacle and wall buffer zones
+            _bufferVisualizer = new BufferVisualizer { Name = "BufferVisualizer" };
+            AddChild(_bufferVisualizer);
+            const float obstacleBufferMeters = 0.5f; // 0.5m obstacle buffer (both dig target selection and path planning)
+            const float wallBufferMeters = 0.5f;     // 0.5m wall buffer (dig target selection only)
+            _bufferVisualizer.Initialize(obstacleList, obstacleBufferMeters, _terrain.Radius, wallBufferMeters);
+            GD.Print($"[Director] BufferVisualizer created - obstacle buffer: {obstacleBufferMeters}m, wall buffer: {wallBufferMeters}m");
+
+            // Create world state for path planning
+            var worldState = new WorldState
+            {
+                Obstacles = obstacleList,
+                Terrain = _terrain
+            };
+
+            // Create path planner (will be reused for all robots)
+            var hybridPlanner = new HybridReedsSheppPlanner();
+
+            // Initialize brain dig system with path drawing callback
+            foreach (var brain in _robotBrains)
+            {
+                int robotIndex = _robotBrains.IndexOf(brain);
+                int totalRobots = _robotBrains.Count;
+                GD.Print($"🎮 [Director] Initializing brain {robotIndex} with DigConfig.DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
+                brain.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, _digVisualizer, DrawPathProjectedToTerrain, robotIndex, totalRobots);
             }
 
             var digTargets = scheduler.PlanFirstDigTargets(
-                brains, _terrain, Vector3.Zero, DigScoring.Default);
+                _robotBrains, _terrain, Vector3.Zero, DigScoring.Default,
+                keepoutR: 2.0f, randomizeOrder: true,
+                obstacles: obstacleList, inflation: 0.5f);  // Pass obstacles for manual checking
 
             // === Build paths to the assigned dig targets (scheduler-driven) ===
             for (int k = 0; k < _vehicles.Count; k++)
             {
                 var car = _vehicles[k];
+                var brain = _robotBrains[k];
                 var (digPos, approachYaw) = digTargets[k];
+
+                // Set dig target on brain
+                brain.SetDigTarget(digPos, approachYaw);
 
                 // current forward yaw in XZ (Godot forward is -Z)
                 var fwd = -car.GlobalTransform.Basis.Z;
@@ -131,16 +212,10 @@ namespace DigSim3D.App
                 var startPose = new Pose(start.X, start.Z, startYaw);
                 var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
 
-                // Vehicle + world (note: Obstacles is List<Obstacle3D>)
+                // Vehicle spec
                 VehicleSpec spec = car.Spec;
-                var world = new WorldState
-                {
-                    Obstacles = obstacleList,   // <— List<Obstacle3D>
-                    Terrain = _terrain
-                };
 
-                var hybridRSPlanner = new HybridReedsSheppPlanner();
-                PlannedPath path = hybridRSPlanner.Plan(startPose, goalPose, spec, world);
+                PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, worldState);
 
                 DrawPathProjectedToTerrain(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
                 DrawMarkerProjected(start, new Color(0, 1, 0));
@@ -151,12 +226,65 @@ namespace DigSim3D.App
                 GD.Print($"[Director] {car.Name} path: {path.Points.Count} samples");
             }
 
-            _camTop.Current = true; _camChase.Current = false; _camFree.Current = false; _camOrbit.Current = false;
+            // === Initialize UI ===
+            // Add UI Control to a CanvasLayer to ensure it's drawn on top
+            var uiLayer = new CanvasLayer { Layer = 100 };
+            AddChild(uiLayer);
+            GD.Print($"[Director] Created CanvasLayer for UI");
+            
+            _digSimUI = new DigSim3D.UI.DigSimUI();
+            uiLayer.AddChild(_digSimUI);
+            GD.Print($"[Director] Added DigSimUI to CanvasLayer");
+
+            // Add robots to UI
+            for (int i = 0; i < _robotBrains.Count; i++)
+            {
+                var car = _vehicles[i];
+                _digSimUI.AddRobot(i, car._vehicleID, new Color((float)i / _robotBrains.Count, 0.6f, 1.0f));
+            }
+
+            // Calculate and store initial terrain volume
+            _initialTerrainVolume = CalculateTerrainVolume();
+            GD.Print($"[Director] Initial terrain volume: {_initialTerrainVolume:F2} m³");
+
+            _digSimUI.SetDigConfig(_digConfig);
+            GD.Print($"🎮 [Director] Passed DigConfig to UI: DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
+            // _digSimUI.SetHeatMapStatus(false);
+            _digSimUI.SetInitialVolume(_initialTerrainVolume);
+            _digSimUI.SetVehicles(_vehicles);
+            // Removed SetTerrain call - no longer needed without terrain thumbnail
+            
+            // Initialize progress bars to 0% and 100%
+            _digSimUI.UpdateTerrainProgress(_initialTerrainVolume, _initialTerrainVolume);
+
+            GD.Print("[Director] DigSimUI initialized successfully");
+
+            SetCameraMode(CameraMode.TopDown);
         }
 
         // ---------- Input / camera (unchanged) ----------
         public override void _Input(InputEvent e)
         {
+            // ---- Camera mode hotkeys ----
+            if (e is InputEventKey k && k.Pressed && !k.Echo)
+            {
+                switch (k.Keycode)
+                {
+                    case Key.Key1: SetCameraMode(CameraMode.TopDown); return;
+                    case Key.Key2: SetCameraMode(CameraMode.Orbit); return;
+                    case Key.Key3: SetCameraMode(CameraMode.Free); return;
+                    case Key.Key4: SetCameraMode(CameraMode.VehicleFollow); return;
+
+                    case Key.Left:
+                        if (_mode == CameraMode.VehicleFollow) { CycleFollowTarget(-1); return; }
+                        break;
+                    case Key.Right:
+                        if (_mode == CameraMode.VehicleFollow) { CycleFollowTarget(+1); return; }
+                        break;
+                }
+            }
+
+            // ---- (keep your existing mouse handlers below) ----
             if (e is InputEventMouseMotion mm && _rotatingFreeCam)
             {
                 _freeYaw += -mm.Relative.X * MouseSensitivity;
@@ -175,25 +303,15 @@ namespace DigSim3D.App
             {
                 if (mb.ButtonIndex == MouseButton.WheelUp)
                 {
-                    // Get the forward direction (-Z axis in local space)
                     Vector3 forward = -_camFree.GlobalTransform.Basis.Z.Normalized();
-
-                    // Calculate new position
                     Vector3 newPosition = _camFree.GlobalTransform.Origin + forward * -ZoomSensitivity;
-
                     _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPosition);
-
                 }
                 else if (mb.ButtonIndex == MouseButton.WheelDown)
                 {
-                    // Get the forward direction (-Z axis in local space)
                     Vector3 forward = -_camFree.GlobalTransform.Basis.Z.Normalized();
-
-                    // Calculate new position
                     Vector3 newPosition = _camFree.GlobalTransform.Origin + forward * ZoomSensitivity;
-
                     _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPosition);
-
                 }
             }
             else if (e is InputEventMouseMotion mm3 && _rotatingOrbitCam)
@@ -214,14 +332,9 @@ namespace DigSim3D.App
             }
             else if (e is InputEventMouseButton mb2 && _camOrbit.Current)
             {
-                if (mb2.ButtonIndex == MouseButton.WheelUp)
-                {
-                    Distance += ZoomSensitivity;
-                }
-                else if (mb2.ButtonIndex == MouseButton.WheelDown)
-                {
-                    Distance -= ZoomSensitivity;
-                }
+                if (mb2.ButtonIndex == MouseButton.WheelUp) Distance += ZoomSensitivity;
+                else if (mb2.ButtonIndex == MouseButton.WheelDown) Distance -= ZoomSensitivity;
+
                 Distance = Mathf.Clamp(Distance, MinDist, MaxDist);
 
                 Vector3 targetPosition = _terrain.GlobalTransform.Origin;
@@ -236,37 +349,86 @@ namespace DigSim3D.App
             }
         }
 
+        private float CalculateTerrainVolume()
+        {
+            if (_terrain == null || _terrain.HeightGrid == null)
+                return 0f;
+
+            double totalVolume = 0.0;
+            float gridStep = _terrain.GridStep;
+            float cellArea = gridStep * gridStep;
+            float baseLevel = _terrain.FloorY;
+
+            for (int i = 0; i < _terrain.GridResolution; i++)
+            {
+                for (int j = 0; j < _terrain.GridResolution; j++)
+                {
+                    float height = _terrain.HeightGrid[i, j];
+                    if (!float.IsNaN(height))
+                    {
+                        float adjustedHeight = height - baseLevel;
+                        if (adjustedHeight > 0)
+                            totalVolume += adjustedHeight * cellArea;
+                    }
+                }
+            }
+
+            return (float)totalVolume;
+        }
+
+
         public override void _Process(double delta)
         {
+            // OPTIMIZATION: Update DigService to batch terrain mesh updates
+            _digService?.Update((float)delta);
+
+            // Update robot dig behaviors
+            foreach (var brain in _robotBrains)
+            {
+                brain.UpdateDigBehavior((float)delta);
+            }
+
+            // Update UI with robot stats
+            if (_digSimUI != null && _robotBrains.Count > 0)
+            {
+                for (int i = 0; i < _robotBrains.Count; i++)
+                {
+                    var brain = _robotBrains[i];
+                    var state = brain.DigState;
+                    var robotPos = brain.Agent.GlobalTransform.Origin;
+                    
+                    float payloadPercent = state.MaxPayload > 0 ? (state.CurrentPayload / state.MaxPayload) : 0f;
+                    _digSimUI.UpdateRobotPayload(i, payloadPercent, robotPos, state.State.ToString());
+                }
+
+                // Update terrain progress
+                float remainingVolume = CalculateTerrainVolume();
+                _digSimUI.UpdateTerrainProgress(remainingVolume, _initialTerrainVolume);
+            }
+
+            // Original camera code
+            // (keep your existing toggles if you still want them)
             if (Input.IsActionJustPressed("toggle_camera"))
             {
-                _usingTop = !_usingTop;
-                _camTop.Current = _usingTop;
-                _camChase.Current = !_usingTop;
-                _camFree.Current = _camOrbit.Current = false;
-                _movingFreeCam = _rotatingFreeCam = _rotatingOrbitCam = false;
-                Input.MouseMode = Input.MouseModeEnum.Visible;
-            }
-            if (!_usingTop) FollowChaseCamera(delta);
-
-            if (Input.IsActionJustPressed("select_free_camera"))
-            {
-                _camFree.Current = true;
-                _camTop.Current = _camChase.Current = _camOrbit.Current = false;
+                // Backward-compat: flip between top and follow
+                if (_mode == CameraMode.TopDown) SetCameraMode(CameraMode.VehicleFollow);
+                else if (_mode == CameraMode.VehicleFollow) SetCameraMode(CameraMode.TopDown);
             }
 
-            if (Input.IsActionJustPressed("select_orbit_camera"))
-            {
-                _camOrbit.Current = true;
-                _camTop.Current = _camChase.Current = _camFree.Current = false;
-            }
+            if (_mode == CameraMode.VehicleFollow) FollowChaseCamera(delta);
 
-            if (Input.IsActionPressed("translate_free_camera") && _camFree.Current)
+            if (Input.IsActionJustPressed("select_free_camera")) SetCameraMode(CameraMode.Free);
+            if (Input.IsActionJustPressed("select_orbit_camera")) SetCameraMode(CameraMode.Orbit);
+
+            // Check if mouse is over UI before capturing
+            bool mouseOverUI = IsMouseOverUI();
+
+            if (Input.IsActionPressed("translate_free_camera") && _camFree.Current && !mouseOverUI)
             {
                 _movingFreeCam = true; _rotatingFreeCam = _rotatingOrbitCam = false;
                 Input.MouseMode = Input.MouseModeEnum.Captured;
             }
-            else if (Input.IsActionPressed("rotate_camera"))
+            else if (Input.IsActionPressed("rotate_camera") && !mouseOverUI)
             {
                 _movingFreeCam = false;
                 _rotatingFreeCam = _camFree.Current; _rotatingOrbitCam = _camOrbit.Current;
@@ -277,14 +439,64 @@ namespace DigSim3D.App
                 _movingFreeCam = _rotatingFreeCam = _rotatingOrbitCam = false;
                 Input.MouseMode = Input.MouseModeEnum.Visible;
             }
+
+            if (_camFree.Current)
+            {
+                // Camera-forward/right projected to XZ (ignore pitch)
+                Vector3 camForward = -_camFree.GlobalTransform.Basis.Z;
+                Vector3 camRight = _camFree.GlobalTransform.Basis.X;
+
+                Vector3 fwdXZ = new Vector3(camForward.X, 0, camForward.Z);
+                Vector3 rightXZ = new Vector3(camRight.X, 0, camRight.Z);
+
+                const float EPS = 1e-4f;
+                if (fwdXZ.LengthSquared() < EPS) fwdXZ = new Vector3(0, 0, -1);
+                if (rightXZ.LengthSquared() < EPS) rightXZ = new Vector3(1, 0, 0);
+
+                fwdXZ = fwdXZ.Normalized();
+                rightXZ = rightXZ.Normalized();
+
+                // Build ground-plane intent via InputMap actions
+                Vector3 move = Vector3.Zero;
+                if (Input.IsActionPressed("free_forward")) move += fwdXZ;
+                if (Input.IsActionPressed("free_back")) move -= fwdXZ;
+                if (Input.IsActionPressed("free_right")) move += rightXZ;
+                if (Input.IsActionPressed("free_left")) move -= rightXZ;
+
+                // Add vertical movement in world-Y (Space/Ctrl)
+                float upDown = 0f;
+                if (Input.IsActionPressed("free_up")) upDown += 1f;
+                if (Input.IsActionPressed("free_down")) upDown -= 1f;
+
+                // Speed
+                float speed = Input.IsActionPressed("free_sprint") ? FreeMoveSpeedFast : FreeMoveSpeed;
+
+                // Apply movement
+                if (move != Vector3.Zero || MathF.Abs(upDown) > 0f)
+                {
+                    move = move.Normalized();
+                    Vector3 pos = _camFree.GlobalTransform.Origin;
+
+                    // XZ move (camera-relative, flattened)
+                    Vector3 deltaXZ = move * speed * (float)delta;
+
+                    // Y move (world up/down)
+                    Vector3 deltaY = new Vector3(0, upDown * speed * (float)delta, 0);
+
+                    Vector3 newPos = pos + deltaXZ + deltaY;
+
+                    _camFree.GlobalTransform = new Transform3D(_camFree.GlobalTransform.Basis, newPos);
+                }
+            }
         }
 
         private void FollowChaseCamera(double delta)
         {
             if (_vehicles.Count == 0) return;
-            var car = _vehicles[0];
 
+            var car = _vehicles[Mathf.Clamp(_followIndex, 0, _vehicles.Count - 1)];
             var basis = car.GlobalTransform.Basis;
+
             var targetPos =
                 car.GlobalTransform.Origin +
                 basis.X * ChaseOffset.X +
@@ -297,6 +509,52 @@ namespace DigSim3D.App
             _camChase.GlobalTransform = new Transform3D(_camChase.GlobalTransform.Basis, next);
             _camChase.LookAt(car.GlobalTransform.Origin, Vector3.Up);
         }
+
+        private void SetCameraMode(CameraMode m)
+        {
+            _mode = m;
+
+            // Reset "Current" flags
+            _camTop.Current = false;
+            _camChase.Current = false;
+            _camFree.Current = false;
+            _camOrbit.Current = false;
+
+            // Reset mouse capture state on mode changes
+            _movingFreeCam = _rotatingFreeCam = _rotatingOrbitCam = false;
+            Input.MouseMode = Input.MouseModeEnum.Visible;
+
+            switch (_mode)
+            {
+                case CameraMode.TopDown:
+                    _camTop.Current = true;
+                    break;
+
+                case CameraMode.VehicleFollow:
+                    // clamp follow index if vehicles changed
+                    if (_vehicles.Count > 0)
+                        _followIndex = Mathf.PosMod(_followIndex, _vehicles.Count);
+                    _camChase.Current = true;
+                    break;
+
+                case CameraMode.Free:
+                    _camFree.Current = true;
+                    break;
+
+                case CameraMode.Orbit:
+                    _camOrbit.Current = true;
+                    break;
+            }
+        }
+
+        // Wrap index cleanly when cycling vehicles
+        private void CycleFollowTarget(int delta)
+        {
+            if (_vehicles.Count == 0) return;
+            _followIndex = (_followIndex + delta) % _vehicles.Count;
+            if (_followIndex < 0) _followIndex += _vehicles.Count;
+        }
+
         // ------------------------------------------------
 
         // === Placement on terrain using FL/FR/RC (unchanged) =======================
@@ -392,6 +650,39 @@ namespace DigSim3D.App
             mat.NoDepthTest = DebugPathOnTop;
             m.SetSurfaceOverrideMaterial(0, mat);
             AddChild(m);
+        }
+
+        private bool IsMouseOverUI()
+        {
+            if (_digSimUI == null || !_digSimUI.Visible) return false;
+            
+            var mousePos = GetViewport().GetMousePosition();
+            
+            // Check if mouse is over the UI panel or any of its children
+            return IsPointInControl(_digSimUI, mousePos);
+        }
+        
+        private bool IsPointInControl(Control control, Vector2 point)
+        {
+            if (!control.Visible) return false;
+            
+            // Check if point is in this control's rectangle
+            var rect = control.GetGlobalRect();
+            if (rect.HasPoint(point))
+            {
+                return true;
+            }
+            
+            // Recursively check all Control children
+            foreach (var child in control.GetChildren())
+            {
+                if (child is Control childControl && IsPointInControl(childControl, point))
+                {
+                    return true;
+                }
+            }
+            
+            return false;
         }
     }
 }
