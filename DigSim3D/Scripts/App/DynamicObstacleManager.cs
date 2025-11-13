@@ -11,7 +11,7 @@ namespace DigSim3D.App
     {
         private List<Node3D> dynamicObstacles = new List<Node3D>();
 
-        [Export] public float AvoidanceRadius = 1.0f; // meters
+        [Export] public float AvoidanceRadius = 1.5f; // meters
 
         public override void _Ready()
         {

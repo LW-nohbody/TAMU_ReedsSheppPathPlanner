@@ -386,50 +386,42 @@ namespace DigSim3D.App
             return totalVolume;
         }
 
-        public override void _Process(double delta)
+public override void _Process(double delta)
+{
+    foreach (var brain in _robotBrains)
+    {
+        brain.UpdateDigBehavior((float)delta);
+
+        if (_dynamicObstacleManager != null)
         {
-            // Update robot dig behaviors
-            foreach (var brain in _robotBrains)
+            int myIndex = _robotBrains.IndexOf(brain);
+            bool shouldPause = false;
+
+            foreach (var other in _robotBrains)
             {
-                brain.UpdateDigBehavior((float)delta);
+                if (other == brain) continue;
 
-                // if (_dynamicObstacleManager != null && _dynamicObstacleManager.IsNearDynamicObstacle(brain.Agent.GlobalTransform.Origin, brain.Agent))
-                // {
-                //     //tell brain to replan path
+                int otherIndex = _robotBrains.IndexOf(other);
+                float dist = brain.Agent.GlobalTransform.Origin.DistanceTo(other.Agent.GlobalTransform.Origin);
 
-                //     //debug print robot number near dynamic obstacle
-                //     GD.Print($"[Director] Robot near dynamic obstacle: {_robotBrains.IndexOf(brain)}");
-                // }
-                if (_dynamicObstacleManager != null)
+                if (dist < _dynamicObstacleManager.AvoidanceRadius)
                 {
-                    int myIndex = _robotBrains.IndexOf(brain);
-                    bool shouldPause = false;
-
-                    foreach (var other in _robotBrains)
+                    if (otherIndex > myIndex)
                     {
-                        if (other == brain) continue;
-
-                        int otherIndex = _robotBrains.IndexOf(other);
-                        float dist = brain.Agent.GlobalTransform.Origin.DistanceTo(other.Agent.GlobalTransform.Origin);
-
-                        if (dist < _dynamicObstacleManager.AvoidanceRadius)
-                        {
-                            // If there's *any* higher-priority robot nearby, we must wait
-                            if (otherIndex > myIndex)
-                            {
-                                shouldPause = true;
-                                break;
-                            }
-                        }
+                        shouldPause = true;
+                        break;
                     }
-
-                    brain.Agent.SetPhysicsProcess(!shouldPause);
-
-                    //if (shouldPause)
-                        //GD.Print($"[Director] Robot {myIndex} waiting for higher-priority robot nearby.");
-                
                 }
             }
+
+            if (shouldPause)
+                brain.FreezeForPriority();     // ← replan happens once inside this
+            else
+                brain.UnfreezeFromPriority();  // ← resets the "allowed to replan" flag
+        }
+    }
+
+
 
             // Update UI with robot stats
             if (_digSimUI != null && _robotBrains.Count > 0)
