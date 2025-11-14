@@ -274,13 +274,13 @@ namespace DigSim3D.App
                         float cylinderVolume = effectiveTargetDepth * Mathf.Pi * _digConfig.DigRadius * _digConfig.DigRadius;
                         
                         // Check if there's no more dirt at the site (all terrain in radius at floor level)
-                        float minHeight = GetMinHeightInRadius(DigState.CurrentDigTarget, _digConfig.DigRadius);
+                        float maxHeight = GetMaxHeightInRadius(DigState.CurrentDigTarget, _digConfig.DigRadius);
                         float centerHeight = GetTerrainHeightAt(DigState.CurrentDigTarget);
-                        bool noMoreDirt = minHeight <= (floorY + 0.01f); // Within 1cm of floor
-                        
+                        bool noMoreDirt = centerHeight <= (floorY + 0.001f); // Within 1cm of floor
+
                         // Debug: Log site completion check
                         float volumePercent = cylinderVolume > 0 ? (DigState.CurrentSiteVolumeExcavated / cylinderVolume * 100f) : 0f;
-                        GD.Print($"⛏️ [VehicleBrain] {Agent.Name} digging: minH={minHeight:F3}m, centerH={centerHeight:F3}m, floor={floorY:F3}m | volume={DigState.CurrentSiteVolumeExcavated:F3}/{cylinderVolume:F3}m³ ({volumePercent:F0}%) | payload={DigState.CurrentPayload:F2}/{DigState.MaxPayload:F2}m³");
+                        GD.Print($"⛏️ [VehicleBrain] {Agent.Name} digging: maxH={maxHeight:F3}m, centerH={centerHeight:F3}m, floor={floorY:F3}m | volume={DigState.CurrentSiteVolumeExcavated:F3}/{cylinderVolume:F3}m³ ({volumePercent:F0}%) | payload={DigState.CurrentPayload:F2}/{DigState.MaxPayload:F2}m³");
                         
                         // Site is ONLY complete when there's no more dirt (removed cylinder volume check)
                         // Robots must dig until all dirt in the radius is at floor level
@@ -288,7 +288,7 @@ namespace DigSim3D.App
                         {
                             // Mark this site as COMPLETE
                             DigState.CurrentSiteComplete = true;
-                            GD.Print($"✅ [VehicleBrain] {Agent.Name} SITE COMPLETE! All terrain at floor (minH={minHeight:F3}m ≈ floor={floorY:F3}m). Excavated {DigState.CurrentSiteVolumeExcavated:F3}m³. Moving to next site!");
+                            GD.Print($"✅ [VehicleBrain] {Agent.Name} SITE COMPLETE! All terrain at floor (maxH={maxHeight:F3}m ≈ floor={floorY:F3}m). Excavated {DigState.CurrentSiteVolumeExcavated:F3}m³. Moving to next site!");
                             
                             // Find next dig site (will dump first if payload > 0)
                             RequestNewDigTarget();
@@ -432,15 +432,11 @@ namespace DigSim3D.App
                     float worldZ = (j - resolution / 2f) * gridStep;
                     Vector3 candidateXZ = new Vector3(worldX, 0, worldZ);
 
-                    // Check MAX height in the dig radius (not average or center point)
-                    // This ensures we return to partially-dug sites that still have dirt remaining
-                    // Using MAX instead of average prevents skipping sites with leftover dirt mounds
-                    float maxHeight = GetMaxHeightInRadius(candidateXZ, _digConfig.DigRadius);
+                    float centerHeight = GetTerrainHeightAt(candidateXZ);
 
-                    // Accept dig sites with ANY dirt > 0cm in the radius
-                    if (maxHeight <= 0.0f) continue;
+                   
 
-                    Vector3 candidate = new Vector3(worldX, maxHeight, worldZ);
+                    Vector3 candidate = new Vector3(worldX, centerHeight, worldZ);
 
                     candidatesChecked++;
 
@@ -485,23 +481,12 @@ namespace DigSim3D.App
                     }
                     if (tooCloseToObstacle) continue;
 
-                    // Check if this site is in the failed sites list (too close to a failed location)
-                    bool isFailedSite = false;
-                    foreach (var failedSite in _failedDigSites)
-                    {
-                        float distToFailed = candidate.WithY(0).DistanceTo(failedSite.WithY(0));
-                        if (distToFailed < _digConfig.DigRadius * 2f) // Avoid sites within 2x dig radius of failed sites
-                        {
-                            isFailedSite = true;
-                            break;
-                        }
-                    }
-                    if (isFailedSite) continue;
+                
 
                     // PURE HEIGHT SCORING: ONLY prioritize height (no distance penalty)
                     // This ensures robots always move to the tallest point in their sector
                     // Use max height in the dig radius as the score
-                    float score = maxHeight;
+                    float score = centerHeight;
 
                     if (score > bestScore)
                     {
@@ -782,20 +767,24 @@ namespace DigSim3D.App
         /// Get the minimum (lowest) height within a circular radius around the position.
         /// This ensures we check if ALL dirt in the dig area has been removed.
         /// </summary>
-        private float GetMinHeightInRadius(Vector3 center, float radius)
+        private float GetMaxHeightInRadius(Vector3 center, float radius)
         {
             if (_terrain == null || _terrain.HeightGrid == null)
                 return 0f;
 
             int resolution = _terrain.GridResolution;
             float gridStep = _terrain.GridStep;
-            float minHeight = float.MaxValue;
+            float maxHeight = float.MinValue;
             bool foundAny = false;
+
+            // Exclude the rim by shrinking the radius slightly
+            float innerRadius = MathF.Max(0f, radius - gridStep * 0.5f);
+
 
             // Calculate grid cell range to check
             int centerI = (int)((center.X / gridStep) + resolution / 2f);
             int centerJ = (int)((center.Z / gridStep) + resolution / 2f);
-            int cellRadius = (int)(radius / gridStep) + 1;
+            int cellRadius = (int)(innerRadius / gridStep) + 1;
 
             for (int di = -cellRadius; di <= cellRadius; di++)
             {
@@ -822,13 +811,13 @@ namespace DigSim3D.App
                     float height = _terrain.HeightGrid[i, j];
                     if (!float.IsNaN(height))
                     {
-                        minHeight = Mathf.Min(minHeight, height);
+                        maxHeight = Mathf.Max(maxHeight, height);
                         foundAny = true;
                     }
                 }
             }
-
-            return foundAny ? minHeight : 0f;
+            
+            return foundAny ? maxHeight : 0f;
         }
 
         /// <summary>
@@ -883,58 +872,6 @@ namespace DigSim3D.App
             }
 
             return count > 0 ? (sumHeight / count) : 0f;
-        }
-
-        /// <summary>
-        /// Get the maximum (tallest) height within a circular radius around the position.
-        /// This is used to select dig sites that have ANY remaining dirt, even partially-dug areas.
-        /// Returns 0 if no valid cells found.
-        /// </summary>
-        private float GetMaxHeightInRadius(Vector3 center, float radius)
-        {
-            if (_terrain == null || _terrain.HeightGrid == null)
-                return 0f;
-
-            int resolution = _terrain.GridResolution;
-            float gridStep = _terrain.GridStep;
-            float maxHeight = 0f;
-
-            // Calculate grid cell range to check
-            int centerI = (int)((center.X / gridStep) + resolution / 2f);
-            int centerJ = (int)((center.Z / gridStep) + resolution / 2f);
-            int cellRadius = (int)(radius / gridStep) + 1;
-
-            for (int di = -cellRadius; di <= cellRadius; di++)
-            {
-                for (int dj = -cellRadius; dj <= cellRadius; dj++)
-                {
-                    int i = centerI + di;
-                    int j = centerJ + dj;
-
-                    // Check bounds
-                    if (i < 0 || i >= resolution || j < 0 || j >= resolution)
-                        continue;
-
-                    // Check if within circular radius
-                    float worldX = (i - resolution / 2f) * gridStep;
-                    float worldZ = (j - resolution / 2f) * gridStep;
-                    float distFromCenter = Mathf.Sqrt(
-                        (worldX - center.X) * (worldX - center.X) +
-                        (worldZ - center.Z) * (worldZ - center.Z)
-                    );
-
-                    if (distFromCenter > radius)
-                        continue;
-
-                    float height = _terrain.HeightGrid[i, j];
-                    if (!float.IsNaN(height))
-                    {
-                        maxHeight = Mathf.Max(maxHeight, height);
-                    }
-                }
-            }
-
-            return maxHeight;
         }
 
         /// <summary>
