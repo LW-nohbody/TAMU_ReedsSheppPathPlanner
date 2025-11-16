@@ -659,30 +659,7 @@ namespace DigSim3D.App
             var mousePos = GetViewport().GetMousePosition();
             
             // Check if mouse is over the UI panel or any of its children
-            return IsPointInControl(_digSimUI, mousePos);
-        }
-        
-        private bool IsPointInControl(Control control, Vector2 point)
-        {
-            if (!control.Visible) return false;
-            
-            // Check if point is in this control's rectangle
-            var rect = control.GetGlobalRect();
-            if (rect.HasPoint(point))
-            {
-                return true;
-            }
-            
-            // Recursively check all Control children
-            foreach (var child in control.GetChildren())
-            {
-                if (child is Control childControl && IsPointInControl(childControl, point))
-                {
-                    return true;
-                }
-            }
-            
-            return false;
-        }
+            return _digSimUI.IsPointInUI(mousePos);
+        }     
     }
 }

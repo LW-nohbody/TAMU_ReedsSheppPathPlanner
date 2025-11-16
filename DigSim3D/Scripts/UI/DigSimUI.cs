@@ -548,9 +548,14 @@ namespace DigSim3D.UI
                     _glowIncreasing = true;
                 }
             }
-
-            // Update border glow
-            // Note: In production you'd update the StyleBox color here
         }
+        
+        public bool IsPointInUI(Vector2 point)
+        {
+            return _leftPanel.GetGlobalRect().HasPoint(point)
+                || _settingsPanel.GetGlobalRect().HasPoint(point);
+        }
+
+
     }
 }
