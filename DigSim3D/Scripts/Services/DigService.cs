@@ -15,6 +15,11 @@ namespace DigSim3D.Services
         private DigConfig _digConfig;
         private float _totalTerrainVolumeRemoved = 0f;
 
+        // OPTIMIZATION: Batch mesh updates instead of updating every dig operation
+        private bool _terrainModifiedSinceLastUpdate = false;
+        private float _timeSinceLastMeshUpdate = 0f;
+        private const float MeshUpdateInterval = 0.1f; // Update mesh 10 times per second
+
         public DigService(TerrainDisk terrain, DigConfig config)
         {
             _terrain = terrain ?? throw new ArgumentNullException(nameof(terrain));
@@ -22,22 +27,40 @@ namespace DigSim3D.Services
         }
 
         /// <summary>
-        /// Perform excavation at the given world position for the given time duration.
-        /// Returns the volume of dirt excavated (m³).
+        /// Call this each frame to handle batched mesh updates.
         /// </summary>
-        public float DigAtPosition(Vector3 pos, float deltaSeconds, float remainingCapacity)
+        public void Update(float deltaSeconds)
+        {
+            if (_terrainModifiedSinceLastUpdate)
+            {
+                _timeSinceLastMeshUpdate += deltaSeconds;
+                if (_timeSinceLastMeshUpdate >= MeshUpdateInterval)
+                {
+                    _terrain.RebuildMeshOnly();
+                    _terrainModifiedSinceLastUpdate = false;
+                    _timeSinceLastMeshUpdate = 0f;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Perform excavation at the given world position for the given time duration.
+        /// Returns a tuple: (swelled volume for payload, in-situ volume removed from terrain).
+        /// OPTIMIZATION: Does NOT immediately rebuild mesh - call Update() to batch updates.
+        /// </summary>
+        public (float SwelledVolume, float InSituVolume) DigAtPosition(Vector3 pos, float deltaSeconds, float remainingCapacity)
         {
             float r = MathF.Max(0f, _digConfig.DigRadius);
             float depthRate = MathF.Max(0f, _digConfig.DepthRatePerSecond);
             float swell = MathF.Max(1f, _digConfig.SwellFactor);
 
             if (r <= 0f || depthRate <= 0f || remainingCapacity <= 0f || deltaSeconds <= 0f)
-                return 0f;
+                return (0f, 0f);
 
             // How much vertical cut we try this frame
             float maxDepthThisFrame = depthRate * deltaSeconds;
             if (maxDepthThisFrame <= 0f)
-                return 0f;
+                return (0f, 0f);
 
             // Capacity-based clamp: how much depth fits in remainingCapacity
             float effArea = MathF.PI * r * r;
@@ -45,12 +68,16 @@ namespace DigSim3D.Services
 
             float depthToApply = MathF.Min(maxDepthThisFrame, capLimitedDepth);
             if (depthToApply <= 0f)
-                return 0f;
+                return (0f, 0f);
 
             // Actually lower terrain and get REAL in-situ volume removed
-            float removedInSitu = _terrain.LowerAreaAndReturnRemovedVolume(pos, r, depthToApply);
+            // OPTIMIZATION: Use new method that doesn't rebuild mesh immediately
+            float removedInSitu = _terrain.LowerAreaWithoutMeshUpdate(pos, r, depthToApply);
             if (removedInSitu <= 0f)
-                return 0f;
+                return (0f, 0f);
+
+            // Mark that terrain has been modified (mesh update will happen in Update())
+            _terrainModifiedSinceLastUpdate = true;
 
             float carried = removedInSitu * swell;
 
@@ -58,7 +85,7 @@ namespace DigSim3D.Services
             if (carried > remainingCapacity)
                 carried = remainingCapacity;
 
-            return carried; // robot adds this to CurrentPayload
+            return (carried, removedInSitu); // Return both swelled and in-situ volumes
         }
 
         /// <summary>

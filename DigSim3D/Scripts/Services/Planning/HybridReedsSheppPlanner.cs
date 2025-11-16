@@ -42,6 +42,19 @@ namespace DigSim3D.Services
             var goalPos = new Vector3((float)goal.X, 0, (float)goal.Z);
 
             var obstacles = world?.Obstacles?.OfType<CylinderObstacle>().ToList() ?? new List<CylinderObstacle>();
+            
+            // Get arena radius for wall boundary checking
+            float arenaRadius = world?.Terrain?.Radius ?? float.PositiveInfinity;
+            
+            // Debug: Warn if terrain radius is not available
+            if (arenaRadius == float.PositiveInfinity)
+            {
+                GD.PrintErr("⚠️ [HybridReedsSheppPlanner] WARNING: Arena radius not available! Wall checking disabled!");
+            }
+            else
+            {
+                GD.Print($"🔍 [HybridReedsSheppPlanner] Planning path with arena radius: {arenaRadius:F2}m (wall buffer: 0.5m)");
+            }
 
             // 1️⃣ Direct Reeds–Shepp path
             var (rsPoints, rsGears) = RSAdapter.ComputePath3D(
@@ -52,7 +65,7 @@ namespace DigSim3D.Services
             );
 
             var rsPts = rsPoints.ToList();
-            if (obstacles.Count == 0 || PathIsValid(rsPts, obstacles))
+            if (obstacles.Count == 0 || PathIsValid(rsPts, obstacles, arenaRadius))
             {
                 //GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
 #if DEBUG
@@ -78,7 +91,7 @@ namespace DigSim3D.Services
             }
 
             // Attempt to replan
-            var merged = TryReplanWithMidpoints(startPos, goalPos, spec.TurnRadius, gridPath, obstacles, startGear: 1, goal.Yaw);
+            var merged = TryReplanWithMidpoints(startPos, goalPos, spec.TurnRadius, gridPath, obstacles, startGear: 1, goal.Yaw, arenaRadius);
 
             if (merged.points != null)
             {
@@ -102,7 +115,8 @@ namespace DigSim3D.Services
             List<Vector3> gridPath,
             List<CylinderObstacle> obstacles,
             int startGear,
-            double goalYaw)
+            double goalYaw,
+            float arenaRadius)
         {
             if (gridPath == null || gridPath.Count < 2)
                 return (null, null);
@@ -141,7 +155,7 @@ namespace DigSim3D.Services
                     double segYaw = Math.Atan2((segEnd - segStart).Z, (segEnd - segStart).X);
 
                     var (rsTest, rsGearsTest) = RSAdapter.ComputePath3D(segStart, prevYaw, segEnd, segYaw, turnRadius, _sampleStep);
-                    if (rsTest.Length == 0 || !PathIsValid(rsTest.ToList(), obstacles))
+                    if (rsTest.Length == 0 || !PathIsValid(rsTest.ToList(), obstacles, arenaRadius))
                         break;
 
                     farthestReachable = j;
@@ -153,7 +167,7 @@ namespace DigSim3D.Services
                 var (rsSegment, rsGears) = RSAdapter.ComputePath3D(segStart, prevYaw, target, targetYaw, turnRadius, _sampleStep);
 
                 int subdiv = 0;
-                while ((rsSegment.Length == 0 || !PathIsValid(rsSegment.ToList(), obstacles)) && subdiv < 5)
+                while ((rsSegment.Length == 0 || !PathIsValid(rsSegment.ToList(), obstacles, arenaRadius)) && subdiv < 5)
                 {
                     subdiv++;
                     Vector3 mid = segStart.Lerp(target, 0.5f);
@@ -163,7 +177,7 @@ namespace DigSim3D.Services
                     var (rs2, rsGears2) = RSAdapter.ComputePath3D(mid, midYaw, target, targetYaw, turnRadius, _sampleStep);
 
                     if (rs1.Length == 0 || rs2.Length == 0 ||
-                        !PathIsValid(rs1.ToList(), obstacles) || !PathIsValid(rs2.ToList(), obstacles))
+                        !PathIsValid(rs1.ToList(), obstacles, arenaRadius) || !PathIsValid(rs2.ToList(), obstacles, arenaRadius))
                         break;
 
                     mergedPoints.AddRange(rs1.Skip(1));
@@ -199,7 +213,7 @@ namespace DigSim3D.Services
                     var (rsTest, rsGearsTest) = RSAdapter.ComputePath3D(mergedPoints[cur], prevYaw,
                                                                         mergedPoints[j], segYaw,
                                                                         turnRadius, _sampleStep);
-                    if (rsTest.Length > 0 && PathIsValid(rsTest.ToList(), obstacles))
+                    if (rsTest.Length > 0 && PathIsValid(rsTest.ToList(), obstacles, arenaRadius))
                     {
                         farthest = j;
                         break;
@@ -241,21 +255,22 @@ namespace DigSim3D.Services
             double turnRadius,
             List<CylinderObstacle> obstacles,
             int depth,
-            int maxDepth)
+            int maxDepth,
+            float arenaRadius)
         {
             if (depth > maxDepth)
                 return (null, null);
 
             var (rsSegment, rsGears) = RSAdapter.ComputePath3D(start, startYaw, end, endYaw, turnRadius, _sampleStep);
-            if (rsSegment.Length > 0 && PathIsValid(rsSegment.ToList(), obstacles))
+            if (rsSegment.Length > 0 && PathIsValid(rsSegment.ToList(), obstacles, arenaRadius))
                 return (rsSegment.ToList(), rsGears.ToList());
 
             // Subdivide at midpoint
             Vector3 mid = start.Lerp(end, 0.5f);
             double midYaw = Math.Atan2((mid - start).Z, (mid - start).X);
 
-            var (firstHalf, gears1) = ComputeRSWithSubdivision(start, mid, startYaw, midYaw, turnRadius, obstacles, depth + 1, maxDepth);
-            var (secondHalf, gears2) = ComputeRSWithSubdivision(mid, end, midYaw, endYaw, turnRadius, obstacles, depth + 1, maxDepth);
+            var (firstHalf, gears1) = ComputeRSWithSubdivision(start, mid, startYaw, midYaw, turnRadius, obstacles, depth + 1, maxDepth, arenaRadius);
+            var (secondHalf, gears2) = ComputeRSWithSubdivision(mid, end, midYaw, endYaw, turnRadius, obstacles, depth + 1, maxDepth, arenaRadius);
 
             if (firstHalf == null || secondHalf == null || gears1 == null || gears2 == null)
                 return (null, null);
@@ -291,14 +306,29 @@ namespace DigSim3D.Services
             return path;
         }
 
-        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles)
+        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, float arenaRadius)
         {
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
 
+            // Wall buffer must account for vehicle width and safety margin
+            // Original 0.5m + extra margin to prevent paths from going through walls
+            const float WallBufferMeters = 1.0f; // Increased from 0.5m to account for vehicle turning radius
+            float maxAllowedRadius = arenaRadius - WallBufferMeters;
+            
             int hitCount = 0;
 
             foreach (var p in pathPoints)
             {
+                // Check arena boundary (wall buffer zone)
+                float distFromCenter = Mathf.Sqrt(p.X * p.X + p.Z * p.Z);
+                if (distFromCenter > maxAllowedRadius)
+                {
+                    GD.PrintErr($"❌ [PathPlanner] Path goes through wall buffer: point=({p.X:F2},{p.Z:F2}) " +
+                                $"distFromCenter={distFromCenter:F2} > maxAllowed={maxAllowedRadius:F2} (arenaRadius={arenaRadius:F2}, buffer={WallBufferMeters:F2}m)");
+                    return false;
+                }
+                
+                // Check obstacle collisions
                 foreach (var obs in obstacles)
                 {
                     var dx = p.X - obs.GlobalPosition.X;
@@ -321,6 +351,7 @@ namespace DigSim3D.Services
                         return false;
                     }
                 }
+                hitCount++;
             }
 
             //GD.Print("[HybridReedsSheppPlanner] PathIsValid → CLEAR");
