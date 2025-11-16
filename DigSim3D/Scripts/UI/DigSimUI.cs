@@ -19,7 +19,6 @@ namespace DigSim3D.UI
         private AnimatedValueLabel _remainingDirtLabel = null!;
         private ProgressBar _overallProgressBar = null!;
         private AnimatedValueLabel _overallProgressLabel = null!;
-        // private Label _heatMapStatusLabel = null!;
         private AnimatedValueLabel _dirtRemainingLabel = null!;
         private ProgressBar _dirtRemainingBar = null!;  // Changed from thumbnail to progress bar
         private PremiumSlider _speedSlider = null!;
@@ -167,18 +166,18 @@ namespace DigSim3D.UI
                 Text = "Overall Dirt Removed Progress Bar",
                 SizeFlagsHorizontal = SizeFlags.ExpandFill
             };
-            _overallProgressLabel.SetFontSize(14); // Larger font
-            _overallProgressLabel.SetColor(new Color(1.0f, 0.65f, 0.20f, 1.0f)); // Brighter neon orange
+            _overallProgressLabel.SetFontSize(15); 
+            _overallProgressLabel.SetColor(new Color(0.85f, 0.85f, 1.0f)); 
             progressHbox.AddChild(_overallProgressLabel);
 
-            // Progress bar - dark theme with neon green - responsive width
+            // Progress bar 
             var progressBarWidth = panelWidth - 50; // Account for margins
             _overallProgressBar = new ProgressBar
             {
                 MinValue = 0,
                 MaxValue = 100,
                 Value = 0,
-                CustomMinimumSize = new Vector2(progressBarWidth, 26), // Taller progress bar
+                CustomMinimumSize = new Vector2(progressBarWidth, 26),
                 MouseFilter = MouseFilterEnum.Stop,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill
             };
@@ -205,16 +204,6 @@ namespace DigSim3D.UI
             _remainingDirtLabel.SetFontSize(13); // Slightly larger
             _remainingDirtLabel.SetColor(new Color(0.80f, 0.83f, 0.87f, 1.0f)); // Brighter light gray text
             _leftPanelContainer.AddChild(_remainingDirtLabel);
-
-            // Heat map status
-            // _heatMapStatusLabel = new Label
-            // {
-            //     Text = "Terrain Representation: Standard Mode",
-            //     Modulate = new Color(0.70f, 0.73f, 0.77f, 1.0f)
-            // };
-            // _heatMapStatusLabel.AddThemeFontSizeOverride("font_size", 11);
-            // _heatMapStatusLabel.AddThemeColorOverride("font_color", new Color(0.70f, 0.73f, 0.77f, 1.0f));
-            // _leftPanelContainer.AddChild(_heatMapStatusLabel);
             
             // Add spacing before dirt remaining bar
             var spacer1 = new Control { CustomMinimumSize = new Vector2(0, 15) }; // More spacing
@@ -459,14 +448,6 @@ namespace DigSim3D.UI
 
             _syncingFromConfig = false;
         }
-
-
-        // public void SetHeatMapStatus(bool enabled)
-        // {
-        //     string icon = enabled ? "🔥" : "🌡️";
-        //     string status = enabled ? "ON" : "OFF";
-        //     _heatMapStatusLabel.Text = $"{icon} Heat Map: {status}";
-        // }
 
         public void SetInitialVolume(float volume) => _initialTerrainVolume = volume;
 

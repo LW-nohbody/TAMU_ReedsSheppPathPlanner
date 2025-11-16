@@ -249,10 +249,8 @@ namespace DigSim3D.App
 
             _digSimUI.SetDigConfig(_digConfig);
             GD.Print($"🎮 [Director] Passed DigConfig to UI: DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
-            // _digSimUI.SetHeatMapStatus(false);
             _digSimUI.SetInitialVolume(_initialTerrainVolume);
             _digSimUI.SetVehicles(_vehicles);
-            // Removed SetTerrain call - no longer needed without terrain thumbnail
             
             // Initialize progress bars to 0% and 100%
             _digSimUI.UpdateTerrainProgress(_initialTerrainVolume, _initialTerrainVolume);
