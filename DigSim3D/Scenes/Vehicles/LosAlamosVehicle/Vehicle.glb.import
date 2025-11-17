@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://bmvw5f485a8oc"
-path="res://.godot/imported/Vehicle.glb-4d6ce4d16449b7be12dc931ba508ee2e.scn"
+path="res://.godot/imported/Vehicle.glb-57a46fd8e1d116061e4fb6579caad136.scn"
 
 [deps]
 
-source_file="res://Scenes/Vehicles/Vehicle.glb"
-dest_files=["res://.godot/imported/Vehicle.glb-4d6ce4d16449b7be12dc931ba508ee2e.scn"]
+source_file="res://Scenes/Vehicles/LosAlamosVehicle/Vehicle.glb"
+dest_files=["res://.godot/imported/Vehicle.glb-57a46fd8e1d116061e4fb6579caad136.scn"]
 
 [params]
 

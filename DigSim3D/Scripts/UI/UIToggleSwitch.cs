@@ -107,6 +107,23 @@ public partial class UIToggleSwitch : Control
         MouseFilter = MouseFilterEnum.Stop;
     }
 
+    public override void _Process(double delta)
+    {
+        if (GetViewportRect().Size.X != Position.X + Size.X + _offset.X ||
+            GetViewportRect().Size.Y != Position.Y + Size.Y + _offset.Y)
+        {
+            UpdatePosition();
+        }
+    }
+
+    public void UpdatePosition()
+    {
+        Position = new Vector2(
+            GetViewportRect().Size.X - Size.X - _offset.X,
+            GetViewportRect().Size.Y - Size.Y - _offset.Y
+        );
+    }
+
     private void Toggle()
     {
         _pressed = !_pressed;
