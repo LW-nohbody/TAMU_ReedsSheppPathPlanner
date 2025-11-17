@@ -74,7 +74,7 @@ namespace DigSim3D.App
 
         // === UI ===
         private DigSim3D.UI.DigSimUI? _digSimUI = null!;
-        private DigSim3D.UI.ToggleSwitch? _uiToggle = null!;
+        private DigSim3D.UI.UIToggleSwitch? _uiToggle = null!;
 
         public override void _Ready()
         {
@@ -261,7 +261,7 @@ namespace DigSim3D.App
             var toggleLayer = new CanvasLayer { Layer = 200 };
             AddChild(toggleLayer);
 
-            _uiToggle = new ToggleSwitch();
+            _uiToggle = new UIToggleSwitch();
             toggleLayer.AddChild(_uiToggle);
             _uiToggle.SetTargetUI(_digSimUI);
             
