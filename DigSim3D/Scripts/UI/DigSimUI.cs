@@ -282,7 +282,7 @@ namespace DigSim3D.UI
             };
             _robotEntriesContainer.AddThemeConstantOverride("separation", 10); // More spacing between robot panels
             scrollContainer.AddChild(_robotEntriesContainer);
-            
+
             GD.Print($"[DigSimUI] Left panel created: {panelWidth}x{panelHeight}px with professional dark theme and scrollable agent list");
         }
 
@@ -399,9 +399,6 @@ namespace DigSim3D.UI
                 var entry = _robotEntries[index];
                 entry.UpdatePayload(payloadPercent, status, position);
             }
-            // {
-            //     entry.UpdatePayload(payloadPercent, status, position);
-            // }
         }
 
         public void UpdateTerrainProgress(float remainingVolume, float initialVolume)
@@ -537,6 +534,19 @@ namespace DigSim3D.UI
                 || _settingsPanel.GetGlobalRect().HasPoint(point);
         }
 
+        private void OnUIToggle(bool pressed)
+        {
+            GD.Print("Toggle: " + pressed);
+            // Show or hide the rest of the UI based on the toggle
+            foreach (var child in GetChildren())
+            {
+                if (child != this) // or exclude the toggle itself
+                {
+                    if (child is Control c)
+                        c.Visible = pressed;
+                }
+            }
+        }
 
     }
 }

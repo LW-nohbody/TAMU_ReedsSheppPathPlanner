@@ -73,8 +73,8 @@ namespace DigSim3D.App
         private float _initialTerrainVolume = 0f;  // Store initial volume at startup
 
         // === UI ===
-        private DigSim3D.UI.DigSimUI _digSimUI = null!;
-        // private SimpleTestUI _testUI = null!;
+        private DigSim3D.UI.DigSimUI? _digSimUI = null!;
+        private DigSim3D.UI.ToggleSwitch? _uiToggle = null!;
 
         public override void _Ready()
         {
@@ -257,6 +257,15 @@ namespace DigSim3D.App
 
             GD.Print("[Director] DigSimUI initialized successfully");
 
+            // Toggle Switch for UI Visibility
+            var toggleLayer = new CanvasLayer { Layer = 200 };
+            AddChild(toggleLayer);
+
+            _uiToggle = new ToggleSwitch();
+            toggleLayer.AddChild(_uiToggle);
+            _uiToggle.SetTargetUI(_digSimUI);
+            
+            // Set Camera Mode before returning from Ready
             SetCameraMode(CameraMode.TopDown);
         }
 
@@ -652,12 +661,25 @@ namespace DigSim3D.App
 
         private bool IsMouseOverUI()
         {
-            if (_digSimUI == null || !_digSimUI.Visible) return false;
-            
+            bool noDigSimUI = _digSimUI == null || !_digSimUI.Visible;
+            bool noUIToggle = _uiToggle == null || !_uiToggle.Visible;
+            if (noDigSimUI && noUIToggle) return false;
+
             var mousePos = GetViewport().GetMousePosition();
-            
+
             // Check if mouse is over the UI panel or any of its children
-            return _digSimUI.IsPointInUI(mousePos);
+            if (noDigSimUI)
+            {
+                return _uiToggle.IsPointInUI(mousePos);
+            }
+            else if (noUIToggle)
+            {   
+                return _digSimUI.IsPointInUI(mousePos);
+            }
+            else
+            {
+                return (_digSimUI.IsPointInUI(mousePos) || _uiToggle.IsPointInUI(mousePos));
+            }
         }     
     }
 }
