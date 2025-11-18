@@ -43,6 +43,9 @@ namespace DigSim3D.Services
             var goalPos = new Vector3((float)goal.X, 0, (float)goal.Z);
 
             var obstacles = world?.Obstacles?.OfType<CylinderObstacle>().ToList() ?? new List<CylinderObstacle>();
+            
+            // Get arena radius for wall boundary checking
+            float arenaRadius = world?.Terrain?.Radius ?? float.PositiveInfinity;
 
             // 1️⃣ Direct Reeds–Shepp path
             double r = Math.Sqrt(Math.Pow(goalPos.X, 2) + Math.Pow(goalPos.Z, 2));
@@ -97,7 +100,7 @@ namespace DigSim3D.Services
 
             // Attempt to replan
             var merged = TryReplanWithMidpoints(startPos, goalPos, spec.TurnRadius, gridPath, obstacles, startGear: 1, world,
-    goal.Yaw, start.Yaw);
+            goal.Yaw, start.Yaw, arenaRadius);
 
             if (merged.points != null)
             {
@@ -125,7 +128,8 @@ namespace DigSim3D.Services
             int startGear,
             WorldState world,
             double goalYaw,
-            double startYaw)
+            double startYaw,
+            float arenaRadius)
         {
             if (gridPath == null || gridPath.Count < 2)
                 return (null, null);
@@ -392,11 +396,12 @@ namespace DigSim3D.Services
         private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, double endYaw, double radius, double worldRadius)
         {
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
-
+            
             int hitCount = 0;
 
             foreach (var p in pathPoints)
-            {
+            {   
+                // Check obstacle collisions
                 foreach (var obs in obstacles)
                 {
                     var dx = p.X - obs.GlobalPosition.X;
@@ -409,20 +414,8 @@ namespace DigSim3D.Services
                     double turnDist = obs.Radius + radius;
                     double turnDistSq = turnDist * turnDist;
 
-                    // Optional: Print every ~10th point to not flood logs
-                    // if ((hitCount % 10 == 0) && distSq < minDistSq * 4)
-                    // {
-                    //     GD.Print($"   sample ({p.X:F2},{p.Z:F2}) → obs ({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}), " +
-                    //             $"dist={Math.Sqrt(distSq):F2}, min={minDist:F2}");
-                    // }
-                    // if(angleDist < 0.48 && distSq < turnDistSq)
-                    // {
-                    //     GD.PrintErr($"Dubins path stuck at obstacle, angleDist: {angleDist}, distSq: {distSq}");
-                    // }
                     if (distSq < minDistSq || (angleDist < 0.48 && distSq < turnDistSq))
                     {
-                        //GD.PrintErr($"❌ RS path collision: sample=({p.X:F2},{p.Z:F2}) obs=({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}) " +
-                        //            $"dist={Math.Sqrt(distSq):F2} < min={minDist:F2}");
                         return false;
                     }
 
@@ -435,6 +428,7 @@ namespace DigSim3D.Services
                 {
                     return false;
                 }
+                hitCount++;
             }
 
             //GD.Print("[HybridReedsSheppPlanner] PathIsValid → CLEAR");
