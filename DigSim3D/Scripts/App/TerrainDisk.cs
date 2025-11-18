@@ -102,11 +102,11 @@ namespace DigSim3D.App
                         float h = Amplitude * n;
                         if (h < FloorY)
                             h = FloorY + (FloorY - h);
-                        _heights[i, j] = h;
                         if (h < 0.011f)
                         {
                             h = 0.011f;
                         }
+                        _heights[i, j] = h;
                     }
                     else
                     {
@@ -219,13 +219,13 @@ namespace DigSim3D.App
             _colShape.Disabled = false;
 
             int under = 0; float minH = 1e9f, maxH = -1e9f;
-            for (int j=0;j<_N;j++)
-            for (int i=0;i<_N;i++)
-            {
-                float h = _heights[i,j];
-                if (h < FloorY - 1e-6f) under++;
-                if (h < minH) minH = h; if (h > maxH) maxH = h;
-            }
+            for (int j = 0; j < _N; j++)
+                for (int i = 0; i < _N; i++)
+                {
+                    float h = _heights[i, j];
+                    if (h < FloorY - 1e-6f) under++;
+                    if (h < minH) minH = h; if (h > maxH) maxH = h;
+                }
             GD.Print($"[TerrainDisk] min={minH:F6} max={maxH:F6} floor={FloorY:F6} underFloor={under}");
         }
 
