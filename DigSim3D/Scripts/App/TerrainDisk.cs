@@ -102,6 +102,9 @@ namespace DigSim3D.App
                         float h = Amplitude * n;
                         if (h < FloorY)
                             h = FloorY + (FloorY - h);
+                        // Ensure minimum height > 0.01f
+                        if (h < 0.011f)
+                            h = 0.011f;
                         _heights[i, j] = h;
                     }
                     else

@@ -691,6 +691,23 @@ namespace DigSim3D.App
             DigState.CurrentPayload += swelledVolume;
             DigState.CurrentSiteVolumeExcavated += inSituVolume;
 
+            // Set any terrain cell with height <= 0.01 to -1 (mark as empty)
+            if (_terrain != null && _terrain.HeightGrid != null)
+            {
+                int resolution = _terrain.GridResolution;
+                for (int i = 0; i < resolution; i++)
+                {
+                    for (int j = 0; j < resolution; j++)
+                    {
+                        float height = _terrain.HeightGrid[i, j];
+                        if (!float.IsNaN(height) && height <= 0.001f)
+                        {
+                            _terrain.HeightGrid[i, j] = -1f;
+                        }
+                    }
+                }
+            }
+
             if (DigState.IsPayloadFull)
             {
                 GD.Print($"[VehicleBrain] {Agent.Name} payload full, going to dump");
