@@ -61,7 +61,9 @@ namespace DigSim3D.App
         private float lift = 0.04f;
 
         [Export] public NodePath ObstacleManagerPath = null!;
+        [Export] public NodePath DynamicObstacleManagerPath = null!;
         private ObstacleManager _obstacleManager = null!;
+        private DynamicObstacleManager _dynamicObstacleManager = null!;
 
         // === Dig System ===
         private DigService _digService = null!;
@@ -75,6 +77,8 @@ namespace DigSim3D.App
         // === UI ===
         private DigSim3D.UI.DigSimUI? _digSimUI = null!;
         private DigSim3D.UI.UIToggleSwitch? _uiToggle = null!;
+
+        [Export] public bool DynamicAvoidanceEnabled = false;
 
         public override void _Ready()
         {
@@ -94,6 +98,12 @@ namespace DigSim3D.App
             if (_obstacleManager == null)
             {
                 GD.PushError("SimulationDirector: ObstacleManagerPath not set or not found.");
+                return;
+            }
+            _dynamicObstacleManager = GetNodeOrNull<DynamicObstacleManager>(DynamicObstacleManagerPath);
+            if (_dynamicObstacleManager == null)
+            {
+                GD.PushError("SimulationDirector: DynamicObstacleManagerPath not set or not found.");
                 return;
             }
 
@@ -122,6 +132,8 @@ namespace DigSim3D.App
 
                 _vehicles.Add(car);
 
+                _dynamicObstacleManager.RegisterDynamicObstacle(car);
+
                 // Add nameplate
                 var id = car._vehicleID;
                 var nameplate = new Nameplate3D
@@ -149,11 +161,11 @@ namespace DigSim3D.App
 
             // === Initialize Dig Service ===
             _digService = new DigService(_terrain, _digConfig);
-            
+
             // Create dig visualizer
             _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
             AddChild(_digVisualizer);
-            
+
             // Create sector visualizer to show robot sectors
             _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
             AddChild(_sectorVisualizer);
@@ -231,7 +243,7 @@ namespace DigSim3D.App
             var uiLayer = new CanvasLayer { Layer = 100 };
             AddChild(uiLayer);
             GD.Print($"[Director] Created CanvasLayer for UI");
-            
+
             _digSimUI = new DigSim3D.UI.DigSimUI();
             uiLayer.AddChild(_digSimUI);
             GD.Print($"[Director] Added DigSimUI to CanvasLayer");
@@ -251,7 +263,7 @@ namespace DigSim3D.App
             GD.Print($"🎮 [Director] Passed DigConfig to UI: DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
             _digSimUI.SetInitialVolume(_initialTerrainVolume);
             _digSimUI.SetVehicles(_vehicles);
-            
+
             // Initialize progress bars to 0% and 100%
             _digSimUI.UpdateTerrainProgress(_initialTerrainVolume, _initialTerrainVolume);
 
@@ -384,16 +396,47 @@ namespace DigSim3D.App
         }
 
 
-        public override void _Process(double delta)
-        {
+public override void _Process(double delta)
+{
             // OPTIMIZATION: Update DigService to batch terrain mesh updates
             _digService?.Update((float)delta);
 
-            // Update robot dig behaviors
-            foreach (var brain in _robotBrains)
+    foreach (var brain in _robotBrains)
+    {
+        brain.UpdateDigBehavior((float)delta);
+
+        if(DynamicAvoidanceEnabled){
+            if (_dynamicObstacleManager != null)
             {
-                brain.UpdateDigBehavior((float)delta);
+                int myIndex = _robotBrains.IndexOf(brain);
+                bool shouldPause = false;
+
+                foreach (var other in _robotBrains)
+                {
+                    if (other == brain) continue;
+
+                    int otherIndex = _robotBrains.IndexOf(other);
+                    float dist = brain.Agent.GlobalTransform.Origin.DistanceTo(other.Agent.GlobalTransform.Origin);
+
+                    if (dist < _dynamicObstacleManager.AvoidanceRadius)
+                    {
+                        if (otherIndex > myIndex)
+                        {
+                            shouldPause = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (shouldPause)
+                    brain.FreezeForPriority();     // ← replan happens once inside this
+                else
+                    brain.UnfreezeFromPriority();  // ← resets the "allowed to replan" flag
             }
+        }
+    }
+
+
 
             // Update UI with robot stats
             if (_digSimUI != null && _robotBrains.Count > 0)
