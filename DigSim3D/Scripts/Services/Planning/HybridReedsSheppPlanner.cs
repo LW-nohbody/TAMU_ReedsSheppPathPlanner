@@ -311,8 +311,8 @@ namespace DigSim3D.Services
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
 
             // Wall buffer must account for vehicle width and safety margin
-            // Original 0.5m + extra margin to prevent paths from going through walls
-            const float WallBufferMeters = 1.0f; // Increased from 0.5m to account for vehicle turning radius
+            // Set to 0.1m for tighter wall avoidance
+            const float WallBufferMeters = 0.1f; // Changed from previous value
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
             
             int hitCount = 0;

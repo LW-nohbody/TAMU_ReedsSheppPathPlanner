@@ -165,7 +165,7 @@ namespace DigSim3D.App
             _bufferVisualizer = new BufferVisualizer { Name = "BufferVisualizer" };
             AddChild(_bufferVisualizer);
             const float obstacleBufferMeters = 0.5f; // 0.5m obstacle buffer (both dig target selection and path planning)
-            const float wallBufferMeters = 0.5f;     // 0.5m wall buffer (dig target selection only)
+            const float wallBufferMeters = 0.1f;     // 0.1m wall buffer (dig target selection only)
             _bufferVisualizer.Initialize(obstacleList, obstacleBufferMeters, _terrain.Radius, wallBufferMeters);
             GD.Print($"[Director] BufferVisualizer created - obstacle buffer: {obstacleBufferMeters}m, wall buffer: {wallBufferMeters}m");
 
