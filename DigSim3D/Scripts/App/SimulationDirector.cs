@@ -86,6 +86,8 @@ namespace DigSim3D.App
         private DigSim3D.UI.DigSimUI _digSimUI = null!;
         // private SimpleTestUI _testUI = null!;
 
+        [Export] public bool DynamicAvoidanceEnabled = false;
+
         public override void _Ready()
         {
             // Nodes
@@ -392,32 +394,34 @@ public override void _Process(double delta)
     {
         brain.UpdateDigBehavior((float)delta);
 
-        if (_dynamicObstacleManager != null)
-        {
-            int myIndex = _robotBrains.IndexOf(brain);
-            bool shouldPause = false;
-
-            foreach (var other in _robotBrains)
+        if(DynamicAvoidanceEnabled){
+            if (_dynamicObstacleManager != null)
             {
-                if (other == brain) continue;
+                int myIndex = _robotBrains.IndexOf(brain);
+                bool shouldPause = false;
 
-                int otherIndex = _robotBrains.IndexOf(other);
-                float dist = brain.Agent.GlobalTransform.Origin.DistanceTo(other.Agent.GlobalTransform.Origin);
-
-                if (dist < _dynamicObstacleManager.AvoidanceRadius)
+                foreach (var other in _robotBrains)
                 {
-                    if (otherIndex > myIndex)
+                    if (other == brain) continue;
+
+                    int otherIndex = _robotBrains.IndexOf(other);
+                    float dist = brain.Agent.GlobalTransform.Origin.DistanceTo(other.Agent.GlobalTransform.Origin);
+
+                    if (dist < _dynamicObstacleManager.AvoidanceRadius)
                     {
-                        shouldPause = true;
-                        break;
+                        if (otherIndex > myIndex)
+                        {
+                            shouldPause = true;
+                            break;
+                        }
                     }
                 }
-            }
 
-            if (shouldPause)
-                brain.FreezeForPriority();     // ← replan happens once inside this
-            else
-                brain.UnfreezeFromPriority();  // ← resets the "allowed to replan" flag
+                if (shouldPause)
+                    brain.FreezeForPriority();     // ← replan happens once inside this
+                else
+                    brain.UnfreezeFromPriority();  // ← resets the "allowed to replan" flag
+            }
         }
     }
 
