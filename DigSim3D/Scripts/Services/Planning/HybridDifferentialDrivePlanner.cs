@@ -296,7 +296,7 @@ private (List<Vector3>, List<int>) ComputeRSWithSubdivision(
         {
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
 
-            const float WallBufferMeters = 0.5f; // Same 0.5m wall buffer as dig site selection
+            const float WallBufferMeters = 0.1f; // 0.1m wall buffer
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
             
             int hitCount = 0;
