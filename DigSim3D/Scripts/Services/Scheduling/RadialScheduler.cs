@@ -81,7 +81,7 @@ namespace DigSim3D.Services
 
                 // Calculate wall buffer zone
                 float arenaRadius = terrain.Radius;
-                const float WallBufferMeters = 0.5f; // 0.5m wall buffer
+                const float WallBufferMeters = 0.1f; // 0.1m wall buffer
                 float maxAllowedRadius = arenaRadius - WallBufferMeters;
                 
                 const float ObstacleBufferMeters = 0.5f; // 0.5m obstacle buffer

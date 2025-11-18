@@ -416,7 +416,7 @@ namespace DigSim3D.App
             float arenaRadius = _terrain.Radius;
             // Wall buffer accounts for: vehicle width (~0.5m) + turn radius (1.0m) + safety margin
             // Must match path planner's wall buffer to ensure selected dig sites are pathable
-            const float WallBufferMeters = 1.0f; // Increased to prevent path planning failures near walls
+            const float WallBufferMeters = 0.1f; // Must match HybridReedsSheppPlanner.PathIsValid buffer
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
 
             // Get obstacles from world state for manual checking
@@ -559,8 +559,8 @@ namespace DigSim3D.App
 
             // Calculate wall buffer zone (0.5m)
             float arenaRadius = _terrain.Radius;
-            // Wall buffer must match the path planner's buffer (1.0m) to ensure all selected sites are pathable
-            const float WallBufferMeters = 1.0f; // Must match HybridReedsSheppPlanner.PathIsValid buffer
+            // Wall buffer must match the path planner's buffer (0.5m) to ensure all selected sites are pathable
+            const float WallBufferMeters = 0.1f; // Must match HybridReedsSheppPlanner.PathIsValid buffer
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
 
             const float ObstacleBufferMeters = 0.5f; // 0.5m obstacle buffer
@@ -573,7 +573,7 @@ namespace DigSim3D.App
                     float height = _terrain.HeightGrid[i, j];
 
                     // Accept dirt > 0cm (same threshold as HasRemainingTerrain for consistency)
-                    if (float.IsNaN(height) || height <= 0.0f) continue;
+                    if (float.IsNaN(height) || height <= 0.01f) continue;
 
                     // Convert grid indices to world position
                     float worldX = (i - resolution / 2f) * gridStep;
@@ -668,7 +668,7 @@ namespace DigSim3D.App
                     float height = _terrain.HeightGrid[i, j];
                     // Threshold for "significant" dirt - lowered to 0cm to catch any remaining dirt
                     // (was 30cm which caused robots to declare complete while dirt remained)
-                    if (!float.IsNaN(height) && height > 0.0f)
+                    if (!float.IsNaN(height) && height > 0.01f)
                     {
                         return true;
                     }
