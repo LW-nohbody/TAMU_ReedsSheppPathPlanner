@@ -72,6 +72,8 @@ namespace DigSim3D.App
         private List<VehicleBrain> _robotBrains = new();
         private float _initialTerrainVolume = 0f;  // Store initial volume at startup
 
+        private bool _simPaused = false;
+
         // === UI ===
         private DigSim3D.UI.DigSimUI _digSimUI = null!;
         // private SimpleTestUI _testUI = null!;
@@ -149,11 +151,11 @@ namespace DigSim3D.App
 
             // === Initialize Dig Service ===
             _digService = new DigService(_terrain, _digConfig);
-            
+
             // Create dig visualizer
             _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
             AddChild(_digVisualizer);
-            
+
             // Create sector visualizer to show robot sectors
             _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
             AddChild(_sectorVisualizer);
@@ -231,7 +233,7 @@ namespace DigSim3D.App
             var uiLayer = new CanvasLayer { Layer = 100 };
             AddChild(uiLayer);
             GD.Print($"[Director] Created CanvasLayer for UI");
-            
+
             _digSimUI = new DigSim3D.UI.DigSimUI();
             uiLayer.AddChild(_digSimUI);
             GD.Print($"[Director] Added DigSimUI to CanvasLayer");
@@ -253,7 +255,7 @@ namespace DigSim3D.App
             _digSimUI.SetInitialVolume(_initialTerrainVolume);
             _digSimUI.SetVehicles(_vehicles);
             // Removed SetTerrain call - no longer needed without terrain thumbnail
-            
+
             // Initialize progress bars to 0% and 100%
             _digSimUI.UpdateTerrainProgress(_initialTerrainVolume, _initialTerrainVolume);
 
@@ -275,6 +277,18 @@ namespace DigSim3D.App
                     case Key.Key3: SetCameraMode(CameraMode.Free); return;
                     case Key.Key4: SetCameraMode(CameraMode.VehicleFollow); return;
 
+                    case Key.R:
+                        GetTree().ReloadCurrentScene();
+                        return;
+
+                    case Key.P:
+                        _simPaused = !_simPaused;
+                        GD.Print($"Sim paused: {_simPaused}");
+                        // Tell all vehicles to respect sim pause
+                        foreach (var v in _vehicles)
+                            v.SimPaused = _simPaused;
+                        return;
+
                     case Key.Left:
                         if (_mode == CameraMode.VehicleFollow) { CycleFollowTarget(-1); return; }
                         break;
@@ -284,7 +298,6 @@ namespace DigSim3D.App
                 }
             }
 
-            // ---- (keep your existing mouse handlers below) ----
             if (e is InputEventMouseMotion mm && _rotatingFreeCam)
             {
                 _freeYaw += -mm.Relative.X * MouseSensitivity;
@@ -379,13 +392,17 @@ namespace DigSim3D.App
 
         public override void _Process(double delta)
         {
-            // OPTIMIZATION: Update DigService to batch terrain mesh updates
-            _digService?.Update((float)delta);
-
-            // Update robot dig behaviors
-            foreach (var brain in _robotBrains)
+            // Only advance digging + brains when NOT paused
+            if (!_simPaused)
             {
-                brain.UpdateDigBehavior((float)delta);
+                // Update terrain dig batching
+                _digService?.Update((float)delta);
+
+                // Update robot dig behaviours
+                foreach (var brain in _robotBrains)
+                {
+                    brain.UpdateDigBehavior((float)delta);
+                }
             }
 
             // Update UI with robot stats
@@ -396,7 +413,7 @@ namespace DigSim3D.App
                     var brain = _robotBrains[i];
                     var state = brain.DigState;
                     var robotPos = brain.Agent.GlobalTransform.Origin;
-                    
+
                     float payloadPercent = state.MaxPayload > 0 ? (state.CurrentPayload / state.MaxPayload) : 0f;
                     _digSimUI.UpdateRobotPayload(i, payloadPercent, robotPos, state.State.ToString());
                 }
@@ -655,24 +672,24 @@ namespace DigSim3D.App
         private bool IsMouseOverUI()
         {
             if (_digSimUI == null || !_digSimUI.Visible) return false;
-            
+
             var mousePos = GetViewport().GetMousePosition();
-            
+
             // Check if mouse is over the UI panel or any of its children
             return IsPointInControl(_digSimUI, mousePos);
         }
-        
+
         private bool IsPointInControl(Control control, Vector2 point)
         {
             if (!control.Visible) return false;
-            
+
             // Check if point is in this control's rectangle
             var rect = control.GetGlobalRect();
             if (rect.HasPoint(point))
             {
                 return true;
             }
-            
+
             // Recursively check all Control children
             foreach (var child in control.GetChildren())
             {
@@ -681,7 +698,7 @@ namespace DigSim3D.App
                     return true;
                 }
             }
-            
+
             return false;
         }
     }

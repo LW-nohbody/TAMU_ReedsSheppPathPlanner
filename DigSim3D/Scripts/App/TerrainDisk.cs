@@ -103,6 +103,10 @@ namespace DigSim3D.App
                         if (h < FloorY)
                             h = FloorY + (FloorY - h);
                         _heights[i, j] = h;
+                        if (h < 0.011f)
+                        {
+                            h = 0.011f;
+                        }
                     }
                     else
                     {
