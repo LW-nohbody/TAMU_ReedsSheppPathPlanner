@@ -53,6 +53,10 @@ public partial class World : Node2D
     private SpinBox _goalX, _goalY, _goalTheta;
     private Button _resetBtn;
 
+    // Debug refs
+    private double start_rotation = 0;
+    private double goal_rotation = 0;
+
     // === UI/units helpers ===
     // Set to 50f if you want UI unit = 50 px; set to 100f if you want UI unit = 100 px.
     private const float GRID = 50f;
@@ -240,8 +244,8 @@ public partial class World : Node2D
                      y: (double)GoalGizmo.GlobalPosition.Y,
                      th: (double)GoalGizmo.GlobalRotation);
         
-        GD.Print($"startG: {startG}");
-        GD.Print($"goalG: {goalG}");
+        // GD.Print($"startG: {startG}");
+        // GD.Print($"goalG: {goalG}");
 
         var startM = (x: startG.x,
                       y: startG.y,
@@ -254,19 +258,29 @@ public partial class World : Node2D
                      th: goalG.th);
 
         double R = TurnRadius;
+        // if (startM.th != start_rotation || goalM.th != goal_rotation)
+        // {
+        //     GD.Print($"Start Rotation: {startM.th}, Goal Rotation: {goalM.th}");
+        //     start_rotation = startM.th;
+        //     goal_rotation = goalM.th;
+        // }
+        
 
         // Initialize new library
         Pose startPose = Pose.Create(startM.x/R, startM.y/R, startM.th);
         Pose goalPose = Pose.Create(goalM.x/R, goalM.y/R, goalM.th);
 
-        ReedsShepp rs_alg = new ReedsShepp();
-        ReedsSheppPath rs_path = rs_alg.GetOptimalPath(startPose, goalPose);
+        // ReedsShepp rs_alg = new ReedsShepp();
+        // ReedsSheppPath rs_path = rs_alg.GetOptimalPath(startPose, goalPose);
+        // Pose globalStartPose = Pose.Create(startM.x, startM.y, startM.th);
+        // PosePath bestPath = rs_path.Sample(1, R, globalStartPose);
 
-        // Dubins dubins_alg = new Dubins();
-        // DubinsPath dubins_path = dubins_alg.GetOptimalPath(startPose, goalPose);
-
+        Dubins dubins_alg = new Dubins();
+        DubinsPath dubins_path = dubins_alg.GetOptimalPath(startPose, goalPose);
         Pose globalStartPose = Pose.Create(startM.x, startM.y, startM.th);
-        PosePath bestPath = rs_path.Sample(1, R, globalStartPose);
+        PosePath bestPath = dubins_path.Sample(1, R, globalStartPose);
+
+
         // bestPath = bestPath.Sample(10000);
 
         if (bestPath == null || bestPath.Count == 0)
@@ -277,12 +291,18 @@ public partial class World : Node2D
         }
 
         var ptsGodot = new Vector2[bestPath.Count];
+
         for (int i = 0; i < bestPath.Count; i++)
         {
             var p = bestPath.Elements[i];
 
-            // p.X, p.Y are world-MATH coordinates (pixels), convert to Godot screen coordinates:
-            ptsGodot[i] = new Vector2((float) p.X, (float) (startM.y + startM.y - p.Y));
+            // p.X, p.Y are world-MATH coordinates (pixels), convert to Godot screen coordinates
+            // Flip y across local y-axis?
+            // ptsGodot[i] = new Vector2((float)p.X, (float)(startM.y + startM.y - p.Y));
+
+            // Unessecary here just take x and y values
+            ptsGodot[i] = new Vector2((float)p.X, (float)p.Y);
+
         }
 
         // List<Vector2> points = new List<Vector2>();
@@ -320,11 +340,11 @@ public partial class World : Node2D
         BestPath.Width = 3;
         BestPath.DefaultColor = new Color(0.2f, 1f, 0.2f, 1f);
 
-        GD.Print($"Start X (Godot): {(double)StartGizmo.GlobalPosition.X}, Path first: {ptsGodot[0].X}");
-        GD.Print($"End X (Godot): {(double)GoalGizmo.GlobalPosition.X}, Path last: {ptsGodot[^1].X}");
+        // GD.Print($"Start X (Godot): {(double)StartGizmo.GlobalPosition.X}, Path first: {ptsGodot[0].X}");
+        // GD.Print($"End X (Godot): {(double)GoalGizmo.GlobalPosition.X}, Path last: {ptsGodot[^1].X}");
 
-        GD.Print($"Start Y (Godot): {(double)StartGizmo.GlobalPosition.Y}, Path first: {ptsGodot[0].Y}");
-        GD.Print($"End Y (Godot): {(double)GoalGizmo.GlobalPosition.Y}, Path last: {ptsGodot[^1].Y}");
+        // GD.Print($"Start Y (Godot): {(double)StartGizmo.GlobalPosition.Y}, Path first: {ptsGodot[0].Y}");
+        // GD.Print($"End Y (Godot): {(double)GoalGizmo.GlobalPosition.Y}, Path last: {ptsGodot[^1].Y}");
 
         // 7) Local-normalized ending pose and error (same as your original output)
         // var reachedLocal = ptsLocalNorm[^1];

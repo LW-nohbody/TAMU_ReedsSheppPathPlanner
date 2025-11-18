@@ -45,6 +45,9 @@ namespace DigSim3D.App
         private TerrainDisk _terrain = null!;
         public void SetTerrain(TerrainDisk t) => _terrain = t;
 
+        // Name for nameplate & UI
+        public string _vehicleID = null!;
+
         public void SetPath(Vector3[] pts, int[] gears)
         {
             _path = pts ?? Array.Empty<Vector3>();

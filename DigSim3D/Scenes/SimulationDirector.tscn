@@ -1,9 +1,9 @@
 [gd_scene load_steps=21 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
-[ext_resource type="Script" uid="uid://bhet1jfht782y" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
-[ext_resource type="PackedScene" uid="uid://bjwl37wdxs6ua" path="res://Scenes/Vehicles/Vehicle_RS.tscn" id="2_q02dg"]
-[ext_resource type="Script" uid="uid://v4xqfuc11lep" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
+[ext_resource type="Script" uid="uid://y3xj5surludi" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
+[ext_resource type="PackedScene" uid="uid://b5fyd3u7xnm52" path="res://Scenes/Vehicles/DifferentialDriveVehicle/Differential_Drive_Vehicle.tscn" id="2_qfmbg"]
+[ext_resource type="Script" uid="uid://ytlhjpjwably" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
 [ext_resource type="Material" uid="uid://d0aiqbs32qvub" path="res://Materials/concrete.tres" id="3_qfmbg"]
 [ext_resource type="Script" uid="uid://681xefc05mdq" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
 [ext_resource type="Script" uid="uid://davwas26vhqie" path="res://Scripts/App/DynamicObstacleManager.cs" id="7_xklxq"]
@@ -80,14 +80,14 @@ radial_segments = 32
 [node name="SimulationDirector" type="Node3D"]
 transform = Transform3D(0.984884, 0, 0, 0, 0.984884, 0, 0, 0, 0.984884, 0, 0, 0)
 script = ExtResource("1_tjpb3")
-VehicleScene = ExtResource("2_q02dg")
+VehicleScene = ExtResource("2_qfmbg")
 VehiclesRootPath = NodePath("VehiclesRoot")
 CameraTopPath = NodePath("Cameras/CameraTop")
 CameraChasePath = NodePath("Cameras/CameraChase")
 CameraFreePath = NodePath("Cameras/CameraFree")
 CameraOrbitPath = NodePath("Cameras/CameraOrbit")
 TerrainPath = NodePath("Terrain")
-VehicleCount = 4
+VehicleCount = 3
 VehicleLength = 0.75
 VehicleWidth = 0.5
 GoalAdvance = 10.0

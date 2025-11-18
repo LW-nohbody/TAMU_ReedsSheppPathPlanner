@@ -4,7 +4,7 @@ using System;
 namespace DigSim3D.UI
 {
     /// <summary>
-    /// Premium panel with glassmorphism and draggable support
+    /// Professional panel component with configurable title and content
     /// </summary>
     public partial class PremiumUIPanel : Control
     {
@@ -18,7 +18,7 @@ namespace DigSim3D.UI
             MouseFilter = MouseFilterEnum.Stop;
             CustomMinimumSize = new Vector2(380, 500);
             
-            // Main panel with glassmorphism
+            // Professional dark theme panel
             _panel = new Panel
             {
                 CustomMinimumSize = CustomMinimumSize,
@@ -26,12 +26,13 @@ namespace DigSim3D.UI
             };
             
             var styleBox = new StyleBoxFlat();
-            styleBox.BgColor = new Color(0.08f, 0.08f, 0.12f, 0.9f);
-            styleBox.BorderColor = new Color(0.4f, 0.6f, 1.0f, 0.8f);
-            styleBox.SetBorderWidthAll(3);
-            styleBox.SetCornerRadiusAll(12);
-            styleBox.ShadowColor = new Color(0.4f, 0.6f, 1.0f, 0.4f);
-            styleBox.ShadowSize = 8;
+            styleBox.BgColor = new Color(0.12f, 0.13f, 0.15f, 0.95f); // Dark charcoal
+            styleBox.BorderColor = new Color(0.20f, 0.22f, 0.25f, 1.0f); // Subtle dark border
+            styleBox.SetBorderWidthAll(1);
+            styleBox.SetCornerRadiusAll(6);
+            styleBox.ShadowColor = new Color(0.0f, 0.0f, 0.0f, 0.4f);
+            styleBox.ShadowSize = 15;
+            styleBox.ShadowOffset = new Vector2(0, 4);
             _panel.AddThemeStyleboxOverride("panel", styleBox);
             
             AddChild(_panel);
@@ -43,8 +44,8 @@ namespace DigSim3D.UI
                 MouseFilter = MouseFilterEnum.Stop
             };
             var titleStyleBox = new StyleBoxFlat();
-            titleStyleBox.BgColor = new Color(0.15f, 0.15f, 0.2f, 0.95f);
-            titleStyleBox.SetCornerRadiusAll(12);
+            titleStyleBox.BgColor = new Color(0.08f, 0.09f, 0.11f, 1.0f); // Darker header
+            titleStyleBox.SetCornerRadiusAll(6);
             titleStyleBox.CornerRadiusBottomLeft = 0;
             titleStyleBox.CornerRadiusBottomRight = 0;
             titleBar.AddThemeStyleboxOverride("panel", titleStyleBox);
@@ -54,11 +55,10 @@ namespace DigSim3D.UI
             {
                 Text = Title,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                Modulate = new Color(0.7f, 0.9f, 1.0f)
+                VerticalAlignment = VerticalAlignment.Center
             };
-            titleLabel.AddThemeFontSizeOverride("font_size", 16);
-            titleLabel.AddThemeColorOverride("font_color", Colors.White);
+            titleLabel.AddThemeFontSizeOverride("font_size", 15);
+            titleLabel.AddThemeColorOverride("font_color", new Color(0.85f, 0.87f, 0.90f, 1.0f)); // Light gray text
             titleBar.AddChild(titleLabel);
             
             // Content container

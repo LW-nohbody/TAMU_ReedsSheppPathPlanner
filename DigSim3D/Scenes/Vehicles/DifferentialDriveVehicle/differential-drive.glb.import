@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bmvw5f485a8oc"
-path="res://.godot/imported/Vehicle.glb-4d6ce4d16449b7be12dc931ba508ee2e.scn"
+uid="uid://mpq5jr47vdwo"
+path="res://.godot/imported/differential-drive.glb-18fe6de9318be455c4607106528e7e0d.scn"
 
 [deps]
 
-source_file="res://Scenes/Vehicles/Vehicle.glb"
-dest_files=["res://.godot/imported/Vehicle.glb-4d6ce4d16449b7be12dc931ba508ee2e.scn"]
+source_file="res://Scenes/Vehicles/DifferentialDriveVehicle/differential-drive.glb"
+dest_files=["res://.godot/imported/differential-drive.glb-18fe6de9318be455c4607106528e7e0d.scn"]
 
 [params]
 
@@ -32,17 +32,6 @@ animation/trimming=false
 animation/remove_immutable_tracks=true
 animation/import_rest_as_RESET=false
 import_script/path=""
-_subresources={
-"meshes": {
-"Vehicle_Mesh_3": {
-"generate/lightmap_uv": 0,
-"generate/lods": 0,
-"generate/shadow_meshes": 0,
-"lods/normal_merge_angle": 60.0,
-"save_to_file/enabled": true,
-"save_to_file/path": "res://Scenes/Vehicles/Vehicle_Mesh_3.res"
-}
-}
-}
+_subresources={}
 gltf/naming_version=1
 gltf/embedded_image_handling=1
