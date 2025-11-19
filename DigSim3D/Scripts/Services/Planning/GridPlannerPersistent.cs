@@ -23,9 +23,12 @@ namespace DigSim3D.Services
 
 
         /// <summary>
-        /// Build the A* grid once and store it for later reuse.
-        /// Call this when your scene loads or obstacles change.
+        /// Builds A* grid around obstacles
         /// </summary>
+        /// <param name="obstacles"></param>
+        /// <param name="gridSize"></param>
+        /// <param name="gridExtent"></param>
+        /// <param name="obstacleBufferMeters"></param>
         // --- Replace BuildGrid with this version (only additions are GD.Print lines) ---
         public static void BuildGrid(
             IEnumerable<Obstacle3D> obstacles,
@@ -141,6 +144,12 @@ namespace DigSim3D.Services
         }
 
 
+        /// <summary>
+        /// Plans the A* path around the obstacles, then returns that path
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="goal"></param>
+        /// <returns></returns>
         // --- Replace Plan2DPath with this version (adds pre/post prints and simple consistency checks) ---
         public static List<Vector3> Plan2DPath(Vector3 start, Vector3 goal)
         {
@@ -207,11 +216,19 @@ namespace DigSim3D.Services
         /// <summary>
         /// Rebuilds the cached grid manually (for dynamic worlds).
         /// </summary>
+        /// <param name="obstacles"></param>
         public static void Rebuild(List<Obstacle3D> obstacles)
         {
             BuildGrid(obstacles, _gridSize, _gridExtent, _obstacleBuffer);
         }
 
+        /// <summary>
+        /// Gets id of object of location gx, gz
+        /// </summary>
+        /// <param name="gx"></param>
+        /// <param name="gz"></param>
+        /// <param name="extent"></param>
+        /// <returns></returns>
         private static long ToId(int gx, int gz, int extent)
         {
             return ((long)(gx + extent) * (extent * 2 + 1)) + (gz + extent);
@@ -221,6 +238,8 @@ namespace DigSim3D.Services
         /// Returns true if the grid cell under this world-space XZ is disabled
         /// (i.e., falls inside an obstacle + the buffer passed to BuildGrid).
         /// </summary>
+        /// <param name="xz"></param>
+        /// <returns></returns>
         public static bool IsCellBlocked(Vector3 xz)
         {
             if (!_built) return false;
@@ -240,6 +259,9 @@ namespace DigSim3D.Services
         /// Optional inflated check – looks at neighboring cells within a circular radius
         /// measured in meters (useful if a wider keep-out than BuildGrid is needed).
         /// </summary>
+        /// <param name="xz"></param>
+        /// <param name="extraInflationMeters"></param>
+        /// <returns></returns>
         public static bool IsCellBlocked(Vector3 xz, float extraInflationMeters)
         {
             if (!_built) return false;
