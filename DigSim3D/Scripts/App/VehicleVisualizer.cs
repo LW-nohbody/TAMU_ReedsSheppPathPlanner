@@ -48,6 +48,13 @@ namespace DigSim3D.App
         // Name for nameplate & UI
         public string _vehicleID = null!;
 
+        private bool _simPaused = false;
+        public bool SimPaused
+        {
+            get => _simPaused;
+            set => _simPaused = value;
+        }
+
         public void SetPath(Vector3[] pts, int[] gears)
         {
             _path = pts ?? Array.Empty<Vector3>();
@@ -81,6 +88,9 @@ namespace DigSim3D.App
 
         public override void _PhysicsProcess(double delta)
         {
+            if (_simPaused)
+                return;
+
             float dt = (float)delta;
 
             if (_done)

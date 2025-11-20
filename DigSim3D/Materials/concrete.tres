@@ -4,6 +4,8 @@
 frequency = 1.0
 
 [sub_resource type="NoiseTexture2D" id="NoiseTexture2D_qfmbg"]
+width = 2048
+height = 2048
 seamless = true
 noise = SubResource("FastNoiseLite_q8d41")
 

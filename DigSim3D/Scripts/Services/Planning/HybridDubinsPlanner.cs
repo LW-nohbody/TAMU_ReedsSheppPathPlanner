@@ -396,9 +396,6 @@ namespace DigSim3D.Services
         private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, double endYaw, double radius, float arenaRadius)
         {
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
-
-            const float WallBufferMeters = 0.1f; // 0.1m wall buffer
-            float maxAllowedRadius = arenaRadius - WallBufferMeters;
             
             int hitCount = 0;
 

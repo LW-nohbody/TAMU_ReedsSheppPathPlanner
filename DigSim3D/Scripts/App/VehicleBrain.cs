@@ -12,6 +12,9 @@ namespace DigSim3D.App
         /// <summary> Robot's assigned sector index (permanent) </summary>
         public int SectorIndex { get; private set; } = -1;
 
+        /// <summary> This brain's robot index (matches SimulationDirector index) </summary>
+        private int _robotIndex = -1;
+
         /// <summary> Total number of sectors (equal to number of robots) </summary>
         private int _totalSectors = 1;
 
@@ -37,7 +40,7 @@ namespace DigSim3D.App
         private DigVisualizer _digVisualizer = null!;
 
         /// <summary> Path drawing callback (set by SimulationDirector) </summary>
-        private System.Action<Vector3[], Color> _drawPathCallback = null!;
+        private System.Action<int, Vector3[], Color> _drawPathCallback = null!;
 
         /// <summary> Accumulated dig time at current site (seconds) </summary>
         private float _digTimeAccumulated = 0f;
@@ -88,7 +91,7 @@ namespace DigSim3D.App
         private float _gameTime = 0f;
 
         private bool _hasReplannedFromFreeze = false;
-                // Track frozen cars we've already replanned for
+        // Track frozen cars we've already replanned for
         private readonly HashSet<VehicleBrain> _frozenCarsAlreadyHandled = new();
 
         // Freeze/unfreeze radii
@@ -103,7 +106,7 @@ namespace DigSim3D.App
             return (dx * dx + dz * dz) < radius * radius;
         }
 
-        
+
         public override void _Ready()
         {
             Agent = GetParent<VehicleVisualizer>();
@@ -112,9 +115,10 @@ namespace DigSim3D.App
         /// <summary>
         /// Initialize dig brain with external services and sector assignment.
         /// </summary>
-        public void InitializeDigBrain(DigService digService, TerrainDisk terrain, 
+        public void InitializeDigBrain(
+            DigService digService, TerrainDisk terrain,
             RadialScheduler scheduler, DigConfig digConfig, IPathPlanner pathPlanner,
-            WorldState worldState, DigVisualizer digVisualizer, System.Action<Vector3[], Color> drawPathCallback,
+            WorldState worldState, DigVisualizer digVisualizer, System.Action<int, Vector3[], Color> drawPathCallback,
             int sectorIndex, int totalSectors)
         {
             _digService = digService;
@@ -126,18 +130,18 @@ namespace DigSim3D.App
             _digVisualizer = digVisualizer;
             _drawPathCallback = drawPathCallback;
 
-            // Assign permanent sector
+            // Assign permanent sector + robot index
             SectorIndex = sectorIndex;
+            _robotIndex = sectorIndex;      // ← this matches the index passed from SimulationDirector
             _totalSectors = totalSectors;
 
             // Initialize position tracking for stuck detection
             if (Agent != null)
             {
                 _lastPosition = Agent.GlobalTransform.Origin;
+                GD.Print($"[VehicleBrain] {Agent.Name} assigned to sector {SectorIndex}/{_totalSectors}");
+                GD.Print($"🤖 [VehicleBrain] {Agent.Name} received DigConfig: DigDepth={_digConfig.DigDepth:F2}m, DigRadius={_digConfig.DigRadius:F2}m, DepthRate={_digConfig.DepthRatePerSecond:F2}m/s (config object hash: {_digConfig.GetHashCode()})");
             }
-
-            GD.Print($"[VehicleBrain] {Agent.Name} assigned to sector {SectorIndex}/{_totalSectors}");
-            GD.Print($"🤖 [VehicleBrain] {Agent.Name} received DigConfig: DigDepth={_digConfig.DigDepth:F2}m, DigRadius={_digConfig.DigRadius:F2}m, DepthRate={_digConfig.DepthRatePerSecond:F2}m/s (config object hash: {_digConfig.GetHashCode()})");
         }
 
         /// <summary>
@@ -152,10 +156,10 @@ namespace DigSim3D.App
                 return;
 
             var robotPos = Agent.GlobalTransform.Origin;
-            
+
             // Update game time for failed site tracking
             _gameTime += deltaSeconds;
-            
+
             // Clean up old failed sites (older than 30 seconds)
             CleanupOldFailedSites();
 
@@ -176,23 +180,23 @@ namespace DigSim3D.App
                     {
                         // Robot hasn't moved much, accumulate stuck time
                         _stuckTime += deltaSeconds;
-                        
+
                         if (_stuckTime >= StuckTimeThreshold)
                         {
                             _stuckAttempts++;
-                            
+
                             if (_stuckAttempts >= MaxStuckAttempts)
                             {
                                 // Too many attempts at this target - abandon it
                                 GD.Print($"� [VehicleBrain] {Agent.Name} STUCK {_stuckAttempts} times at current target! Abandoning site and finding new target...");
-                                
+
                                 // Mark current site as failed
                                 MarkSiteAsFailed(DigState.CurrentDigTarget);
-                                
+
                                 // Reset stuck counters
                                 _stuckTime = 0f;
                                 _stuckAttempts = 0;
-                                
+
                                 // Find a completely new dig target
                                 DigState.State = DigState.TaskState.Idle;
                                 RequestNewDigTarget();
@@ -202,29 +206,29 @@ namespace DigSim3D.App
                             {
                                 // Try backing up and replanning with randomization
                                 GD.Print($"🚨 [VehicleBrain] {Agent.Name} STUCK (attempt {_stuckAttempts}/{MaxStuckAttempts})! Backing up and replanning with offset...");
-                                
+
                                 // Back up in reverse direction
                                 var fwd = -Agent.GlobalTransform.Basis.Z;
                                 Vector3 backupTarget = robotPos - (fwd * BackupDistance);
-                                
+
                                 // Add random offset to avoid repeating same path
                                 var random = new Random();
                                 float randomOffsetX = (float)(random.NextDouble() - 0.5) * 2.0f; // ±1 meter
                                 float randomOffsetZ = (float)(random.NextDouble() - 0.5) * 2.0f;
                                 backupTarget += new Vector3(randomOffsetX, 0, randomOffsetZ);
-                                
+
                                 // Move robot backwards
                                 Agent.GlobalTransform = new Transform3D(Agent.GlobalTransform.Basis, backupTarget);
-                                
+
                                 // Reset stuck timer
                                 _stuckTime = 0f;
                                 _lastPosition = backupTarget;
-                                
+
                                 // Replan path with slightly different approach angle
                                 float angleVariation = (float)(random.NextDouble() - 0.5) * 0.5f; // ±0.25 radians (~14 degrees)
                                 float newApproachYaw = DigState.CurrentDigYaw + angleVariation;
                                 DigState.CurrentDigYaw = newApproachYaw;
-                                
+
                                 GD.Print($"🔄 [VehicleBrain] {Agent.Name} backed up with random offset, replanning with angle variation...");
                                 PlanPathToDigSite(DigState.CurrentDigTarget, newApproachYaw);
                                 break;
@@ -237,7 +241,7 @@ namespace DigSim3D.App
                         _stuckTime = 0f;
                         _lastPosition = robotPos;
                     }
-                    
+
                     // Check if arrived at dig site
                     float distToDig = robotPos.DistanceTo(DigState.CurrentDigTarget);
                     if (distToDig < _digConfig.AtSiteThreshold)
@@ -247,7 +251,7 @@ namespace DigSim3D.App
                         _timeSinceLastSiteCheck = 0f; // Reset site check timer when starting to dig
                         _stuckTime = 0f; // Reset stuck timer when arriving at site
                         _stuckAttempts = 0; // Reset stuck attempts on successful arrival
-                        
+
                         // Only reset volume tracker if this is a NEW site (not returning after dump)
                         if (DigState.CurrentSiteComplete)
                         {
@@ -292,7 +296,7 @@ namespace DigSim3D.App
                         float effectiveTargetHeight = Mathf.Max(targetHeightBasedOnDepth, floorY);
                         float effectiveTargetDepth = DigState.InitialDigHeight - effectiveTargetHeight;
                         float cylinderVolume = effectiveTargetDepth * Mathf.Pi * _digConfig.DigRadius * _digConfig.DigRadius;
-                        
+
                         // Check if there's no more dirt at the site (all terrain in radius at floor level)
                         float maxHeight = GetMaxHeightInRadius(DigState.CurrentDigTarget, _digConfig.DigRadius);
                         float centerHeight = GetTerrainHeightAt(DigState.CurrentDigTarget);
@@ -301,7 +305,7 @@ namespace DigSim3D.App
                         // Debug: Log site completion check
                         float volumePercent = cylinderVolume > 0 ? (DigState.CurrentSiteVolumeExcavated / cylinderVolume * 100f) : 0f;
                         GD.Print($"⛏️ [VehicleBrain] {Agent.Name} digging: maxH={maxHeight:F3}m, centerH={centerHeight:F3}m, floor={floorY:F3}m | volume={DigState.CurrentSiteVolumeExcavated:F3}/{cylinderVolume:F3}m³ ({volumePercent:F0}%) | payload={DigState.CurrentPayload:F2}/{DigState.MaxPayload:F2}m³");
-                        
+
                         // Site is ONLY complete when there's no more dirt (removed cylinder volume check)
                         // Robots must dig until all dirt in the radius is at floor level
                         if (noMoreDirt)
@@ -309,7 +313,7 @@ namespace DigSim3D.App
                             // Mark this site as COMPLETE
                             DigState.CurrentSiteComplete = true;
                             GD.Print($"✅ [VehicleBrain] {Agent.Name} SITE COMPLETE! All terrain at floor (maxH={maxHeight:F3}m ≈ floor={floorY:F3}m). Excavated {DigState.CurrentSiteVolumeExcavated:F3}m³. Moving to next site!");
-                            
+
                             // Find next dig site (will dump first if payload > 0)
                             RequestNewDigTarget();
                             break;
@@ -333,7 +337,7 @@ namespace DigSim3D.App
                     DigState.DumpCount++;
                     float dumpedAmount = DigState.CurrentPayload;
                     DigState.CurrentPayload = 0f;
-                    
+
                     GD.Print($"📦 [VehicleBrain] {Agent.Name} dumped {dumpedAmount:F2}m³ (dump #{DigState.DumpCount})");
 
                     // Check if there's still dirt to dig globally
@@ -411,101 +415,101 @@ namespace DigSim3D.App
         private double FrozenReplanCooldown = 0f;
 
         private void CheckFrozenCarReplan()
-{
-    var myPos = Agent.GlobalTransform.Origin;
-
-    foreach (var kv in FrozenCarObstacles)
-    {
-        var other = kv.Key;
-        if (other == this) continue;
-
-        var otherPos = other.Agent.GlobalTransform.Origin;
-        float dist = myPos.DistanceTo(otherPos);
-
-        // ---- ENTERING FREEZE RADIUS ----
-        if (dist < FreezeRadius)
         {
-            // Only replan the FIRST time we see this frozen car
-            if (!_frozenCarsAlreadyHandled.Contains(other))
+            var myPos = Agent.GlobalTransform.Origin;
+
+            foreach (var kv in FrozenCarObstacles)
             {
-                _frozenCarsAlreadyHandled.Add(other);
+                var other = kv.Key;
+                if (other == this) continue;
 
-                GD.Print($"[VehicleBrain] {Agent.Name} replanning (new frozen car: {other.Agent.Name})");
+                var otherPos = other.Agent.GlobalTransform.Origin;
+                float dist = myPos.DistanceTo(otherPos);
 
-                if (DigState.State == DigState.TaskState.TravelingToDigSite)
-                    PlanPathToDigSite(DigState.CurrentDigTarget, DigState.CurrentDigYaw);
-                else if (DigState.State == DigState.TaskState.TravelingToDump)
-                    PlanPathToDump();
+                // ---- ENTERING FREEZE RADIUS ----
+                if (dist < FreezeRadius)
+                {
+                    // Only replan the FIRST time we see this frozen car
+                    if (!_frozenCarsAlreadyHandled.Contains(other))
+                    {
+                        _frozenCarsAlreadyHandled.Add(other);
+
+                        GD.Print($"[VehicleBrain] {Agent.Name} replanning (new frozen car: {other.Agent.Name})");
+
+                        if (DigState.State == DigState.TaskState.TravelingToDigSite)
+                            PlanPathToDigSite(DigState.CurrentDigTarget, DigState.CurrentDigYaw);
+                        else if (DigState.State == DigState.TaskState.TravelingToDump)
+                            PlanPathToDump();
+                    }
+                }
+                // ---- EXITING FREEZE / ENTERING UNFREEZE RADIUS ----
+                else if (dist > UnfreezeRadius)
+                {
+                    // Allow replanning again only after we fully leave the zone
+                    if (_frozenCarsAlreadyHandled.Contains(other))
+                    {
+                        _frozenCarsAlreadyHandled.Remove(other);
+                        GD.Print($"[VehicleBrain] {Agent.Name} untracked frozen car {other.Agent.Name}");
+                    }
+                }
             }
         }
-        // ---- EXITING FREEZE / ENTERING UNFREEZE RADIUS ----
-        else if (dist > UnfreezeRadius)
-        {
-            // Allow replanning again only after we fully leave the zone
-            if (_frozenCarsAlreadyHandled.Contains(other))
-            {
-                _frozenCarsAlreadyHandled.Remove(other);
-                GD.Print($"[VehicleBrain] {Agent.Name} untracked frozen car {other.Agent.Name}");
-            }
-        }
-    }
-}
 
 
         // ------------------------
-// PRIORITY FREEZE / UNFREEZE HOOKS
-// ------------------------
+        // PRIORITY FREEZE / UNFREEZE HOOKS
+        // ------------------------
 
-private bool _isPriorityFrozen = false;
+        private bool _isPriorityFrozen = false;
 
-public void FreezeForPriority()
-{
-    // already frozen → do nothing
-    if (_isPriorityFrozen) return;
+        public void FreezeForPriority()
+        {
+            // already frozen → do nothing
+            if (_isPriorityFrozen) return;
 
-    _isPriorityFrozen = true;
+            _isPriorityFrozen = true;
 
-    // Stop physics updates
-    Agent.SetPhysicsProcess(false);
+            // Stop physics updates
+            Agent.SetPhysicsProcess(false);
 
-    // Register frozen obstacle in the world
-    RegisterFrozenCarObstacle();
+            // Register frozen obstacle in the world
+            RegisterFrozenCarObstacle();
 
-    // Replan only once during this frozen period
-    if (!_hasReplannedFromFreeze)
-    {
-        _hasReplannedFromFreeze = true;
+            // Replan only once during this frozen period
+            if (!_hasReplannedFromFreeze)
+            {
+                _hasReplannedFromFreeze = true;
 
-        GD.Print($"[VehicleBrain] {Agent.Name} frozen — triggering ONE replan.");
+                GD.Print($"[VehicleBrain] {Agent.Name} frozen — triggering ONE replan.");
 
-        // Trigger your replan function here
-        CheckFrozenCarReplan();
-        // or call whatever replanning method you prefer
-    }
-    else
-    {
-        GD.Print($"[VehicleBrain] {Agent.Name} frozen (already replanned, skipping).");
-    }
-}
+                // Trigger your replan function here
+                CheckFrozenCarReplan();
+                // or call whatever replanning method you prefer
+            }
+            else
+            {
+                GD.Print($"[VehicleBrain] {Agent.Name} frozen (already replanned, skipping).");
+            }
+        }
 
 
-public void UnfreezeFromPriority()
-{
-    if (!_isPriorityFrozen) return;
+        public void UnfreezeFromPriority()
+        {
+            if (!_isPriorityFrozen) return;
 
-    _isPriorityFrozen = false;
+            _isPriorityFrozen = false;
 
-    // Resume physics
-    Agent.SetPhysicsProcess(true);
+            // Resume physics
+            Agent.SetPhysicsProcess(true);
 
-    // Remove frozen obstacle
-    RemoveFrozenCarObstacle();
+            // Remove frozen obstacle
+            RemoveFrozenCarObstacle();
 
-    // Allow replanning again on next freeze event
-    _hasReplannedFromFreeze = false;
+            // Allow replanning again on next freeze event
+            _hasReplannedFromFreeze = false;
 
-    GD.Print($"[VehicleBrain] {Agent.Name} unfrozen.");
-}
+            GD.Print($"[VehicleBrain] {Agent.Name} unfrozen.");
+        }
 
 
 
@@ -596,7 +600,7 @@ public void UnfreezeFromPriority()
 
                     float centerHeight = GetTerrainHeightAt(candidateXZ);
 
-                   
+
 
                     Vector3 candidate = new Vector3(worldX, centerHeight, worldZ);
 
@@ -643,18 +647,14 @@ public void UnfreezeFromPriority()
                     }
                     if (tooCloseToObstacle) continue;
 
-                
-
-                    // PURE HEIGHT SCORING: ONLY prioritize height (no distance penalty)
-                    // This ensures robots always move to the tallest point in their sector
-                    // Use max height in the dig radius as the score
-                    float score = centerHeight;
+                    float score = GetDigSiteScore(candidate);
 
                     if (score > bestScore)
                     {
                         bestScore = score;
                         bestPos = candidate;
                     }
+
                 }
             }
 
@@ -807,7 +807,7 @@ public void UnfreezeFromPriority()
             // Draw the dig path (cyan/blue)
             if (_drawPathCallback != null)
             {
-                _drawPathCallback(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f, 0.8f));
+                _drawPathCallback(_robotIndex, path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f, 0.8f));
             }
 
             // Set the path on the vehicle
@@ -853,23 +853,6 @@ public void UnfreezeFromPriority()
             DigState.CurrentPayload += swelledVolume;
             DigState.CurrentSiteVolumeExcavated += inSituVolume;
 
-            // Set any terrain cell with height <= 0.01 to -1 (mark as empty)
-            if (_terrain != null && _terrain.HeightGrid != null)
-            {
-                int resolution = _terrain.GridResolution;
-                for (int i = 0; i < resolution; i++)
-                {
-                    for (int j = 0; j < resolution; j++)
-                    {
-                        float height = _terrain.HeightGrid[i, j];
-                        if (!float.IsNaN(height) && height <= 0.001f)
-                        {
-                            _terrain.HeightGrid[i, j] = -1f;
-                        }
-                    }
-                }
-            }
-
             if (DigState.IsPayloadFull)
             {
                 GD.Print($"[VehicleBrain] {Agent.Name} payload full, going to dump");
@@ -902,7 +885,7 @@ public void UnfreezeFromPriority()
             // Draw the dump path (yellow/orange)
             if (_drawPathCallback != null)
             {
-                _drawPathCallback(path.Points.ToArray(), new Color(1.0f, 0.8f, 0f, 0.8f));
+                _drawPathCallback(_robotIndex, path.Points.ToArray(), new Color(1.0f, 0.8f, 0f, 0.8f));
             }
 
             // Set the path on the vehicle
@@ -995,7 +978,7 @@ public void UnfreezeFromPriority()
                     }
                 }
             }
-            
+
             return foundAny ? maxHeight : 0f;
         }
 
@@ -1059,13 +1042,19 @@ public void UnfreezeFromPriority()
         private float GetDigSiteScore(Vector3 digSite)
         {
             Vector3 robotPos = Agent.GlobalTransform.Origin;
-            float distFromRobot = digSite.DistanceTo(robotPos);
 
-            // Base score: height is most important (tallest points first)
-            float score = digSite.Y * 10.0f;
+            // Horizontal distance only (ignore height difference)
+            float dx = digSite.X - robotPos.X;
+            float dz = digSite.Z - robotPos.Z;
+            float distFromRobot = Mathf.Sqrt(dx * dx + dz * dz);
 
-            // Small penalty for being very far from robot (prefer closer targets when equal height)
-            score -= distFromRobot * 0.05f;
+            float height = digSite.Y;
+
+            // Height should dominate; distance is a small penalty.
+            const float HeightWeight = 10.0f;
+            const float DistanceWeight = 0.05f;
+
+            float score = height * HeightWeight - distFromRobot * DistanceWeight;
 
             return score;
         }
@@ -1089,7 +1078,7 @@ public void UnfreezeFromPriority()
         private void CleanupOldFailedSites()
         {
             // Remove sites older than 30 seconds
-            _failedDigSites.RemoveAll(site => 
+            _failedDigSites.RemoveAll(site =>
             {
                 if (_failedSiteTimes.TryGetValue(site, out float addTime))
                 {

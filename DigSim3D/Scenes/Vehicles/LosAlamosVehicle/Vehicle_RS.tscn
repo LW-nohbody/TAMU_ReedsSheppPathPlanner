@@ -1,7 +1,12 @@
 [gd_scene load_steps=8 format=3 uid="uid://bjwl37wdxs6ua"]
 
+<<<<<<< HEAD:DigSim3D/Scenes/Vehicles/Vehicle_RS.tscn
+[ext_resource type="Script" uid="uid://bphtvec6igp6u" path="res://Scripts/App/VehicleVisualizer.cs" id="1_andsp"]
+[ext_resource type="ArrayMesh" uid="uid://hcn7bpngoe57" path="res://Scenes/Vehicles/Vehicle_Mesh_3.res" id="2_qufrh"]
+=======
 [ext_resource type="Script" uid="uid://ce3v2b2bcp44e" path="res://Scripts/App/VehicleVisualizer.cs" id="1_andsp"]
 [ext_resource type="ArrayMesh" uid="uid://hcn7bpngoe57" path="res://Scenes/Vehicles/LosAlamosVehicle/Vehicle_Mesh_3.res" id="2_qufrh"]
+>>>>>>> de7792814740074e9fa0adfd43f186bfb897b0ca:DigSim3D/Scenes/Vehicles/LosAlamosVehicle/Vehicle_RS.tscn
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_0xm2m"]
 size = Vector3(0.5, 0.5, 0.75)
