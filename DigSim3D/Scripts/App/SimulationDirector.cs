@@ -79,6 +79,7 @@ namespace DigSim3D.App
         // === UI ===
         private DigSim3D.UI.DigSimUI? _digSimUI = null!;
         private DigSim3D.UI.UIToggleSwitch? _uiToggle = null!;
+        private readonly Dictionary<int, MeshInstance3D> _pathMeshes = new();
 
         [Export] public bool DynamicAvoidanceEnabled = false;
 
@@ -233,7 +234,7 @@ namespace DigSim3D.App
 
                 PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, worldState);
 
-                DrawPathProjectedToTerrain(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
+                DrawPathProjectedToTerrain(k, path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
                 DrawMarkerProjected(start, new Color(0, 1, 0));
                 DrawMarkerProjected(digPos, new Color(0, 0, 1));
 
@@ -280,7 +281,7 @@ namespace DigSim3D.App
             _uiToggle = new UIToggleSwitch();
             toggleLayer.AddChild(_uiToggle);
             _uiToggle.SetTargetUI(_digSimUI);
-            
+
             // Set Camera Mode before returning from Ready
             SetCameraMode(CameraMode.TopDown);
         }
@@ -454,7 +455,7 @@ namespace DigSim3D.App
                     }
                 }
             }
-            
+
             // Update UI with robot stats
             if (_digSimUI != null && _robotBrains.Count > 0)
             {
@@ -674,7 +675,7 @@ namespace DigSim3D.App
         {
             if (_terrain != null && _terrain.SampleHeightNormal(xz, out var hit, out var _))
                 return hit.Y;
-            // fallback simple ray if terrain not present; should not happen in this setup
+
             var space = GetWorld3D().DirectSpaceState;
             var from = xz + new Vector3(0, 100f, 0);
             var to = xz + new Vector3(0, -1000f, 0);
@@ -684,11 +685,21 @@ namespace DigSim3D.App
             return 0f;
         }
 
-        private void DrawPathProjectedToTerrain(Vector3[] points, Color col)
+        private void DrawPathProjectedToTerrain(int robotIndex, Vector3[] points, Color col)
         {
             if (points == null || points.Length < 2) return;
 
-            var mi = new MeshInstance3D();
+            // Remove previous path for this robot, if any
+            if (_pathMeshes.TryGetValue(robotIndex, out var oldPath))
+            {
+                oldPath.QueueFree();
+                _pathMeshes.Remove(robotIndex);
+            }
+
+            var mi = new MeshInstance3D
+            {
+                Name = $"Path_{robotIndex:00}"
+            };
             var im = new ImmediateMesh();
             mi.Mesh = im;
             AddChild(mi);
@@ -702,10 +713,17 @@ namespace DigSim3D.App
             }
             im.SurfaceEnd();
 
-            var mat = new StandardMaterial3D { AlbedoColor = col, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
-            mat.NoDepthTest = DebugPathOnTop;
+            var mat = new StandardMaterial3D
+            {
+                AlbedoColor = col,
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                NoDepthTest = DebugPathOnTop
+            };
+
             if (mi.Mesh != null && mi.Mesh.GetSurfaceCount() > 0)
                 mi.SetSurfaceOverrideMaterial(0, mat);
+
+            _pathMeshes[robotIndex] = mi;
         }
 
         private void DrawMarkerProjected(Vector3 pos, Color col)
@@ -737,13 +755,13 @@ namespace DigSim3D.App
                 return _uiToggle.IsPointInUI(mousePos);
             }
             else if (noUIToggle)
-            {   
+            {
                 return _digSimUI.IsPointInUI(mousePos);
             }
             else
             {
                 return (_digSimUI.IsPointInUI(mousePos) || _uiToggle.IsPointInUI(mousePos));
             }
-        }     
+        }
     }
 }

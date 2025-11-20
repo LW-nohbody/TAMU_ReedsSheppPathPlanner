@@ -594,6 +594,9 @@ namespace DigSim3D.App
             float maxSlope = MathF.Tan(Mathf.DegToRad(clampedAngle));
             ApplyAngleOfRepose(worldXZ, radiusMeters * 1.5f, maxSlope, iterations: 2);
 
+            // Soften edge to reduce sharpness (not currently working)
+            // SoftenFloorRim(0.05f, 0.5f);
+
             // NOTE: Mesh update is NOT called here - caller must call RebuildMeshOnly() when ready
             return removedVolume; // in-situ m³ actually removed
         }
@@ -728,6 +731,51 @@ namespace DigSim3D.App
                     deltaLocal[ni - baseI, nj - baseJ] -= move;
                 }
             }
+        }
+
+        public void SoftenFloorRim(float band = 0.05f, float lerpFactor = 0.5f)
+        {
+            if (_heights == null) return;
+
+            var tmp = (float[,])_heights.Clone();
+
+            for (int j = 1; j < _N - 1; j++)
+            {
+                for (int i = 1; i < _N - 1; i++)
+                {
+                    float h = _heights[i, j];
+                    if (float.IsNaN(h)) continue;
+
+                    // Only smooth cells slightly above the floor, not the floor itself
+                    const float floorEps = 0.001f;  // small tolerance
+
+                    if (h <= FloorY + floorEps || h >= FloorY + band)
+                        continue;
+
+                    float sum = 0f;
+                    int count = 0;
+
+                    // 4-neighbor average (you can use 8 if you want smoother)
+                    int[,] offs = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+                    for (int k = 0; k < 4; k++)
+                    {
+                        int ni = i + offs[k, 0];
+                        int nj = j + offs[k, 1];
+                        float nh = _heights[ni, nj];
+                        if (float.IsNaN(nh)) continue;
+                        sum += nh;
+                        count++;
+                    }
+
+                    if (count > 0)
+                    {
+                        float avg = sum / count;
+                        tmp[i, j] = Mathf.Lerp(h, avg, lerpFactor);
+                    }
+                }
+            }
+
+            _heights = tmp;
         }
     }
 }
