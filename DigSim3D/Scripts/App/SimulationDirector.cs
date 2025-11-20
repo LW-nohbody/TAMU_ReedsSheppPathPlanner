@@ -752,15 +752,18 @@ namespace DigSim3D.App
             // Check if mouse is over the UI panel or any of its children
             if (noDigSimUI)
             {
-                return _uiToggle.IsPointInUI(mousePos);
+                // Here we know _uiToggle is not null and Visible
+                return _uiToggle!.IsPointInUI(mousePos);
             }
             else if (noUIToggle)
             {
-                return _digSimUI.IsPointInUI(mousePos);
+                // Here we know _digSimUI is not null and Visible
+                return _digSimUI!.IsPointInUI(mousePos);
             }
             else
             {
-                return (_digSimUI.IsPointInUI(mousePos) || _uiToggle.IsPointInUI(mousePos));
+                // Here both are non-null and visible
+                return (_digSimUI!.IsPointInUI(mousePos) || _uiToggle!.IsPointInUI(mousePos));
             }
         }
     }
