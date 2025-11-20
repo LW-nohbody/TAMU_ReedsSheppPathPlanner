@@ -418,8 +418,12 @@ namespace DigSim3D.App
                     _digSimUI.UpdateRobotPayload(i, payloadPercent, robotPos, state.State.ToString());
                 }
 
-                // Update terrain progress
-                float remainingVolume = CalculateTerrainVolume();
+                // Use incremental stats instead of rescanning the grid
+                float removedVolume = (_digService != null) ? _digService.GetTotalVolumeRemoved() : 0f;
+
+                // "Remaining" = initial - removed so the existing UI math still works
+                float remainingVolume = Mathf.Max(0f, _initialTerrainVolume - removedVolume);
+
                 _digSimUI.UpdateTerrainProgress(remainingVolume, _initialTerrainVolume);
             }
 

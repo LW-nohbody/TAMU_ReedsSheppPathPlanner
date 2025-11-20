@@ -76,6 +76,8 @@ namespace DigSim3D.Services
             if (removedInSitu <= 0f)
                 return (0f, 0f);
 
+            _totalTerrainVolumeRemoved += removedInSitu;
+
             // Mark that terrain has been modified (mesh update will happen in Update())
             _terrainModifiedSinceLastUpdate = true;
 

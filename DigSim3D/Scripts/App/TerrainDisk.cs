@@ -43,7 +43,7 @@ namespace DigSim3D.App
         public float GridStep => _step;
 
         // Angle at which terrain settles (usually around 25-35)
-        float angleOfReposeDeg = 0.0f;
+        float angleOfReposeDeg = 20.0f;
         // Dropping the minimum angle lower than 15 may cause bugs
         const float MinAngleDeg = 15.0f;
 
