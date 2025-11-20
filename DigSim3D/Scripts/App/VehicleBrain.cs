@@ -87,6 +87,23 @@ namespace DigSim3D.App
         /// <summary> Current game time for failed site tracking </summary>
         private float _gameTime = 0f;
 
+        private bool _hasReplannedFromFreeze = false;
+                // Track frozen cars we've already replanned for
+        private readonly HashSet<VehicleBrain> _frozenCarsAlreadyHandled = new();
+
+        // Freeze/unfreeze radii
+        private const float FreezeRadius = 2.0f;      // trigger freeze/replan
+        private const float UnfreezeRadius = 3.0f;    // must exceed freeze radius
+
+
+        private static bool IsInsideAvoidanceRadius(Vector3 a, Vector3 b, float radius)
+        {
+            float dx = a.X - b.X;
+            float dz = a.Z - b.Z;
+            return (dx * dx + dz * dz) < radius * radius;
+        }
+
+        
         public override void _Ready()
         {
             Agent = GetParent<VehicleVisualizer>();
@@ -95,7 +112,7 @@ namespace DigSim3D.App
         /// <summary>
         /// Initialize dig brain with external services and sector assignment.
         /// </summary>
-        public void InitializeDigBrain(DigService digService, TerrainDisk terrain,
+        public void InitializeDigBrain(DigService digService, TerrainDisk terrain, 
             RadialScheduler scheduler, DigConfig digConfig, IPathPlanner pathPlanner,
             WorldState worldState, DigVisualizer digVisualizer, System.Action<Vector3[], Color> drawPathCallback,
             int sectorIndex, int totalSectors)
@@ -127,6 +144,9 @@ namespace DigSim3D.App
         /// </summary>
         public void UpdateDigBehavior(float deltaSeconds)
         {
+            // Check if any nearby frozen robot is blocking us -> replan
+            CheckFrozenCarReplan();
+
             if (_digService == null || _terrain == null || _scheduler == null)
                 return;
 
@@ -345,6 +365,148 @@ namespace DigSim3D.App
                     break;
             }
         }
+
+        // ------------------------
+        // FROZEN CAR OBSTACLE SYSTEM
+        // ------------------------
+
+        private static System.Collections.Generic.Dictionary<VehicleBrain, CylinderObstacle> FrozenCarObstacles
+            = new System.Collections.Generic.Dictionary<VehicleBrain, CylinderObstacle>();
+
+        private const float CarObstacleRadius = 0.9f;   // adjust to robot radius
+        private const float CarObstacleHeight = 1.5f;
+
+        // Call when THIS car becomes frozen
+        public void RegisterFrozenCarObstacle()
+        {
+            if (FrozenCarObstacles.ContainsKey(this)) return;
+
+            var pos = Agent.GlobalTransform.Origin;
+            var obstacle = new CylinderObstacle()
+            {
+                GlobalPosition = pos,
+                Radius = CarObstacleRadius,
+                Height = CarObstacleHeight
+            };
+
+            FrozenCarObstacles[this] = obstacle;
+            _worldState.Obstacles.Add(obstacle);
+
+            GD.Print($"[VehicleBrain] Registered frozen obstacle for {Agent.Name}");
+        }
+
+        // Call when THIS car unfreezes
+        public void RemoveFrozenCarObstacle()
+        {
+            if (!FrozenCarObstacles.ContainsKey(this)) return;
+
+            var obstacle = FrozenCarObstacles[this];
+            _worldState.Obstacles.Remove(obstacle);
+            FrozenCarObstacles.Remove(this);
+
+            GD.Print($"[VehicleBrain] Removed frozen obstacle for {Agent.Name}");
+        }
+
+        private double FrozenReplanCooldown = 0f;
+
+        private void CheckFrozenCarReplan()
+{
+    var myPos = Agent.GlobalTransform.Origin;
+
+    foreach (var kv in FrozenCarObstacles)
+    {
+        var other = kv.Key;
+        if (other == this) continue;
+
+        var otherPos = other.Agent.GlobalTransform.Origin;
+        float dist = myPos.DistanceTo(otherPos);
+
+        // ---- ENTERING FREEZE RADIUS ----
+        if (dist < FreezeRadius)
+        {
+            // Only replan the FIRST time we see this frozen car
+            if (!_frozenCarsAlreadyHandled.Contains(other))
+            {
+                _frozenCarsAlreadyHandled.Add(other);
+
+                GD.Print($"[VehicleBrain] {Agent.Name} replanning (new frozen car: {other.Agent.Name})");
+
+                if (DigState.State == DigState.TaskState.TravelingToDigSite)
+                    PlanPathToDigSite(DigState.CurrentDigTarget, DigState.CurrentDigYaw);
+                else if (DigState.State == DigState.TaskState.TravelingToDump)
+                    PlanPathToDump();
+            }
+        }
+        // ---- EXITING FREEZE / ENTERING UNFREEZE RADIUS ----
+        else if (dist > UnfreezeRadius)
+        {
+            // Allow replanning again only after we fully leave the zone
+            if (_frozenCarsAlreadyHandled.Contains(other))
+            {
+                _frozenCarsAlreadyHandled.Remove(other);
+                GD.Print($"[VehicleBrain] {Agent.Name} untracked frozen car {other.Agent.Name}");
+            }
+        }
+    }
+}
+
+
+        // ------------------------
+// PRIORITY FREEZE / UNFREEZE HOOKS
+// ------------------------
+
+private bool _isPriorityFrozen = false;
+
+public void FreezeForPriority()
+{
+    // already frozen → do nothing
+    if (_isPriorityFrozen) return;
+
+    _isPriorityFrozen = true;
+
+    // Stop physics updates
+    Agent.SetPhysicsProcess(false);
+
+    // Register frozen obstacle in the world
+    RegisterFrozenCarObstacle();
+
+    // Replan only once during this frozen period
+    if (!_hasReplannedFromFreeze)
+    {
+        _hasReplannedFromFreeze = true;
+
+        GD.Print($"[VehicleBrain] {Agent.Name} frozen — triggering ONE replan.");
+
+        // Trigger your replan function here
+        CheckFrozenCarReplan();
+        // or call whatever replanning method you prefer
+    }
+    else
+    {
+        GD.Print($"[VehicleBrain] {Agent.Name} frozen (already replanned, skipping).");
+    }
+}
+
+
+public void UnfreezeFromPriority()
+{
+    if (!_isPriorityFrozen) return;
+
+    _isPriorityFrozen = false;
+
+    // Resume physics
+    Agent.SetPhysicsProcess(true);
+
+    // Remove frozen obstacle
+    RemoveFrozenCarObstacle();
+
+    // Allow replanning again on next freeze event
+    _hasReplannedFromFreeze = false;
+
+    GD.Print($"[VehicleBrain] {Agent.Name} unfrozen.");
+}
+
+
 
         /// <summary>
         /// Request a new dig target from the scheduler using assigned sector.
@@ -689,6 +851,13 @@ namespace DigSim3D.App
 
             DigState.CurrentPayload += swelledVolume;
             DigState.CurrentSiteVolumeExcavated += inSituVolume;
+
+            if (DigState.IsPayloadFull)
+            {
+                GD.Print($"[VehicleBrain] {Agent.Name} payload full, going to dump");
+                DigState.State = DigState.TaskState.TravelingToDump;
+                PlanPathToDump();
+            }
         }
 
         /// <summary>

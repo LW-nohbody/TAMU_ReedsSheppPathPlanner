@@ -61,7 +61,9 @@ namespace DigSim3D.App
         private float lift = 0.04f;
 
         [Export] public NodePath ObstacleManagerPath = null!;
+        [Export] public NodePath DynamicObstacleManagerPath = null!;
         private ObstacleManager _obstacleManager = null!;
+        private DynamicObstacleManager _dynamicObstacleManager = null!;
 
         // === Dig System ===
         private DigService _digService = null!;
@@ -75,8 +77,10 @@ namespace DigSim3D.App
         private bool _simPaused = false;
 
         // === UI ===
-        private DigSim3D.UI.DigSimUI _digSimUI = null!;
-        // private SimpleTestUI _testUI = null!;
+        private DigSim3D.UI.DigSimUI? _digSimUI = null!;
+        private DigSim3D.UI.UIToggleSwitch? _uiToggle = null!;
+
+        [Export] public bool DynamicAvoidanceEnabled = false;
 
         public override void _Ready()
         {
@@ -96,6 +100,12 @@ namespace DigSim3D.App
             if (_obstacleManager == null)
             {
                 GD.PushError("SimulationDirector: ObstacleManagerPath not set or not found.");
+                return;
+            }
+            _dynamicObstacleManager = GetNodeOrNull<DynamicObstacleManager>(DynamicObstacleManagerPath);
+            if (_dynamicObstacleManager == null)
+            {
+                GD.PushError("SimulationDirector: DynamicObstacleManagerPath not set or not found.");
                 return;
             }
 
@@ -123,6 +133,8 @@ namespace DigSim3D.App
                 car._vehicleID = $"RS-{(i + 1):00}";
 
                 _vehicles.Add(car);
+
+                _dynamicObstacleManager.RegisterDynamicObstacle(car);
 
                 // Add nameplate
                 var id = car._vehicleID;
@@ -152,9 +164,11 @@ namespace DigSim3D.App
             // === Initialize Dig Service ===
             _digService = new DigService(_terrain, _digConfig);
 
+
             // Create dig visualizer
             _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
             AddChild(_digVisualizer);
+
 
             // Create sector visualizer to show robot sectors
             _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
@@ -251,16 +265,23 @@ namespace DigSim3D.App
 
             _digSimUI.SetDigConfig(_digConfig);
             GD.Print($"🎮 [Director] Passed DigConfig to UI: DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
-            // _digSimUI.SetHeatMapStatus(false);
             _digSimUI.SetInitialVolume(_initialTerrainVolume);
             _digSimUI.SetVehicles(_vehicles);
-            // Removed SetTerrain call - no longer needed without terrain thumbnail
 
             // Initialize progress bars to 0% and 100%
             _digSimUI.UpdateTerrainProgress(_initialTerrainVolume, _initialTerrainVolume);
 
             GD.Print("[Director] DigSimUI initialized successfully");
 
+            // Toggle Switch for UI Visibility
+            var toggleLayer = new CanvasLayer { Layer = 200 };
+            AddChild(toggleLayer);
+
+            _uiToggle = new UIToggleSwitch();
+            toggleLayer.AddChild(_uiToggle);
+            _uiToggle.SetTargetUI(_digSimUI);
+            
+            // Set Camera Mode before returning from Ready
             SetCameraMode(CameraMode.TopDown);
         }
 
@@ -389,7 +410,6 @@ namespace DigSim3D.App
             return (float)totalVolume;
         }
 
-
         public override void _Process(double delta)
         {
             // Only advance digging + brains when NOT paused
@@ -398,13 +418,43 @@ namespace DigSim3D.App
                 // Update terrain dig batching
                 _digService?.Update((float)delta);
 
-                // Update robot dig behaviours
                 foreach (var brain in _robotBrains)
                 {
                     brain.UpdateDigBehavior((float)delta);
+
+                    if (DynamicAvoidanceEnabled)
+                    {
+                        if (_dynamicObstacleManager != null)
+                        {
+                            int myIndex = _robotBrains.IndexOf(brain);
+                            bool shouldPause = false;
+
+                            foreach (var other in _robotBrains)
+                            {
+                                if (other == brain) continue;
+
+                                int otherIndex = _robotBrains.IndexOf(other);
+                                float dist = brain.Agent.GlobalTransform.Origin.DistanceTo(other.Agent.GlobalTransform.Origin);
+
+                                if (dist < _dynamicObstacleManager.AvoidanceRadius)
+                                {
+                                    if (otherIndex > myIndex)
+                                    {
+                                        shouldPause = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (shouldPause)
+                                brain.FreezeForPriority();     // ← replan happens once inside this
+                            else
+                                brain.UnfreezeFromPriority();  // ← resets the "allowed to replan" flag
+                        }
+                    }
                 }
             }
-
+            
             // Update UI with robot stats
             if (_digSimUI != null && _robotBrains.Count > 0)
             {
@@ -675,35 +725,25 @@ namespace DigSim3D.App
 
         private bool IsMouseOverUI()
         {
-            if (_digSimUI == null || !_digSimUI.Visible) return false;
+            bool noDigSimUI = _digSimUI == null || !_digSimUI.Visible;
+            bool noUIToggle = _uiToggle == null || !_uiToggle.Visible;
+            if (noDigSimUI && noUIToggle) return false;
 
             var mousePos = GetViewport().GetMousePosition();
 
             // Check if mouse is over the UI panel or any of its children
-            return IsPointInControl(_digSimUI, mousePos);
-        }
-
-        private bool IsPointInControl(Control control, Vector2 point)
-        {
-            if (!control.Visible) return false;
-
-            // Check if point is in this control's rectangle
-            var rect = control.GetGlobalRect();
-            if (rect.HasPoint(point))
+            if (noDigSimUI)
             {
-                return true;
+                return _uiToggle.IsPointInUI(mousePos);
             }
-
-            // Recursively check all Control children
-            foreach (var child in control.GetChildren())
+            else if (noUIToggle)
+            {   
+                return _digSimUI.IsPointInUI(mousePos);
+            }
+            else
             {
-                if (child is Control childControl && IsPointInControl(childControl, point))
-                {
-                    return true;
-                }
+                return (_digSimUI.IsPointInUI(mousePos) || _uiToggle.IsPointInUI(mousePos));
             }
-
-            return false;
-        }
+        }     
     }
 }

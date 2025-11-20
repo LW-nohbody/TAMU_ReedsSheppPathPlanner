@@ -43,7 +43,7 @@ namespace DigSim3D.App
         public float GridStep => _step;
 
         // Angle at which terrain settles (usually around 25-35)
-        float angleOfReposeDeg = 20.0f;
+        float angleOfReposeDeg = 25.0f;
         // Dropping the minimum angle lower than 15 may cause bugs
         const float MinAngleDeg = 15.0f;
 
@@ -108,10 +108,9 @@ namespace DigSim3D.App
                         float h = Amplitude * n;
                         if (h < FloorY)
                             h = FloorY + (FloorY - h);
+                        // Ensure minimum height > 0.01f
                         if (h < 0.011f)
-                        {
                             h = 0.011f;
-                        }
                         _heights[i, j] = h;
                     }
                     else
@@ -371,51 +370,6 @@ namespace DigSim3D.App
                 }
             }
         }
-
-        /// <summary>
-        /// Lower terrain height in a circular area (for digging/excavation).
-        /// Directly modifies _heights and rebuilds only the mesh (preserves modifications).
-        /// This is efficient for real-time terrain deformation.
-        /// Clamps terrain to not go below FloorY.
-        /// </summary>
-        public void LowerArea(Vector3 worldXZ, float radius, float deltaHeight)
-        {
-            if (_heights == null) return;
-
-            // Convert to local coordinates used by _heights
-            Vector3 local = ToLocal(worldXZ);
-            float cx = local.X, cz = local.Z;
-
-            // Iterate grid and subtract deltaHeight where within radius
-            for (int j = 0; j < _N; j++)
-            {
-                float z = -Radius + j * _step;
-                for (int i = 0; i < _N; i++)
-                {
-                    float x = -Radius + i * _step;
-                    if (float.IsNaN(_heights[i, j])) continue;
-
-                    float dx = x - cx;
-                    float dz = z - cz;
-
-                    if (dx * dx + dz * dz <= radius * radius)
-                    {
-                        // Lower terrain but clamp to FloorY to prevent digging through the floor
-                        float newHeight = _heights[i, j] - deltaHeight;
-                        _heights[i, j] = Mathf.Max(newHeight, FloorY);
-                    }
-                }
-            }
-
-            // Rebuild mesh ONLY (preserves modified heights)
-            RebuildMeshOnly();
-        }
-
-        /// <summary>
-        /// Rebuild mesh after height modifications.
-        /// Recomputes normals and updates geometry without regenerating the entire terrain.
-        /// Much faster than Rebuild() for real-time updates.
-        /// </summary>
         public void RebuildMeshOnly()
         {
             if (_heights == null || _norms == null) return;
@@ -576,72 +530,8 @@ namespace DigSim3D.App
             GD.Print($"[TerrainDisk] Floor from node '{cyl.Name}': topY={FloorY:F4}");
         }
 
-        public float LowerAreaAndReturnRemovedVolume(Vector3 worldXZ, float radiusMeters, float maxDeltaHeight)
-        {
-            if (_heights == null) return 0f;
-            if (maxDeltaHeight <= 0f || radiusMeters <= 0f) return 0f;
-
-            // Convert world point to this node's local space
-            Vector3 local = ToLocal(worldXZ);
-            float cx = local.X;
-            float cz = local.Z;
-
-            // Quick out: if outside disk, nothing to remove
-            if ((cx * cx + cz * cz) > (Radius * Radius))
-                return 0f;
-
-            // Center cell in grid space
-            float fx = (cx + Radius) / _step;
-            float fz = (cz + Radius) / _step;
-            int ci = Mathf.Clamp(Mathf.FloorToInt(fx), 0, _N - 1);
-            int cj = Mathf.Clamp(Mathf.FloorToInt(fz), 0, _N - 1);
-
-            // Iterate only a small window around the circle
-            int radiusInCells = Mathf.CeilToInt(radiusMeters / _step) + 1;
-            int i0 = Mathf.Max(0, ci - radiusInCells);
-            int i1 = Mathf.Min(_N - 1, ci + radiusInCells);
-            int j0 = Mathf.Max(0, cj - radiusInCells);
-            int j1 = Mathf.Min(_N - 1, cj + radiusInCells);
-
-            float r2 = radiusMeters * radiusMeters;
-            float cellArea = _step * _step;
-            float removedVolume = 0f;
-
-            for (int i = i0; i <= i1; i++)
-            {
-                float x = -Radius + i * _step; // cell center X (local)
-                for (int j = j0; j <= j1; j++)
-                {
-                    float z = -Radius + j * _step; // cell center Z (local)
-                    if (float.IsNaN(_heights[i, j])) continue;
-
-                    float dx = x - cx;
-                    float dz = z - cz;
-                    if ((dx * dx + dz * dz) > r2) continue;
-
-                    // Lower this cell, clamp at FloorY
-                    float hOld = _heights[i, j];
-                    float hNew = MathF.Max(FloorY, hOld - maxDeltaHeight);
-                    float dh = hOld - hNew;
-                    if (dh <= 0f) continue;
-
-                    _heights[i, j] = hNew;
-                    removedVolume += dh * cellArea;
-                }
-            }
-
-            float clampedAngle = MathF.Max(angleOfReposeDeg, MinAngleDeg);
-            float maxSlope = MathF.Tan(Mathf.DegToRad(clampedAngle));
-            ApplyAngleOfRepose(worldXZ, radiusMeters * 1.5f, maxSlope, iterations: 2);
-
-            // Update normals/mesh for current heights
-            RebuildMeshOnly();
-
-            return removedVolume; // in-situ m³ actually removed
-        }
-
         /// <summary>
-        /// OPTIMIZED VERSION: Lower terrain in circular area WITHOUT rebuilding mesh.
+        /// Lower terrain in circular area WITHOUT rebuilding mesh.
         /// Mesh update must be called separately (allows batching multiple dig operations).
         /// Returns the actual volume removed (in-situ, not swelled).
         /// </summary>

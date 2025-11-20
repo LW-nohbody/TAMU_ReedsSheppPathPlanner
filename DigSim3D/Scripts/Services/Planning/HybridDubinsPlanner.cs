@@ -393,7 +393,7 @@ namespace DigSim3D.Services
             return path;
         }
 
-        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, double endYaw, double radius, double worldRadius)
+        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, double endYaw, double radius, float arenaRadius)
         {
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
             
@@ -421,7 +421,7 @@ namespace DigSim3D.Services
 
                 }
                 double r = Math.Sqrt(p.X * p.X + p.Z * p.Z);
-                double d = worldRadius - r;
+                double d = arenaRadius - r;
                 double angleToWall = Math.Atan2(p.Z, p.X);
                 double angleWallDist = Math.Abs(angleToWall - endYaw);
                 if(angleWallDist < 0.48 && d < radius)
