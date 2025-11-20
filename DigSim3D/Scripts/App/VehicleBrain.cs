@@ -647,18 +647,14 @@ namespace DigSim3D.App
                     }
                     if (tooCloseToObstacle) continue;
 
-
-
-                    // PURE HEIGHT SCORING: ONLY prioritize height (no distance penalty)
-                    // This ensures robots always move to the tallest point in their sector
-                    // Use max height in the dig radius as the score
-                    float score = centerHeight;
+                    float score = GetDigSiteScore(candidate);
 
                     if (score > bestScore)
                     {
                         bestScore = score;
                         bestPos = candidate;
                     }
+
                 }
             }
 
@@ -1046,13 +1042,19 @@ namespace DigSim3D.App
         private float GetDigSiteScore(Vector3 digSite)
         {
             Vector3 robotPos = Agent.GlobalTransform.Origin;
-            float distFromRobot = digSite.DistanceTo(robotPos);
 
-            // Base score: height is most important (tallest points first)
-            float score = digSite.Y * 10.0f;
+            // Horizontal distance only (ignore height difference)
+            float dx = digSite.X - robotPos.X;
+            float dz = digSite.Z - robotPos.Z;
+            float distFromRobot = Mathf.Sqrt(dx * dx + dz * dz);
 
-            // Small penalty for being very far from robot (prefer closer targets when equal height)
-            score -= distFromRobot * 0.05f;
+            float height = digSite.Y;
+
+            // Height should dominate; distance is a small penalty.
+            const float HeightWeight = 10.0f;
+            const float DistanceWeight = 0.05f;
+
+            float score = height * HeightWeight - distFromRobot * DistanceWeight;
 
             return score;
         }
