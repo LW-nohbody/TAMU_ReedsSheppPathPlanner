@@ -632,7 +632,7 @@ namespace DigSim3D.App
 
             float clampedAngle = MathF.Max(angleOfReposeDeg, MinAngleDeg);
             float maxSlope = MathF.Tan(Mathf.DegToRad(clampedAngle));
-            ApplyAngleOfRepose(worldXZ, radiusMeters * 2.0f, maxSlope, iterations: 6);
+            ApplyAngleOfRepose(worldXZ, radiusMeters * 1.5f, maxSlope, iterations: 2);
 
             // Update normals/mesh for current heights
             RebuildMeshOnly();
@@ -702,7 +702,7 @@ namespace DigSim3D.App
             // Apply angle-of-repose smoothing in the same local region
             float clampedAngle = MathF.Max(angleOfReposeDeg, MinAngleDeg);
             float maxSlope = MathF.Tan(Mathf.DegToRad(clampedAngle));
-            ApplyAngleOfRepose(worldXZ, radiusMeters * 2.0f, maxSlope, iterations: 6);
+            ApplyAngleOfRepose(worldXZ, radiusMeters * 1.5f, maxSlope, iterations: 2);
 
             // NOTE: Mesh update is NOT called here - caller must call RebuildMeshOnly() when ready
             return removedVolume; // in-situ m³ actually removed
