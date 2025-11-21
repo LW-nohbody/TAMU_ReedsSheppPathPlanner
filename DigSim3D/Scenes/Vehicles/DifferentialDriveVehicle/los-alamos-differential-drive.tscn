@@ -1,0 +1,16 @@
+[gd_scene load_steps=4 format=3 uid="uid://7bawumdlq6sd"]
+
+[ext_resource type="Script" uid="uid://ce3v2b2bcp44e" path="res://Scripts/App/VehicleVisualizer.cs" id="1_b40v2"]
+[ext_resource type="PackedScene" uid="uid://cbwgag4m0o774" path="res://Scenes/Vehicles/DifferentialDriveVehicle/models/los-alamos-differential-drive.glb" id="1_ijtrb"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_b40v2"]
+size = Vector3(1.19385, 0.676392, 1)
+
+[node name="CharacterBody3D" type="CharacterBody3D"]
+script = ExtResource("1_b40v2")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0539551, 0.0852661, 0)
+shape = SubResource("BoxShape3D_b40v2")
+
+[node name="los-alamos-differential-drive2" parent="." instance=ExtResource("1_ijtrb")]

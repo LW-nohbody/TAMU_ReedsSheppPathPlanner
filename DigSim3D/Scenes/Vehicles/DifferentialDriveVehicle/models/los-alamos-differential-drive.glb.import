@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dh35purmsn4u"
-path="res://.godot/imported/center-articulated.glb-0497e4f48b1efa5c35197c6f25a797be.scn"
+uid="uid://cbwgag4m0o774"
+path="res://.godot/imported/los-alamos-differential-drive.glb-19cdccc58a6bcf54abfad2162e084341.scn"
 
 [deps]
 
-source_file="res://Scenes/Vehicles/CenterArticulatedVehicle/center-articulated.glb"
-dest_files=["res://.godot/imported/center-articulated.glb-0497e4f48b1efa5c35197c6f25a797be.scn"]
+source_file="res://Scenes/Vehicles/DifferentialDriveVehicle/models/los-alamos-differential-drive.glb"
+dest_files=["res://.godot/imported/los-alamos-differential-drive.glb-19cdccc58a6bcf54abfad2162e084341.scn"]
 
 [params]
 
