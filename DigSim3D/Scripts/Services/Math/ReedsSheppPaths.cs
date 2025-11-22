@@ -3,10 +3,23 @@ using System.Collections.Generic;
 using System.Linq;
 
 namespace DigSim3D.Services
-{
+{   
+    /// <summary>
+    /// Enum for capturing the steering direction
+    /// </summary>
     public enum Steering { LEFT = -1, RIGHT = 1, STRAIGHT = 0 }
+
+    /// <summary>
+    /// Enum for capturing the movement/gear direction
+    /// </summary>
     public enum Gear { FORWARD = 1, BACKWARD = -1 }
 
+    /// <summary>
+    /// Defines a PathElement, consists of a duration(how long is this element valid), steering, and gear
+    /// </summary>
+    /// <param name="Param"></param>
+    /// <param name="Steering"></param>
+    /// <param name="Gear"></param>
     public record PathElement(double Param, Steering Steering, Gear Gear)
     {
         public static PathElement Create(double param, Steering steering, Gear gear)
@@ -21,8 +34,16 @@ namespace DigSim3D.Services
             => $"{{ Steering: {Steering}\tGear: {Gear}\tdistance: {Math.Round(Param, 3)} }}";
     }
 
+    /// <summary>
+    /// Utility class
+    /// </summary>
     public static class Utils
     {
+        /// <summary>
+        /// Wraps angles to be between 0 and 2*pi, (modulo 2*pi)
+        /// </summary>
+        /// <param name="angle"></param>
+        /// <returns></returns>
         public static double M(double angle) // wrap to [0,2π)
         {
             double twoPi = 2 * Math.PI;
@@ -31,6 +52,12 @@ namespace DigSim3D.Services
             return angle;
         }
 
+        /// <summary>
+        /// Performs a cartesian to polar conversion
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <returns></returns>
         public static (double rho, double theta) R(double x, double y)
         {
             double rho = Math.Sqrt(x * x + y * y);
@@ -39,6 +66,12 @@ namespace DigSim3D.Services
         }
 
         // start/end: (x,y,thetaRadians). Returns end in start's local frame, theta in radians.
+        /// <summary>
+        /// Changes the basis of the cooridnates such that the start is at the origin and rotated such it is at 0 degrees
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <returns></returns>
         public static (double x, double y, double theta) ChangeOfBasis(
             (double x, double y, double theta) start,
             (double x, double y, double theta) end)
@@ -55,9 +88,19 @@ namespace DigSim3D.Services
         }
     }
 
+    /// <summary>
+    /// Generates all Reeds-Sheep Paths
+    /// </summary>
     public static class ReedsSheppPaths
     {
         // ---------- families 1..12 (all take phi in RADIANS) ----------
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path1(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -69,6 +112,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path2(double x, double y, double phi)
         {
             phi = Utils.M(phi);
@@ -86,6 +136,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path3(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -105,6 +162,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path4(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -124,6 +188,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path5(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -143,6 +214,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path6(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -174,6 +252,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path7(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -195,6 +280,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path8(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -215,6 +307,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path9(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -235,6 +334,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path10(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -254,6 +360,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path11(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -273,6 +386,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates a main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path12(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -295,16 +415,32 @@ namespace DigSim3D.Services
         }
 
         // ----- symmetries (time-flip reverses order + gear) -----
+        /// <summary>
+        /// Flips the gears of the path,so forward movements are now reverse and vice-versa
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
         public static List<PathElement> Timeflip(List<PathElement> path)
         {
             return path.Select(e => e.ReverseGear()).ToList(); // matches reference
         }
 
 
+        /// <summary>
+        /// Flips the steering of the path, so left turns are now right turns and vice-versa
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
         public static List<PathElement> Reflect(List<PathElement> path)
             => path.Select(e => new PathElement(e.Param, (Steering)(-(int)e.Steering), e.Gear)).ToList();
 
         // ----- planner API: start/end in RADIANS, x/y normalized by R -----
+        /// <summary>
+        /// Gets all possible Reeds-Shepp paths
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <returns></returns>
         public static List<List<PathElement>> GetAllPaths(
             (double x, double y, double theta) start,
             (double x, double y, double theta) end)
@@ -333,6 +469,12 @@ namespace DigSim3D.Services
             return candidates.Where(p => p.Count > 0).ToList();
         }
 
+        /// <summary>
+        /// Gets the shortest Reeds-Shepp path
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <returns></returns>
         public static List<PathElement> GetOptimalPath(
             (double x, double y, double theta) start,
             (double x, double y, double theta) end)
