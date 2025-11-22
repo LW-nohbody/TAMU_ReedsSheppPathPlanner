@@ -7,6 +7,9 @@ using DigSim3D.Domain;
 
 namespace DigSim3D.Services
 {
+    /// <summary>
+    /// Plans the dig targets radially from center
+    /// </summary>
     public sealed class RadialScheduler
     {
         /// <summary>
