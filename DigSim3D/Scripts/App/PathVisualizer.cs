@@ -119,6 +119,9 @@ namespace DigSim3D.App
             CallDeferred(nameof(RedrawPaths));
         }
 
+        /// <summary>
+        /// Clears mesh and draws each vehicles path
+        /// </summary>
         private void RedrawPaths()
         {
             if (_mesh == null || !_visible) return;

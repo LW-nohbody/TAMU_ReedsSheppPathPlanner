@@ -5,6 +5,9 @@ using DigSim3D.Domain;
 
 namespace DigSim3D.App
 {
+    /// <summary>
+    /// Manages all obstacles defined in the Godot simulation
+    /// </summary>
     public partial class ObstacleManager : Node3D
     {
         private List<Obstacle3D> obstacles = new List<Obstacle3D>();
@@ -27,6 +30,11 @@ namespace DigSim3D.App
 
         }
 
+        /// <summary>
+        /// Checks if any obstacles intersect with given path
+        /// </summary>
+        /// <param name="pathPoints"></param>
+        /// <returns></returns>
         public bool PathIsValid(List<Vector3> pathPoints)
         {
             if (pathPoints.Count < 2)
@@ -47,12 +55,19 @@ namespace DigSim3D.App
             return true; // No collisions along the path
         }
 
+        /// <summary>
+        /// Adds new obstacle to manager
+        /// </summary>
+        /// <param name="obstacle"></param>
         public void AddObstacle(Obstacle3D obstacle)
         {
             AddChild(obstacle);
             obstacles.Add(obstacle);
         }
 
+        /// <summary>
+        /// Clears all obstacles
+        /// </summary>
         public void ClearObstacles()
         {
             foreach (var o in obstacles)
@@ -60,6 +75,10 @@ namespace DigSim3D.App
             obstacles.Clear();
         }
 
+        /// <summary>
+        /// Returns list of obstacles as Obstacle3D objects
+        /// </summary>
+        /// <returns></returns>
         public List<Obstacle3D> GetObstacles()
         {
             return obstacles;
