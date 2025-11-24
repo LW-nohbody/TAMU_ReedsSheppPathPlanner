@@ -98,6 +98,10 @@ namespace DigSim3D.App
             _statusLabel.Visible = visible;
         }
 
+        /// <summary>
+        /// Creates ring mesh around target, to show where robot is going
+        /// </summary>
+        /// <returns></returns>
         private Mesh CreateRingMesh()
         {
             var st = new SurfaceTool();
@@ -131,6 +135,10 @@ namespace DigSim3D.App
             return st.Commit();
         }
 
+        /// <summary>
+        /// Creates arrow indicating direction robot is facing
+        /// </summary>
+        /// <returns></returns>
         private Mesh CreateArrowMesh()
         {
             var st = new SurfaceTool();

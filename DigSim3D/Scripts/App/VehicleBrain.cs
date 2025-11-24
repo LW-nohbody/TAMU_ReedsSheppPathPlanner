@@ -4,6 +4,9 @@ using DigSim3D.Services;
 
 namespace DigSim3D.App
 {
+    /// <summary>
+    /// The brain of each vehicle, handles all decision making for the vehicle
+    /// </summary>
     public partial class VehicleBrain : Node
     {
         public VehicleVisualizer Agent { get; private set; } = null!;
@@ -374,6 +377,9 @@ namespace DigSim3D.App
         private const float CarObstacleHeight = 1.5f;
 
         // Call when THIS car becomes frozen
+        /// <summary>
+        /// When the car is frozen, registers as an obstacle
+        /// </summary>
         public void RegisterFrozenCarObstacle()
         {
             if (FrozenCarObstacles.ContainsKey(this)) return;
@@ -393,6 +399,9 @@ namespace DigSim3D.App
         }
 
         // Call when THIS car unfreezes
+        /// <summary>
+        /// Removes car as obstacle when unfrozen
+        /// </summary>
         public void RemoveFrozenCarObstacle()
         {
             if (!FrozenCarObstacles.ContainsKey(this)) return;
@@ -406,6 +415,9 @@ namespace DigSim3D.App
 
         private double FrozenReplanCooldown = 0f;
 
+        /// <summary>
+        /// Replans for frozen car, part of dynamic avoidance
+        /// </summary>
         private void CheckFrozenCarReplan()
 {
     var myPos = Agent.GlobalTransform.Origin;
@@ -454,6 +466,9 @@ namespace DigSim3D.App
 
 private bool _isPriorityFrozen = false;
 
+/// <summary>
+/// Freezes car
+/// </summary>
 public void FreezeForPriority()
 {
     // already frozen → do nothing
@@ -484,7 +499,9 @@ public void FreezeForPriority()
     }
 }
 
-
+/// <summary>
+/// Unfreezes car
+/// </summary>
 public void UnfreezeFromPriority()
 {
     if (!_isPriorityFrozen) return;

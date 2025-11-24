@@ -3,6 +3,9 @@ using System;
 
 namespace DigSim3D.App
 {
+    /// <summary>
+    /// Generates a disk of terrain with some dynamic noise in the height of the terrain
+    /// </summary>
     [Tool]
     public partial class TerrainDisk : Node3D
     {
@@ -51,6 +54,9 @@ namespace DigSim3D.App
         }
 
         // Call this after you change parameters at runtime if needed.
+        /// <summary>
+        /// Rebuilds the terrain disk
+        /// </summary>
         public void Rebuild()
         {
             // --- noise setup -----------------------------------------------------
@@ -228,10 +234,14 @@ namespace DigSim3D.App
             GD.Print($"[TerrainDisk] min={minH:F6} max={maxH:F6} floor={FloorY:F6} underFloor={under}");
         }
 
-        // -------------------------------------------------------------------------
-        // Public sampler: exact height & normal at a world XZ
-        // Returns false if outside the disk.
-        // -------------------------------------------------------------------------
+        /// <summary>
+        /// Public sampler: exact height & normal at a world XZ
+        /// Returns false if outside the disk.
+        /// </summary>
+        /// <param name="worldXZ"></param>
+        /// <param name="hitPos"></param>
+        /// <param name="normal"></param>
+        /// <returns></returns>
         public bool SampleHeightNormal(Vector3 worldXZ, out Vector3 hitPos, out Vector3 normal)
         {
             // Convert to local coords
@@ -351,6 +361,10 @@ namespace DigSim3D.App
                 }
             }
         }
+
+        /// <summary>
+        /// Only rebuilds terrain mesh
+        /// </summary>
         public void RebuildMeshOnly()
         {
             if (_heights == null || _norms == null) return;
@@ -443,6 +457,9 @@ namespace DigSim3D.App
         // -------------------------------------------------------------------------
         // Internals
         // -------------------------------------------------------------------------
+        /// <summary>
+        /// Gets all children of terrain
+        /// </summary>
         private void EnsureChildren()
         {
             _meshMI = GetNodeOrNull<MeshInstance3D>("Mesh");
@@ -466,6 +483,10 @@ namespace DigSim3D.App
                 _staticBody.AddChild(_colShape);
             }
         }
+
+        /// <summary>
+        /// Gets floor based on Node's type
+        /// </summary>
         private void FloorYFromNode()
         {
             if (FloorNodePath == null || FloorNodePath.IsEmpty)

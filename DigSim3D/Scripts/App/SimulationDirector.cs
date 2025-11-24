@@ -9,6 +9,10 @@ using DigSim3D.Services;
 
 namespace DigSim3D.App
 {
+    /// <summary>
+    /// Main control for the simulation in Godot, this is the script tied to the root node in Godot
+    /// Handles camera movement, vehicle creation and initialization, etc
+    /// </summary>
     public partial class SimulationDirector : Node3D
     {
         [Export] public PackedScene VehicleScene = null!;
@@ -363,6 +367,10 @@ namespace DigSim3D.App
             }
         }
 
+        /// <summary>
+        /// Gets total volume of removable terrain in simulation
+        /// </summary>
+        /// <returns></returns>
         private float CalculateTerrainVolume()
         {
             if (_terrain == null || _terrain.HeightGrid == null)
@@ -535,6 +543,10 @@ public override void _Process(double delta)
             }
         }
 
+        /// <summary>
+        /// Controls the chase camera, allows for camera to follow the vehicle
+        /// </summary>
+        /// <param name="delta"></param>
         private void FollowChaseCamera(double delta)
         {
             if (_vehicles.Count == 0) return;
@@ -555,6 +567,10 @@ public override void _Process(double delta)
             _camChase.LookAt(car.GlobalTransform.Origin, Vector3.Up);
         }
 
+        /// <summary>
+        /// Switches camera modes between top, chase, free, and orbit
+        /// </summary>
+        /// <param name="m"></param>
         private void SetCameraMode(CameraMode m)
         {
             _mode = m;
@@ -593,6 +609,10 @@ public override void _Process(double delta)
         }
 
         // Wrap index cleanly when cycling vehicles
+        /// <summary>
+        /// Changes the vehicle chase camera follows
+        /// </summary>
+        /// <param name="delta"></param>
         private void CycleFollowTarget(int delta)
         {
             if (_vehicles.Count == 0) return;
@@ -603,6 +623,11 @@ public override void _Process(double delta)
         // ------------------------------------------------
 
         // === Placement on terrain using FL/FR/RC (unchanged) =======================
+        /// <summary>
+        /// Keeps vehicle on the dynamic terrain
+        /// </summary>
+        /// <param name="car"></param>
+        /// <param name="outward"></param>
         private void PlaceOnTerrain(VehicleVisualizer car, Vector3 outward)
         {
             var yawBasis = Basis.LookingAt(outward, Vector3.Up);
@@ -644,6 +669,11 @@ public override void _Process(double delta)
         // ==========================================================================
 
         // -------- Path viz projected to terrain (old drawer adapted to terrain) ---
+        /// <summary>
+        /// Samples terrain's height
+        /// </summary>
+        /// <param name="xz"></param>
+        /// <returns></returns>
         private float SampleSurfaceY(Vector3 xz)
         {
             if (_terrain != null && _terrain.SampleHeightNormal(xz, out var hit, out var _))
@@ -658,6 +688,11 @@ public override void _Process(double delta)
             return 0f;
         }
 
+        /// <summary>
+        /// Draws path onto dynamic terrain
+        /// </summary>
+        /// <param name="points"></param>
+        /// <param name="col"></param>
         private void DrawPathProjectedToTerrain(Vector3[] points, Color col)
         {
             if (points == null || points.Length < 2) return;
@@ -682,6 +717,11 @@ public override void _Process(double delta)
                 mi.SetSurfaceOverrideMaterial(0, mat);
         }
 
+        /// <summary>
+        /// Draws marker onto the dynamic terrain
+        /// </summary>
+        /// <param name="pos"></param>
+        /// <param name="col"></param>
         private void DrawMarkerProjected(Vector3 pos, Color col)
         {
             var m = new MeshInstance3D
@@ -697,6 +737,10 @@ public override void _Process(double delta)
             AddChild(m);
         }
 
+        /// <summary>
+        /// Captures mouse for UI
+        /// </summary>
+        /// <returns></returns>
         private bool IsMouseOverUI()
         {
             bool noDigSimUI = _digSimUI == null || !_digSimUI.Visible;
