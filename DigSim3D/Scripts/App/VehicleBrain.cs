@@ -33,9 +33,6 @@ namespace DigSim3D.App
         /// <summary> Dig configuration </summary>
         private DigConfig _digConfig = null!;
 
-        /// <summary> Dig visualizer </summary>
-        private DigVisualizer _digVisualizer = null!;
-
         /// <summary> Path drawing callback (set by SimulationDirector) </summary>
         private System.Action<Vector3[], Color> _drawPathCallback = null!;
 
@@ -114,7 +111,7 @@ namespace DigSim3D.App
         /// </summary>
         public void InitializeDigBrain(DigService digService, TerrainDisk terrain, 
             RadialScheduler scheduler, DigConfig digConfig, IPathPlanner pathPlanner,
-            WorldState worldState, DigVisualizer digVisualizer, System.Action<Vector3[], Color> drawPathCallback,
+            WorldState worldState, System.Action<Vector3[], Color> drawPathCallback,
             int sectorIndex, int totalSectors)
         {
             _digService = digService;
@@ -123,7 +120,6 @@ namespace DigSim3D.App
             _digConfig = digConfig;
             _pathPlanner = pathPlanner;
             _worldState = worldState;
-            _digVisualizer = digVisualizer;
             _drawPathCallback = drawPathCallback;
 
             // Assign permanent sector

@@ -68,7 +68,6 @@ namespace DigSim3D.App
         // === Dig System ===
         private DigService _digService = null!;
         private DigConfig _digConfig = DigConfig.Default;
-        private DigVisualizer _digVisualizer = null!;
         private SectorVisualizer _sectorVisualizer = null!;
         private BufferVisualizer _bufferVisualizer = null!;
         private List<VehicleBrain> _robotBrains = new();
@@ -162,10 +161,6 @@ namespace DigSim3D.App
             // === Initialize Dig Service ===
             _digService = new DigService(_terrain, _digConfig);
 
-            // Create dig visualizer
-            _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
-            AddChild(_digVisualizer);
-
             // Create sector visualizer to show robot sectors
             _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
             AddChild(_sectorVisualizer);
@@ -197,7 +192,7 @@ namespace DigSim3D.App
                 int robotIndex = _robotBrains.IndexOf(brain);
                 int totalRobots = _robotBrains.Count;
                 GD.Print($"🎮 [Director] Initializing brain {robotIndex} with DigConfig.DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
-                brain.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, _digVisualizer, DrawPathProjectedToTerrain, robotIndex, totalRobots);
+                brain.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, DrawPathProjectedToTerrain, robotIndex, totalRobots);
             }
 
             var digTargets = scheduler.PlanFirstDigTargets(
