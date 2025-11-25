@@ -6,6 +6,10 @@ namespace DigSim3D.App
     [Tool]
     public partial class TerrainDisk : Node3D
     {
+        // ======================================================================
+        // Exported parameters
+        // ======================================================================
+
         [Export] public float Radius = 15f;
         [Export(PropertyHint.Range, "32,1024,1")] public int Resolution = 256;
 
@@ -17,49 +21,63 @@ namespace DigSim3D.App
         [Export] public float Gain = 0.4f;
         [Export] public int Seed = 1337;
         [Export(PropertyHint.Range, "0,1,0.01")] public float Smooth = 0.6f;
+
         [Export] public float FloorY = 0.0f;
         [Export] public NodePath FloorNodePath = null!;
 
         [Export] public Material MaterialOverride = null!;
 
-        // (Optional) put the collider on a specific layer/mask
+        // Optional: collider layer/mask
         [Export] public uint ColliderLayer = 1;
         [Export] public uint ColliderMask = 1;
 
-        // --- children ------------------------------------------------------------
+        // ======================================================================
+        // Children
+        // ======================================================================
+
         private MeshInstance3D _meshMI = null!;
         private StaticBody3D _staticBody = null!;
         private CollisionShape3D _colShape = null!;
 
-        // --- cached grid for exact sampling -------------------------------------
+        // ======================================================================
+        // Cached grid data (for sampling & deformation)
+        // ======================================================================
+
         private float[,] _heights = null!;   // size: _N x _N (local-space Y)
-        private Vector3[,] _norms = null!;    // per-vertex normals (local space)
+        private Vector3[,] _norms = null!;   // per-vertex normals (local space)
         private int _N;
-        private float _step;         // world spacing between grid verts
+        private float _step;                 // world spacing between grid verts
 
         // Public accessors for external terrain modification
         public float[,] HeightGrid => _heights;
         public int GridResolution => _N;
         public float GridStep => _step;
 
-        // Angle at which terrain settles (usually around 25-35)
-        float angleOfReposeDeg = 25.0f;
+        // Angle at which terrain settles (usually around 25–35 degrees)
+        private float angleOfReposeDeg = 25.0f;
         // Dropping the minimum angle lower than 15 may cause bugs
-        const float MinAngleDeg = 15.0f;
+        private const float MinAngleDeg = 15.0f;
 
+        // ======================================================================
+        // Lifecycle
+        // ======================================================================
 
         public override void _Ready()
         {
             EnsureChildren();
             FloorYFromNode();
             Rebuild();
-            if (Engine.IsEditorHint()) SetProcess(false);
+            if (Engine.IsEditorHint())
+                SetProcess(false);
         }
 
-        // Call this after you change parameters at runtime if needed.
+        /// <summary>
+        /// Full rebuild: noise, height grid, normals, mesh, collider.
+        /// Call this after you change parameters at runtime if needed.
+        /// </summary>
         public void Rebuild()
         {
-            // --- noise setup -----------------------------------------------------
+            // --- noise setup ----------------------------------------------------
             var noise = new FastNoiseLite
             {
                 Seed = Seed,
@@ -81,7 +99,7 @@ namespace DigSim3D.App
                 return Mathf.Lerp(c, avg, Mathf.Clamp(Smooth, 0f, 1f));
             }
 
-            // --- grid -------------------------------------------------------------
+            // --- grid ----------------------------------------------------------
             int N = Mathf.Max(32, Resolution);
             float size = Radius * 2f;
             float step = size / (N - 1);
@@ -90,7 +108,6 @@ namespace DigSim3D.App
             _N = N;
             _step = step;
             _heights = new float[N, N];
-
             _norms = new Vector3[N, N];
 
             bool Inside(float x, float z) => (x * x + z * z) <= (Radius * Radius);
@@ -106,11 +123,14 @@ namespace DigSim3D.App
                     {
                         float n = Smoothed(x, z, blurR);
                         float h = Amplitude * n;
+
                         if (h < FloorY)
                             h = FloorY + (FloorY - h);
+
                         // Ensure minimum height > 0.01f
                         if (h < 0.011f)
                             h = 0.011f;
+
                         _heights[i, j] = h;
                     }
                     else
@@ -125,7 +145,11 @@ namespace DigSim3D.App
             {
                 for (int i = 0; i < N; i++)
                 {
-                    if (float.IsNaN(_heights[i, j])) { _norms[i, j] = Vector3.Up; continue; }
+                    if (float.IsNaN(_heights[i, j]))
+                    {
+                        _norms[i, j] = Vector3.Up;
+                        continue;
+                    }
 
                     int il = Math.Max(0, i - 1), ir = Math.Min(N - 1, i + 1);
                     int jd = Math.Max(0, j - 1), ju = Math.Min(N - 1, j + 1);
@@ -142,7 +166,7 @@ namespace DigSim3D.App
                 }
             }
 
-            // --- mesh build -------------------------------------------------------
+            // --- mesh build ----------------------------------------------------
             var st = new SurfaceTool();
             st.Begin(Mesh.PrimitiveType.Triangles);
 
@@ -215,7 +239,9 @@ namespace DigSim3D.App
             _meshMI.Mesh = mesh;
 
             if (MaterialOverride != null)
+            {
                 _meshMI.SetSurfaceOverrideMaterial(0, MaterialOverride);
+            }
             else
             {
                 var mat = new StandardMaterial3D
@@ -227,8 +253,8 @@ namespace DigSim3D.App
                 _meshMI.SetSurfaceOverrideMaterial(0, mat);
             }
 
-            // --- physics collider (trimesh) --------------------------------------
-            var faces = mesh.GetFaces(); // PoolVector3Array of all triangle verts
+            // --- physics collider (trimesh) ------------------------------------
+            var faces = mesh.GetFaces();
             var concave = new ConcavePolygonShape3D { Data = faces };
             _colShape.Shape = concave;
 
@@ -236,28 +262,36 @@ namespace DigSim3D.App
             _staticBody.CollisionMask = ColliderMask;
             _colShape.Disabled = false;
 
-            int under = 0; float minH = 1e9f, maxH = -1e9f;
+            // Debug: stats
+            int under = 0;
+            float minH = 1e9f, maxH = -1e9f;
             for (int j = 0; j < _N; j++)
+            {
                 for (int i = 0; i < _N; i++)
                 {
                     float h = _heights[i, j];
                     if (h < FloorY - 1e-6f) under++;
-                    if (h < minH) minH = h; if (h > maxH) maxH = h;
+                    if (h < minH) minH = h;
+                    if (h > maxH) maxH = h;
                 }
+            }
             GD.Print($"[TerrainDisk] min={minH:F6} max={maxH:F6} floor={FloorY:F6} underFloor={under}");
         }
 
-        // -------------------------------------------------------------------------
-        // Public sampler: exact height & normal at a world XZ
-        // Returns false if outside the disk.
-        // -------------------------------------------------------------------------
+        // ======================================================================
+        // Public sampling
+        // ======================================================================
+
+        /// <summary>
+        /// Exact height & normal at a world XZ. Returns false if outside the disk.
+        /// </summary>
         public bool SampleHeightNormal(Vector3 worldXZ, out Vector3 hitPos, out Vector3 normal)
         {
             // Convert to local coords
             Vector3 local = ToLocal(worldXZ);
             float x = local.X, z = local.Z;
 
-            // outside disk?
+            // Outside disk?
             if ((x * x + z * z) > (Radius * Radius))
             {
                 hitPos = default;
@@ -310,13 +344,13 @@ namespace DigSim3D.App
             return true;
         }
 
-        // -------------------------------------------------------------------------
-        // Terrain deformation: reduce height at grid points (for excavation)
-        // -------------------------------------------------------------------------
+        // ======================================================================
+        // Terrain deformation API
+        // ======================================================================
+
         /// <summary>
         /// Reduce terrain height at specific grid indices by the given amount.
-        /// Call Rebuild() after modifications to update the mesh.
-        /// Clamps to not go below FloorY.
+        /// Clamps to FloorY. Call Rebuild() or RebuildMeshOnly() after modifications.
         /// </summary>
         public void ReduceHeightAt(int gridI, int gridJ, float amount)
         {
@@ -332,6 +366,7 @@ namespace DigSim3D.App
 
         /// <summary>
         /// Reduce terrain height in a circular region around a world position.
+        /// Uses a quadratic falloff from center to edge. Clamped at FloorY.
         /// </summary>
         public void ReduceHeightCircle(Vector3 worldCenter, float radiusMeters, float depthMeters)
         {
@@ -361,15 +396,19 @@ namespace DigSim3D.App
 
                     if (dist <= radiusMeters)
                     {
-                        // Falloff: stronger at center, weaker at edges
                         float falloff = 1f - (dist / radiusMeters);
-                        falloff = falloff * falloff;  // quadratic
+                        falloff *= falloff;  // quadratic
 
                         ReduceHeightAt(i, j, depthMeters * falloff);
                     }
                 }
             }
         }
+
+        /// <summary>
+        /// Rebuild mesh with current heights/normals (no noise or grid regeneration).
+        /// Used after digging & angle-of-repose adjustments.
+        /// </summary>
         public void RebuildMeshOnly()
         {
             if (_heights == null || _norms == null) return;
@@ -379,7 +418,11 @@ namespace DigSim3D.App
             {
                 for (int i = 0; i < _N; i++)
                 {
-                    if (float.IsNaN(_heights[i, j])) { _norms[i, j] = Vector3.Up; continue; }
+                    if (float.IsNaN(_heights[i, j]))
+                    {
+                        _norms[i, j] = Vector3.Up;
+                        continue;
+                    }
 
                     int il = Math.Max(0, i - 1), ir = Math.Min(_N - 1, i + 1);
                     int jd = Math.Max(0, j - 1), ju = Math.Min(_N - 1, j + 1);
@@ -428,16 +471,10 @@ namespace DigSim3D.App
                     if (y11 <= FloorY + visualFloorEps) y11 = FloorY - visualNudge;
 
                     // Fix normals for visual vertices
-                    Vector3 n00 = _norms[i, j];
-                    Vector3 n10 = _norms[i + 1, j];
-                    Vector3 n01 = _norms[i, j + 1];
-                    Vector3 n11 = _norms[i + 1, j + 1];
-
-                    // Re-normalize normals after nudging so they don't produce seams 
-                    n00 = n00.Normalized();
-                    n10 = n10.Normalized();
-                    n01 = n01.Normalized();
-                    n11 = n11.Normalized();
+                    Vector3 n00 = _norms[i, j].Normalized();
+                    Vector3 n10 = _norms[i + 1, j].Normalized();
+                    Vector3 n01 = _norms[i, j + 1].Normalized();
+                    Vector3 n11 = _norms[i + 1, j + 1].Normalized();
 
                     Vector3 v00 = new Vector3(x0, y00, z0);
                     Vector3 v10 = new Vector3(x1, y10, z0);
@@ -484,9 +521,10 @@ namespace DigSim3D.App
                 _meshMI.SetSurfaceOverrideMaterial(0, MaterialOverride);
         }
 
-        // -------------------------------------------------------------------------
-        // Internals
-        // -------------------------------------------------------------------------
+        // ======================================================================
+        // Internal helpers
+        // ======================================================================
+
         private void EnsureChildren()
         {
             _meshMI = GetNodeOrNull<MeshInstance3D>("Mesh");
@@ -510,6 +548,7 @@ namespace DigSim3D.App
                 _staticBody.AddChild(_colShape);
             }
         }
+
         private void FloorYFromNode()
         {
             if (FloorNodePath == null || FloorNodePath.IsEmpty)
@@ -520,7 +559,8 @@ namespace DigSim3D.App
             {
                 // Not a CsgCylinder3D? Use the node's origin as floor.
                 var n = GetNodeOrNull<Node3D>(FloorNodePath);
-                if (n != null) FloorY = n.GlobalTransform.Origin.Y;
+                if (n != null)
+                    FloorY = n.GlobalTransform.Origin.Y;
                 return;
             }
 
@@ -532,8 +572,8 @@ namespace DigSim3D.App
 
         /// <summary>
         /// Lower terrain in circular area WITHOUT rebuilding mesh.
-        /// Mesh update must be called separately (allows batching multiple dig operations).
-        /// Returns the actual volume removed (in-situ, not swelled).
+        /// Mesh update must be called separately (allows batching multiple dig ops).
+        /// Returns actual volume removed (in-situ, not swelled).
         /// </summary>
         public float LowerAreaWithoutMeshUpdate(Vector3 worldXZ, float radiusMeters, float maxDeltaHeight)
         {
@@ -603,8 +643,7 @@ namespace DigSim3D.App
 
         /// <summary>
         /// Locally relax slopes in a circular region so that height differences
-        /// don't exceed maxSlope * distance. This approximates an angle of repose
-        /// without changing total volume.
+        /// don't exceed maxSlope * distance. Approximates angle of repose.
         /// </summary>
         public void ApplyAngleOfRepose(Vector3 worldXZ, float radiusMeters, float maxSlope, int iterations = 2)
         {
@@ -733,6 +772,10 @@ namespace DigSim3D.App
             }
         }
 
+        /// <summary>
+        /// Softens cells slightly above the floor near the "rim" band.
+        /// Currently experimental / not fully used.
+        /// </summary>
         public void SoftenFloorRim(float band = 0.05f, float lerpFactor = 0.5f)
         {
             if (_heights == null) return;
@@ -755,7 +798,7 @@ namespace DigSim3D.App
                     float sum = 0f;
                     int count = 0;
 
-                    // 4-neighbor average (you can use 8 if you want smoother)
+                    // 4-neighbor average
                     int[,] offs = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
                     for (int k = 0; k < 4; k++)
                     {
