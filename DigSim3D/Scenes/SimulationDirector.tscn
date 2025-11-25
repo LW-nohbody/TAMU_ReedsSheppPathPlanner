@@ -82,18 +82,18 @@ transform = Transform3D(0.984884, 0, 0, 0, 0.984884, 0, 0, 0, 0.984884, 0, 0, 0)
 script = ExtResource("1_tjpb3")
 VehicleScene = ExtResource("2_qfmbg")
 VehiclesRootPath = NodePath("VehiclesRoot")
+TerrainPath = NodePath("Terrain")
 CameraTopPath = NodePath("Cameras/CameraTop")
 CameraChasePath = NodePath("Cameras/CameraChase")
 CameraFreePath = NodePath("Cameras/CameraFree")
 CameraOrbitPath = NodePath("Cameras/CameraOrbit")
-TerrainPath = NodePath("Terrain")
+ObstacleManagerPath = NodePath("ObstacleManager")
+DynamicObstacleManagerPath = NodePath("DynamicObstacleManager")
 VehicleCount = 10
 VehicleLength = 0.75
 VehicleWidth = 0.5
 TurnRadiusMeters = 1.0
 DebugPathOnTop = false
-ObstacleManagerPath = NodePath("ObstacleManager")
-DynamicObstacleManagerPath = NodePath("DynamicObstacleManager")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_q02dg")
