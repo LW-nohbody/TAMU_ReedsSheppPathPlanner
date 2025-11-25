@@ -1,5 +1,8 @@
 namespace DigSim3D.Domain
 {
+    /// <summary>
+    /// Dig scoring, rates possible dig sites
+    /// </summary>
     public struct DigScoring
     {
         public float InnerR;      // where to start searching (m)

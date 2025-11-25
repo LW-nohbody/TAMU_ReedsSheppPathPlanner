@@ -4,6 +4,9 @@ using DigSim3D.App;
 
 namespace DigSim3D.Domain
 {
+    /// <summary>
+    /// Tank definition
+    /// </summary>
     public sealed class WorldState
     {
         // Points of interest (for mission logic)

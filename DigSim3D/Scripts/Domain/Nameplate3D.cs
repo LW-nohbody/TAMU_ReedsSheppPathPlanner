@@ -1,5 +1,8 @@
 using Godot;
 
+/// <summary>
+/// Creates the name tags for each robot displayed in the simulation
+/// </summary>
 public partial class Nameplate3D : Node3D
 {
     [Export] public string Text = "RS-00";
