@@ -1,4 +1,6 @@
 using Godot;
+using System;
+using System.Collections.Generic;
 using DigSim3D.Domain;
 using DigSim3D.Services;
 
@@ -6,98 +8,108 @@ namespace DigSim3D.App
 {
     public partial class VehicleBrain : Node
     {
+        // === Public API / basic state ===
+
         public VehicleVisualizer Agent { get; private set; } = null!;
         public DigState DigState { get; private set; } = new();
 
-        /// <summary> Robot's assigned sector index (permanent) </summary>
+        /// <summary>Robot's assigned sector index (permanent).</summary>
         public int SectorIndex { get; private set; } = -1;
 
-        /// <summary> This brain's robot index (matches SimulationDirector index) </summary>
+        /// <summary>This brain's robot index (matches SimulationDirector index).</summary>
         private int _robotIndex = -1;
 
-        /// <summary> Total number of sectors (equal to number of robots) </summary>
+        /// <summary>Total number of sectors (equal to number of robots).</summary>
         private int _totalSectors = 1;
 
-        /// <summary> Cached reference to dig service (set by SimulationDirector) </summary>
+        // === External references (set by SimulationDirector) ===
+
         private DigService _digService = null!;
-
-        /// <summary> Cached reference to terrain (set by SimulationDirector) </summary>
         private TerrainDisk _terrain = null!;
-
-        /// <summary> Cached reference to scheduler (set by SimulationDirector) </summary>
         private RadialScheduler _scheduler = null!;
-
-        /// <summary> Cached reference to path planner (set by SimulationDirector) </summary>
         private IPathPlanner _pathPlanner = null!;
-
-        /// <summary> Cached reference to world state (set by SimulationDirector) </summary>
         private WorldState _worldState = null!;
-
-        /// <summary> Dig configuration </summary>
         private DigConfig _digConfig = null!;
-
-        /// <summary> Dig visualizer </summary>
         private DigVisualizer _digVisualizer = null!;
 
-        /// <summary> Path drawing callback (set by SimulationDirector) </summary>
-        private System.Action<int, Vector3[], Color> _drawPathCallback = null!;
+        /// <summary>Path drawing callback (set by SimulationDirector).</summary>
+        private Action<int, Vector3[], Color> _drawPathCallback = null!;
 
-        /// <summary> Accumulated dig time at current site (seconds) </summary>
+        // === Dig timers / intervals ===
+
+        /// <summary>Accumulated dig time at current site (seconds).</summary>
         private float _digTimeAccumulated = 0f;
 
-        /// <summary> Time since last check for better dig site (seconds) </summary>
+        /// <summary>Time since last check for better dig site (seconds).</summary>
         private float _timeSinceLastSiteCheck = 0f;
 
-        /// <summary> How often to check for better dig sites (seconds) </summary>
+        /// <summary>How often to check for better dig sites (seconds).</summary>
         private const float SiteCheckInterval = 0.5f; // Check every 0.5 seconds
 
-        /// <summary> Accumulated time since last terrain mesh update (seconds) </summary>
+        /// <summary>Accumulated time since last terrain mesh update (seconds).</summary>
         private float _timeSinceLastMeshUpdate = 0f;
 
-        /// <summary> How often to update terrain mesh while digging (seconds) </summary>
+        /// <summary>How often to update terrain mesh while digging (seconds).</summary>
         private const float MeshUpdateInterval = 0.1f; // Update mesh 10 times per second instead of every frame
 
-        /// <summary> Last known position of robot for stuck detection </summary>
+        // === Stuck detection / recovery ===
+
+        /// <summary>Last known position of robot for stuck detection.</summary>
         private Vector3 _lastPosition = Vector3.Zero;
 
-        /// <summary> Time accumulated while robot hasn't moved significantly (seconds) </summary>
+        /// <summary>Time accumulated while robot hasn't moved significantly (seconds).</summary>
         private float _stuckTime = 0f;
 
-        /// <summary> How long robot must be stuck before triggering recovery (seconds) </summary>
+        /// <summary>How long robot must be stuck before triggering recovery (seconds).</summary>
         private const float StuckTimeThreshold = 3.0f; // 3 seconds
 
-        /// <summary> Minimum distance robot must move to be considered "moving" (meters) </summary>
+        /// <summary>Minimum distance robot must move to be considered "moving" (meters).</summary>
         private const float MinMovementThreshold = 0.1f; // 10cm
 
-        /// <summary> Distance to back up when stuck (meters) </summary>
+        /// <summary>Distance to back up when stuck (meters).</summary>
         private const float BackupDistance = 2.0f; // 2 meters
 
-        /// <summary> Number of consecutive stuck attempts at current target </summary>
+        /// <summary>Number of consecutive stuck attempts at current target.</summary>
         private int _stuckAttempts = 0;
 
-        /// <summary> Maximum stuck attempts before abandoning current target </summary>
+        /// <summary>Maximum stuck attempts before abandoning current target.</summary>
         private const int MaxStuckAttempts = 3;
 
-        /// <summary> List of recently failed dig sites to avoid </summary>
-        private System.Collections.Generic.List<Vector3> _failedDigSites = new();
+        // === Failed dig site memory ===
 
-        /// <summary> How long to remember failed sites (seconds) </summary>
+        /// <summary>List of recently failed dig sites to avoid.</summary>
+        private List<Vector3> _failedDigSites = new();
+
+        /// <summary>How long to remember failed sites (seconds).</summary>
         private const float FailedSiteMemoryTime = 30f;
 
-        /// <summary> Time when each failed site was added </summary>
-        private System.Collections.Generic.Dictionary<Vector3, float> _failedSiteTimes = new();
+        /// <summary>Time when each failed site was added.</summary>
+        private Dictionary<Vector3, float> _failedSiteTimes = new();
 
-        /// <summary> Current game time for failed site tracking </summary>
+        /// <summary>Current game time for failed site tracking.</summary>
         private float _gameTime = 0f;
 
+        // === Frozen-car avoidance / priority freeze ===
+
         private bool _hasReplannedFromFreeze = false;
-        // Track frozen cars we've already replanned for
+
+        /// <summary>Frozen cars we've already replanned for (to avoid spamming replans).</summary>
         private readonly HashSet<VehicleBrain> _frozenCarsAlreadyHandled = new();
 
         // Freeze/unfreeze radii
         private const float FreezeRadius = 2.0f;      // trigger freeze/replan
         private const float UnfreezeRadius = 3.0f;    // must exceed freeze radius
 
+        // Static registry of frozen car obstacles (shared across all brains)
+        private static Dictionary<VehicleBrain, CylinderObstacle> FrozenCarObstacles
+            = new Dictionary<VehicleBrain, CylinderObstacle>();
+
+        private const float CarObstacleRadius = 0.9f;   // adjust to robot radius
+        private const float CarObstacleHeight = 1.5f;
+
+        private bool _isPriorityFrozen = false;
+
+        // ----------------------------------------------------------------------
 
         private static bool IsInsideAvoidanceRadius(Vector3 a, Vector3 b, float radius)
         {
@@ -105,7 +117,6 @@ namespace DigSim3D.App
             float dz = a.Z - b.Z;
             return (dx * dx + dz * dz) < radius * radius;
         }
-
 
         public override void _Ready()
         {
@@ -116,10 +127,16 @@ namespace DigSim3D.App
         /// Initialize dig brain with external services and sector assignment.
         /// </summary>
         public void InitializeDigBrain(
-            DigService digService, TerrainDisk terrain,
-            RadialScheduler scheduler, DigConfig digConfig, IPathPlanner pathPlanner,
-            WorldState worldState, DigVisualizer digVisualizer, System.Action<int, Vector3[], Color> drawPathCallback,
-            int sectorIndex, int totalSectors)
+            DigService digService,
+            TerrainDisk terrain,
+            RadialScheduler scheduler,
+            DigConfig digConfig,
+            IPathPlanner pathPlanner,
+            WorldState worldState,
+            DigVisualizer digVisualizer,
+            Action<int, Vector3[], Color> drawPathCallback,
+            int sectorIndex,
+            int totalSectors)
         {
             _digService = digService;
             _terrain = terrain;
@@ -132,7 +149,7 @@ namespace DigSim3D.App
 
             // Assign permanent sector + robot index
             SectorIndex = sectorIndex;
-            _robotIndex = sectorIndex;      // ← this matches the index passed from SimulationDirector
+            _robotIndex = sectorIndex;      // matches the index passed from SimulationDirector
             _totalSectors = totalSectors;
 
             // Initialize position tracking for stuck detection
@@ -160,7 +177,7 @@ namespace DigSim3D.App
             // Update game time for failed site tracking
             _gameTime += deltaSeconds;
 
-            // Clean up old failed sites (older than 30 seconds)
+            // Clean up old failed sites (older than FailedSiteMemoryTime)
             CleanupOldFailedSites();
 
             switch (DigState.State)
@@ -168,8 +185,8 @@ namespace DigSim3D.App
                 case DigState.TaskState.Idle:
                     // Request new dig target
                     RequestNewDigTarget();
-                    _stuckTime = 0f; // Reset stuck timer when getting new target
-                    _stuckAttempts = 0; // Reset stuck attempts for new target
+                    _stuckTime = 0f;      // Reset stuck timer when getting new target
+                    _stuckAttempts = 0;   // Reset stuck attempts for new target
                     _lastPosition = robotPos;
                     break;
 
@@ -249,8 +266,8 @@ namespace DigSim3D.App
                         DigState.State = DigState.TaskState.Digging;
                         _digTimeAccumulated = 0f;
                         _timeSinceLastSiteCheck = 0f; // Reset site check timer when starting to dig
-                        _stuckTime = 0f; // Reset stuck timer when arriving at site
-                        _stuckAttempts = 0; // Reset stuck attempts on successful arrival
+                        _stuckTime = 0f;              // Reset stuck timer when arriving at site
+                        _stuckAttempts = 0;           // Reset stuck attempts on successful arrival
 
                         // Only reset volume tracker if this is a NEW site (not returning after dump)
                         if (DigState.CurrentSiteComplete)
@@ -283,14 +300,13 @@ namespace DigSim3D.App
                         break;
                     }
 
-                    // OPTIMIZATION: Only check site completion every 0.5 seconds instead of every frame
+                    // Only check site completion on an interval to avoid per-frame cost
                     _timeSinceLastSiteCheck += deltaSeconds;
                     if (_timeSinceLastSiteCheck >= SiteCheckInterval)
                     {
                         _timeSinceLastSiteCheck = 0f;
 
-                        // Calculate cylinder volume: Volume = DigDepth × π × DigRadius²
-                        // But we can't dig below the floor, so use effective depth
+                        // Cylinder volume: V = depth × π × r², but never below floor
                         float floorY = _terrain?.FloorY ?? 0f;
                         float targetHeightBasedOnDepth = DigState.InitialDigHeight - _digConfig.DigDepth;
                         float effectiveTargetHeight = Mathf.Max(targetHeightBasedOnDepth, floorY);
@@ -302,15 +318,15 @@ namespace DigSim3D.App
                         float centerHeight = GetTerrainHeightAt(DigState.CurrentDigTarget);
                         bool noMoreDirt = centerHeight <= (floorY + 0.001f); // Within 1cm of floor
 
-                        // Debug: Log site completion check
-                        float volumePercent = cylinderVolume > 0 ? (DigState.CurrentSiteVolumeExcavated / cylinderVolume * 100f) : 0f;
+                        float volumePercent = cylinderVolume > 0
+                            ? (DigState.CurrentSiteVolumeExcavated / cylinderVolume * 100f)
+                            : 0f;
+
                         GD.Print($"⛏️ [VehicleBrain] {Agent.Name} digging: maxH={maxHeight:F3}m, centerH={centerHeight:F3}m, floor={floorY:F3}m | volume={DigState.CurrentSiteVolumeExcavated:F3}/{cylinderVolume:F3}m³ ({volumePercent:F0}%) | payload={DigState.CurrentPayload:F2}/{DigState.MaxPayload:F2}m³");
 
-                        // Site is ONLY complete when there's no more dirt (removed cylinder volume check)
-                        // Robots must dig until all dirt in the radius is at floor level
+                        // Site is complete only when there's no more dirt at floor level
                         if (noMoreDirt)
                         {
-                            // Mark this site as COMPLETE
                             DigState.CurrentSiteComplete = true;
                             GD.Print($"✅ [VehicleBrain] {Agent.Name} SITE COMPLETE! All terrain at floor (maxH={maxHeight:F3}m ≈ floor={floorY:F3}m). Excavated {DigState.CurrentSiteVolumeExcavated:F3}m³. Moving to next site!");
 
@@ -351,14 +367,12 @@ namespace DigSim3D.App
                     // If current site is NOT complete, return to it. Otherwise find new site.
                     if (!DigState.CurrentSiteComplete)
                     {
-                        // Return to same dig site to continue excavation
                         GD.Print($"🔄 [VehicleBrain] {Agent.Name} returning to SAME dig site (already excavated {DigState.CurrentSiteVolumeExcavated:F3}m³)");
                         DigState.State = DigState.TaskState.TravelingToDigSite;
                         PlanPathToDigSite(DigState.CurrentDigTarget, DigState.CurrentDigYaw);
                     }
                     else
                     {
-                        // Current site is complete, find a new one
                         GD.Print($"🎯 [VehicleBrain] {Agent.Name} previous site complete, finding NEW dig site");
                         DigState.State = DigState.TaskState.Idle;
                         RequestNewDigTarget();
@@ -371,23 +385,18 @@ namespace DigSim3D.App
             }
         }
 
-        // ------------------------
-        // FROZEN CAR OBSTACLE SYSTEM
-        // ------------------------
-
-        private static System.Collections.Generic.Dictionary<VehicleBrain, CylinderObstacle> FrozenCarObstacles
-            = new System.Collections.Generic.Dictionary<VehicleBrain, CylinderObstacle>();
-
-        private const float CarObstacleRadius = 0.9f;   // adjust to robot radius
-        private const float CarObstacleHeight = 1.5f;
+        // =======================================================================
+        // Frozen car obstacle system
+        // =======================================================================
 
         // Call when THIS car becomes frozen
         public void RegisterFrozenCarObstacle()
         {
-            if (FrozenCarObstacles.ContainsKey(this)) return;
+            if (FrozenCarObstacles.ContainsKey(this))
+                return;
 
             var pos = Agent.GlobalTransform.Origin;
-            var obstacle = new CylinderObstacle()
+            var obstacle = new CylinderObstacle
             {
                 GlobalPosition = pos,
                 Radius = CarObstacleRadius,
@@ -403,7 +412,8 @@ namespace DigSim3D.App
         // Call when THIS car unfreezes
         public void RemoveFrozenCarObstacle()
         {
-            if (!FrozenCarObstacles.ContainsKey(this)) return;
+            if (!FrozenCarObstacles.ContainsKey(this))
+                return;
 
             var obstacle = FrozenCarObstacles[this];
             _worldState.Obstacles.Remove(obstacle);
@@ -419,7 +429,8 @@ namespace DigSim3D.App
             foreach (var kv in FrozenCarObstacles)
             {
                 var other = kv.Key;
-                if (other == this) continue;
+                if (other == this)
+                    continue;
 
                 var otherPos = other.Agent.GlobalTransform.Origin;
                 float dist = myPos.DistanceTo(otherPos);
@@ -427,7 +438,7 @@ namespace DigSim3D.App
                 // ---- ENTERING FREEZE RADIUS ----
                 if (dist < FreezeRadius)
                 {
-                    // Only replan the FIRST time we see this frozen car
+                    // Only replan the first time we see this frozen car
                     if (!_frozenCarsAlreadyHandled.Contains(other))
                     {
                         _frozenCarsAlreadyHandled.Add(other);
@@ -440,7 +451,7 @@ namespace DigSim3D.App
                             PlanPathToDump();
                     }
                 }
-                // ---- EXITING FREEZE / ENTERING UNFREEZE RADIUS ----
+                // ---- EXITING UNFREEZE RADIUS ----
                 else if (dist > UnfreezeRadius)
                 {
                     // Allow replanning again only after we fully leave the zone
@@ -453,17 +464,15 @@ namespace DigSim3D.App
             }
         }
 
-
-        // ------------------------
-        // PRIORITY FREEZE / UNFREEZE HOOKS
-        // ------------------------
-
-        private bool _isPriorityFrozen = false;
+        // =======================================================================
+        // Priority freeze / unfreeze hooks
+        // =======================================================================
 
         public void FreezeForPriority()
         {
             // already frozen → do nothing
-            if (_isPriorityFrozen) return;
+            if (_isPriorityFrozen)
+                return;
 
             _isPriorityFrozen = true;
 
@@ -480,9 +489,8 @@ namespace DigSim3D.App
 
                 GD.Print($"[VehicleBrain] {Agent.Name} frozen — triggering ONE replan.");
 
-                // Trigger your replan function here
+                // Trigger replan
                 CheckFrozenCarReplan();
-                // or call whatever replanning method you prefer
             }
             else
             {
@@ -490,10 +498,10 @@ namespace DigSim3D.App
             }
         }
 
-
         public void UnfreezeFromPriority()
         {
-            if (!_isPriorityFrozen) return;
+            if (!_isPriorityFrozen)
+                return;
 
             _isPriorityFrozen = false;
 
@@ -509,7 +517,9 @@ namespace DigSim3D.App
             GD.Print($"[VehicleBrain] {Agent.Name} unfrozen.");
         }
 
-
+        // =======================================================================
+        // Dig target selection / sector search
+        // =======================================================================
 
         /// <summary>
         /// Request a new dig target from the scheduler using assigned sector.
@@ -533,10 +543,9 @@ namespace DigSim3D.App
             // Find best dig location in this robot's specific sector
             Vector3 digPos = FindBestDigInSector();
 
-            // Check if we got a valid position (negative Y means failure from FindBestDigInSector)
+            // Negative Y from FindBestDigInSector indicates failure
             if (digPos.Y < 0f)
             {
-                // No valid dig targets found in sector
                 GD.Print($"🏁 [VehicleBrain] {Agent.Name} SECTOR {SectorIndex} COMPLETE - no valid dig targets available (all blocked or too shallow)");
                 DigState.State = DigState.TaskState.Complete;
                 return;
@@ -565,9 +574,6 @@ namespace DigSim3D.App
             float sectorStartAngle = SectorIndex * Mathf.Tau / _totalSectors;
             float sectorEndAngle = (SectorIndex + 1) * Mathf.Tau / _totalSectors;
 
-            // Removed sector buffer - robots should be able to work all the way to sector boundaries
-            // (Previous 2-degree buffer was creating unreachable dirt in boundary zones)
-
             int resolution = _terrain.GridResolution;
             float gridStep = _terrain.GridStep;
 
@@ -576,14 +582,11 @@ namespace DigSim3D.App
             int candidatesChecked = 0;
             int candidatesInSector = 0;
 
-            // Calculate wall buffer zone
+            // Wall buffer accounts for vehicle size + turn radius; must match planner
             float arenaRadius = _terrain.Radius;
-            // Wall buffer accounts for: vehicle width (~0.5m) + turn radius (1.0m) + safety margin
-            // Must match path planner's wall buffer to ensure selected dig sites are pathable
             const float WallBufferMeters = 0.1f; // Must match HybridReedsSheppPlanner.PathIsValid buffer
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
 
-            // Get obstacles from world state for manual checking
             const float ObstacleBufferMeters = 0.5f; // 0.5m obstacle buffer
 
             // Search terrain grid for best dig point in this sector
@@ -597,9 +600,6 @@ namespace DigSim3D.App
                     Vector3 candidateXZ = new Vector3(worldX, 0, worldZ);
 
                     float centerHeight = GetTerrainHeightAt(candidateXZ);
-
-
-
                     Vector3 candidate = new Vector3(worldX, centerHeight, worldZ);
 
                     candidatesChecked++;
@@ -607,22 +607,20 @@ namespace DigSim3D.App
                     // Check if too close to wall (arena boundary)
                     float distFromCenter = candidate.WithY(0).Length();
                     if (distFromCenter > maxAllowedRadius)
-                    {
-                        // Too close to wall - skip this candidate
                         continue;
-                    }
 
-                    // Check if this point is in our sector using STRICT angle check
+                    // Check if this point is in our sector using strict angle check
                     float angle = Mathf.Atan2(worldZ, worldX);
-                    if (angle < 0) angle += Mathf.Tau; // Normalize to [0, 2π]
+                    if (angle < 0)
+                        angle += Mathf.Tau; // Normalize to [0, 2π]
 
-                    // STRICT sector boundary check
                     bool inSector = IsAngleInSector(angle, sectorStartAngle, sectorEndAngle);
+                    if (!inSector)
+                        continue;
 
-                    if (!inSector) continue;
                     candidatesInSector++;
 
-                    // MANUAL obstacle check - skip if inside obstacle buffer zone
+                    // Manual obstacle check - skip if inside obstacle buffer zone
                     bool tooCloseToObstacle = false;
                     if (_worldState?.Obstacles != null)
                     {
@@ -634,7 +632,6 @@ namespace DigSim3D.App
                                 Vector2 obstacleXZ = new Vector2(cyl.GlobalPosition.X, cyl.GlobalPosition.Z);
                                 float distToObstacle = candidate2D.DistanceTo(obstacleXZ);
 
-                                // Check if inside obstacle + buffer
                                 if (distToObstacle < (cyl.Radius + ObstacleBufferMeters))
                                 {
                                     tooCloseToObstacle = true;
@@ -643,7 +640,8 @@ namespace DigSim3D.App
                             }
                         }
                     }
-                    if (tooCloseToObstacle) continue;
+                    if (tooCloseToObstacle)
+                        continue;
 
                     float score = GetDigSiteScore(candidate);
 
@@ -652,7 +650,6 @@ namespace DigSim3D.App
                         bestScore = score;
                         bestPos = candidate;
                     }
-
                 }
             }
 
@@ -684,11 +681,9 @@ namespace DigSim3D.App
                 // Normal case: sector doesn't wrap around
                 return angle >= sectorStart && angle < sectorEnd;
             }
-            else
-            {
-                // Wraparound case: sector crosses 0/2π boundary
-                return angle >= sectorStart || angle < sectorEnd;
-            }
+
+            // Wraparound case: sector crosses 0/2π boundary
+            return angle >= sectorStart || angle < sectorEnd;
         }
 
         /// <summary>
@@ -706,26 +701,21 @@ namespace DigSim3D.App
         /// </summary>
         private bool HasDiggableTerrainInSector()
         {
-            if (_terrain == null || _terrain.HeightGrid == null) return false;
+            if (_terrain == null || _terrain.HeightGrid == null)
+                return false;
 
             float sectorStartAngle = SectorIndex * Mathf.Tau / _totalSectors;
             float sectorEndAngle = (SectorIndex + 1) * Mathf.Tau / _totalSectors;
 
-            // Removed sector buffer - robots should be able to work all the way to sector boundaries
-            // (Previous 2-degree buffer was creating unreachable dirt in boundary zones)
-
             int resolution = _terrain.GridResolution;
             float gridStep = _terrain.GridStep;
 
-            // Calculate wall buffer zone (0.5m)
             float arenaRadius = _terrain.Radius;
-            // Wall buffer must match the path planner's buffer (0.5m) to ensure all selected sites are pathable
             const float WallBufferMeters = 0.1f; // Must match HybridReedsSheppPlanner.PathIsValid buffer
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
 
-            const float ObstacleBufferMeters = 0.5f; // 0.5m obstacle buffer
+            const float ObstacleBufferMeters = 0.5f;
 
-            // Check if any grid cell in our sector has significant height
             for (int i = 0; i < resolution; i++)
             {
                 for (int j = 0; j < resolution; j++)
@@ -733,7 +723,8 @@ namespace DigSim3D.App
                     float height = _terrain.HeightGrid[i, j];
 
                     // Accept dirt > 0cm (same threshold as HasRemainingTerrain for consistency)
-                    if (float.IsNaN(height) || height <= 0.01f) continue;
+                    if (float.IsNaN(height) || height <= 0.01f)
+                        continue;
 
                     // Convert grid indices to world position
                     float worldX = (i - resolution / 2f) * gridStep;
@@ -741,15 +732,17 @@ namespace DigSim3D.App
 
                     // Check if too close to wall
                     float distFromCenter = Mathf.Sqrt(worldX * worldX + worldZ * worldZ);
-                    if (distFromCenter > maxAllowedRadius) continue;
+                    if (distFromCenter > maxAllowedRadius)
+                        continue;
 
-                    // Check if this point is in our sector using STRICT angle check
+                    // Check if this point is in our sector using strict angle check
                     float angle = Mathf.Atan2(worldZ, worldX);
-                    if (angle < 0) angle += Mathf.Tau;
+                    if (angle < 0)
+                        angle += Mathf.Tau;
 
                     bool inSector = IsAngleInSector(angle, sectorStartAngle, sectorEndAngle);
-
-                    if (!inSector) continue;
+                    if (!inSector)
+                        continue;
 
                     // Manual obstacle check
                     bool tooCloseToObstacle = false;
@@ -772,7 +765,8 @@ namespace DigSim3D.App
                             }
                         }
                     }
-                    if (tooCloseToObstacle) continue;
+                    if (tooCloseToObstacle)
+                        continue;
 
                     return true; // Found diggable terrain in sector
                 }
@@ -780,6 +774,10 @@ namespace DigSim3D.App
 
             return false;
         }
+
+        // =======================================================================
+        // Path planning to dig & dump
+        // =======================================================================
 
         /// <summary>
         /// Plan path to dig site using the same path planner.
@@ -793,22 +791,14 @@ namespace DigSim3D.App
             var fwd = -Agent.GlobalTransform.Basis.Z;
             float startYaw = Mathf.Atan2(fwd.Z, fwd.X);
 
-            // Create start pose
             var startPose = new Pose(robotPos.X, robotPos.Z, startYaw);
-
-            // Create goal pose at dig site
             var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
 
-            // Plan path using same planner
             PlannedPath path = _pathPlanner.Plan(startPose, goalPose, Agent.Spec, _worldState);
 
             // Draw the dig path (cyan/blue)
-            if (_drawPathCallback != null)
-            {
-                _drawPathCallback(_robotIndex, path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f, 0.8f));
-            }
+            _drawPathCallback?.Invoke(_robotIndex, path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f, 0.8f));
 
-            // Set the path on the vehicle
             Agent.SetPath(path.Points.ToArray(), path.Gears.ToArray());
         }
 
@@ -817,21 +807,18 @@ namespace DigSim3D.App
         /// </summary>
         private bool HasRemainingTerrain()
         {
-            if (_terrain == null || _terrain.HeightGrid == null) return false;
+            if (_terrain == null || _terrain.HeightGrid == null)
+                return false;
 
-            // Check if any grid cell has significant height
             int resolution = _terrain.GridResolution;
             for (int i = 0; i < resolution; i++)
             {
                 for (int j = 0; j < resolution; j++)
                 {
                     float height = _terrain.HeightGrid[i, j];
-                    // Threshold for "significant" dirt - lowered to 0cm to catch any remaining dirt
-                    // (was 30cm which caused robots to declare complete while dirt remained)
+                    // Threshold for "significant" dirt
                     if (!float.IsNaN(height) && height > 0.01f)
-                    {
                         return true;
-                    }
                 }
             }
 
@@ -871,22 +858,16 @@ namespace DigSim3D.App
             var fwd = -Agent.GlobalTransform.Basis.Z;
             float startYaw = Mathf.Atan2(fwd.Z, fwd.X);
 
-            // Create start pose
             var startPose = new Pose(robotPos.X, robotPos.Z, startYaw);
 
             // Dump at origin with approach from current direction
             var goalPose = new Pose(0f, 0f, startYaw);
 
-            // Plan path using same planner
             PlannedPath path = _pathPlanner.Plan(startPose, goalPose, Agent.Spec, _worldState);
 
             // Draw the dump path (yellow/orange)
-            if (_drawPathCallback != null)
-            {
-                _drawPathCallback(_robotIndex, path.Points.ToArray(), new Color(1.0f, 0.8f, 0f, 0.8f));
-            }
+            _drawPathCallback?.Invoke(_robotIndex, path.Points.ToArray(), new Color(1.0f, 0.8f, 0f, 0.8f));
 
-            // Set the path on the vehicle
             Agent.SetPath(path.Points.ToArray(), path.Gears.ToArray());
         }
 
@@ -900,6 +881,10 @@ namespace DigSim3D.App
             DigState.State = DigState.TaskState.TravelingToDigSite;
         }
 
+        // =======================================================================
+        // Terrain sampling helpers
+        // =======================================================================
+
         /// <summary>
         /// Get the current terrain height at a specific location.
         /// </summary>
@@ -911,11 +896,9 @@ namespace DigSim3D.App
             int resolution = _terrain.GridResolution;
             float gridStep = _terrain.GridStep;
 
-            // Convert world position to grid indices
             int i = (int)((position.X / gridStep) + resolution / 2f);
             int j = (int)((position.Z / gridStep) + resolution / 2f);
 
-            // Check bounds
             if (i < 0 || i >= resolution || j < 0 || j >= resolution)
                 return 0f;
 
@@ -924,8 +907,8 @@ namespace DigSim3D.App
         }
 
         /// <summary>
-        /// Get the minimum (lowest) height within a circular radius around the position.
-        /// This ensures we check if ALL dirt in the dig area has been removed.
+        /// Get the maximum (highest) height within a circular radius around the position.
+        /// Ensures we check if all dirt in the dig area has been removed.
         /// </summary>
         private float GetMaxHeightInRadius(Vector3 center, float radius)
         {
@@ -940,8 +923,6 @@ namespace DigSim3D.App
             // Exclude the rim by shrinking the radius slightly
             float innerRadius = MathF.Max(0f, radius - gridStep * 0.5f);
 
-
-            // Calculate grid cell range to check
             int centerI = (int)((center.X / gridStep) + resolution / 2f);
             int centerJ = (int)((center.Z / gridStep) + resolution / 2f);
             int cellRadius = (int)(innerRadius / gridStep) + 1;
@@ -953,17 +934,14 @@ namespace DigSim3D.App
                     int i = centerI + di;
                     int j = centerJ + dj;
 
-                    // Check bounds
                     if (i < 0 || i >= resolution || j < 0 || j >= resolution)
                         continue;
 
-                    // Check if within circular radius
                     float worldX = (i - resolution / 2f) * gridStep;
                     float worldZ = (j - resolution / 2f) * gridStep;
                     float distFromCenter = Mathf.Sqrt(
                         (worldX - center.X) * (worldX - center.X) +
-                        (worldZ - center.Z) * (worldZ - center.Z)
-                    );
+                        (worldZ - center.Z) * (worldZ - center.Z));
 
                     if (distFromCenter > radius)
                         continue;
@@ -995,7 +973,6 @@ namespace DigSim3D.App
             float sumHeight = 0f;
             int count = 0;
 
-            // Calculate grid cell range to check
             int centerI = (int)((center.X / gridStep) + resolution / 2f);
             int centerJ = (int)((center.Z / gridStep) + resolution / 2f);
             int cellRadius = (int)(radius / gridStep) + 1;
@@ -1007,17 +984,14 @@ namespace DigSim3D.App
                     int i = centerI + di;
                     int j = centerJ + dj;
 
-                    // Check bounds
                     if (i < 0 || i >= resolution || j < 0 || j >= resolution)
                         continue;
 
-                    // Check if within circular radius
                     float worldX = (i - resolution / 2f) * gridStep;
                     float worldZ = (j - resolution / 2f) * gridStep;
                     float distFromCenter = Mathf.Sqrt(
                         (worldX - center.X) * (worldX - center.X) +
-                        (worldZ - center.Z) * (worldZ - center.Z)
-                    );
+                        (worldZ - center.Z) * (worldZ - center.Z));
 
                     if (distFromCenter > radius)
                         continue;
@@ -1053,9 +1027,12 @@ namespace DigSim3D.App
             const float DistanceWeight = 0.05f;
 
             float score = height * HeightWeight - distFromRobot * DistanceWeight;
-
             return score;
         }
+
+        // =======================================================================
+        // Failed-site tracking
+        // =======================================================================
 
         /// <summary>
         /// Mark a dig site as failed/unreachable and remember it for a while.
@@ -1075,7 +1052,7 @@ namespace DigSim3D.App
         /// </summary>
         private void CleanupOldFailedSites()
         {
-            // Remove sites older than 30 seconds
+            // Remove sites older than FailedSiteMemoryTime
             _failedDigSites.RemoveAll(site =>
             {
                 if (_failedSiteTimes.TryGetValue(site, out float addTime))
