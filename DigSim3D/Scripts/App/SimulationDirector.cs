@@ -27,7 +27,13 @@ namespace DigSim3D.App
 
         // === Simulation Parameters ===
 
-        // Spawn / geometry
+        [ExportGroup("Arena")]
+        [Export(PropertyHint.Range, "5,30,0.5")]
+        public float ArenaRadius = 15.0f;
+        [Export] public NodePath TankOuterPath = null!;
+        public float WallThickness = 0.3f; // Outer = ArenaRadius + WallThickness
+
+        [ExportGroup("Spawning & Vehicle Geometry")]
         [Export] public int VehicleCount = 8;
         [Export] public float SpawnRadius = 2.0f;
         [Export] public float VehicleLength = 2.0f;
@@ -35,16 +41,16 @@ namespace DigSim3D.App
         [Export] public float RideHeight = 0.25f;
         [Export] public float NormalBlend = 0.2f;
 
-        // Reeds–Shepp parameters
+        [ExportGroup("Path Planning")]
         [Export] public float TurnRadiusMeters = 2.0f;
 
-        // Dynamic avoidance toggle
+        [ExportGroup("Dynamic Avoidance")]
         [Export] public bool DynamicAvoidanceEnabled = false;
 
-        // Path visualization
+        [ExportGroup("Debug / Visualization")]
         [Export] public bool DebugPathOnTop = true;
 
-        // Camera controls
+        [ExportGroup("Camera Controls")]
         [Export] public float MouseSensitivity = 0.005f;
         [Export] public float TranslateSensitivity = 0.01f;
         [Export] public float ZoomSensitivity = 1.0f;
@@ -130,6 +136,62 @@ namespace DigSim3D.App
             }
             GD.Print($"[Director] Terrain OK: {_terrain.Name}");
 
+            // Apply global arena radius to terrain
+            _terrain.Radius = ArenaRadius + 0.2f;
+            _terrain.Rebuild();
+
+            // Apply global arena radius to tank walls, if present
+            if (TankOuterPath != null && !TankOuterPath.IsEmpty)
+            {
+                var outer = GetNodeOrNull<CsgCylinder3D>(TankOuterPath);
+                if (outer != null)
+                {
+                    // Outer tank wall = arena radius + thickness
+                    outer.Radius = ArenaRadius + WallThickness;
+
+                    // Inner tank wall = arena radius (matches terrain disk)
+                    var inner = outer.GetNodeOrNull<CsgCylinder3D>("Tank_Inner");
+                    if (inner != null)
+                        inner.Radius = ArenaRadius;
+
+                    // Floor uses same radius as outer shell
+                    var floor = outer.GetNodeOrNull<CsgCylinder3D>("Tank_Floor");
+                    if (floor != null)
+                        floor.Radius = outer.Radius;
+
+                    GD.Print($"[Director] Updated tank radii: inner={ArenaRadius:F2}, outer={outer.Radius:F2}");
+                }
+            }
+
+            // --- Camera config that depends on arena size ---
+
+            // Top-down camera: scale view to fit the arena
+            if (_camTop != null)
+            {
+                // Perspective: move it higher based on arena radius
+                var t = _camTop.GlobalTransform;
+                var origin = t.Origin;
+
+                // Keep it centered over the terrain, but lift it proportionally
+                var center = _terrain.GlobalTransform.Origin;
+                origin.X = center.X;
+                origin.Z = center.Z;
+                origin.Y = ArenaRadius * 1.5f;
+
+                _camTop.GlobalTransform = new Transform3D(t.Basis, origin);
+            }
+
+            // Orbit camera: allow zooming further out for larger arenas
+            if (_camOrbit != null)
+            {
+                // Scale orbit distance limits with arena size
+                MinDist = MathF.Max(0.5f, ArenaRadius * 0.5f);
+                MaxDist = ArenaRadius * 2.0f;
+
+                // Start somewhere sensible in the middle
+                Distance = Mathf.Clamp(ArenaRadius * 1.5f, MinDist, MaxDist);
+            }
+
             // Static obstacles
             _obstacleManager = GetNodeOrNull<ObstacleManager>(ObstacleManagerPath);
             if (_obstacleManager == null)
@@ -169,6 +231,9 @@ namespace DigSim3D.App
 
                 car.SetTerrain(_terrain);
                 car.GlobalTransform = new Transform3D(Basis.Identity, spawnXZ);
+
+                // Make cars respect global arena radius
+                car.ArenaRadius = ArenaRadius;
 
                 PlaceOnTerrain(car, outward);
 
@@ -215,7 +280,7 @@ namespace DigSim3D.App
             _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
             AddChild(_sectorVisualizer);
 
-            float arenaRadius = _terrain.GridResolution * _terrain.GridStep / 2f;
+            float arenaRadius = ArenaRadius;
             _sectorVisualizer.Initialize(_vehicles.Count, arenaRadius);
             GD.Print($"[Director] SectorVisualizer created with {_vehicles.Count} sectors, radius {arenaRadius:F1}m");
 
@@ -224,7 +289,7 @@ namespace DigSim3D.App
 
             const float obstacleBufferMeters = 0.5f; // 0.5m obstacle buffer (dig + path planning)
             const float wallBufferMeters = 0.1f;     // 0.1m wall buffer (dig target selection only)
-            _bufferVisualizer.Initialize(obstacleList, obstacleBufferMeters, _terrain.Radius, wallBufferMeters);
+            _bufferVisualizer.Initialize(obstacleList, obstacleBufferMeters, ArenaRadius, wallBufferMeters);
             GD.Print($"[Director] BufferVisualizer created - obstacle buffer: {obstacleBufferMeters}m, wall buffer: {wallBufferMeters}m");
 
             // --- World state and planner ---

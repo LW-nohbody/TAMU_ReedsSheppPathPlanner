@@ -89,6 +89,7 @@ CameraFreePath = NodePath("Cameras/CameraFree")
 CameraOrbitPath = NodePath("Cameras/CameraOrbit")
 ObstacleManagerPath = NodePath("ObstacleManager")
 DynamicObstacleManagerPath = NodePath("DynamicObstacleManager")
+TankOuterPath = NodePath("Tank_Outer")
 VehicleCount = 10
 VehicleLength = 0.75
 VehicleWidth = 0.5
