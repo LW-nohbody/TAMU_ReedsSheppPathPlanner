@@ -412,8 +412,6 @@ namespace DigSim3D.App
             GD.Print($"[VehicleBrain] Removed frozen obstacle for {Agent.Name}");
         }
 
-        private double FrozenReplanCooldown = 0f;
-
         private void CheckFrozenCarReplan()
         {
             var myPos = Agent.GlobalTransform.Origin;

@@ -28,10 +28,8 @@ namespace DigSim3D.App
         [Export] public float RideHeight = 0.25f;
         [Export] public float NormalBlend = 0.2f;
 
-        // RS params and “go 5m forward then +90° right”
-        [Export] public float GoalAdvance = 5.0f;
+        // RS params
         [Export] public float TurnRadiusMeters = 2.0f;
-        [Export] public float SampleStepMeters = 0.25f;
 
         // Cameras
         [Export] public float MouseSensitivity = 0.005f;
@@ -54,7 +52,6 @@ namespace DigSim3D.App
         private CameraMode _mode = CameraMode.TopDown;
         private int _followIndex = 0;
 
-        private bool _usingTop = true;
         private bool _movingFreeCam = false, _rotatingFreeCam = false, _rotatingOrbitCam = false;
         private float _freePitch = 0f, _freeYaw = 0f, _orbitPitch = 0, _orbitYaw = 0, Distance = 15.0f;
         private float MinPitchDeg = -5, MaxPitchDeg = 89, MinDist = 0.5f, MaxDist = 18f;

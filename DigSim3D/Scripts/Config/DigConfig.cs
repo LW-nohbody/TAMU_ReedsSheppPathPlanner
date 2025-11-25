@@ -21,8 +21,7 @@ namespace DigSim3D.Domain
 
         public float AtSiteThreshold = 0.5f;
         public float AtDumpThreshold = 0.5f;
-        public float MinHeightChange = 0.01f;
-
+        
         public static DigConfig Default => new DigConfig();
     }
 }

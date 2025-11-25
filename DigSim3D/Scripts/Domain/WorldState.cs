@@ -15,11 +15,5 @@ namespace DigSim3D.Domain
 
         // Obstacles in the world
         public List<Obstacle3D> Obstacles = new();
-
-        // World size (meters)
-        public float Extent = 50f;
-
-        // Utility
-        public bool HasTerrain => Terrain != null;
     }
 }

@@ -41,10 +41,6 @@ namespace DigSim3D.Domain
 
     /// <summary> Current state </summary>
     public TaskState State { get; set; } = TaskState.Idle;
-
-        /// <summary> Total terrain volume removed in this session (m³) </summary>
-        public float TotalDugVolume { get; set; } = 0f;
-
         /// <summary> Total times robot has dumped at origin </summary>
         public int DumpCount { get; set; } = 0;
 

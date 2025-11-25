@@ -11,11 +11,9 @@ namespace DigSim3D.App
         [Export] public float ArenaRadius = 15.0f;
         [Export] public float TurnSmoothing = 8.0f;   // yaw smoothing
         [Export] public float TiltSmoothing = 8.0f;   // pitch/roll smoothing
-        [Export] public float YawStopEpsDeg = 3.0f;
 
         // Ground follow
         [Export] public float RideHeightFollow = 0.25f;
-        [Export(PropertyHint.Range, "0,1,0.01")] public float NormalBlendFollow = 0.2f;
         [Export] public float Wheelbase = 2.0f;
         [Export] public float TrackWidth = 1.2f;
         [Export] public bool EnableTilt = true;
@@ -39,7 +37,6 @@ namespace DigSim3D.App
         // Landing
         [Export] public float EndPosSmoothing = 12.0f;   // higher = faster settle to final point
         [Export] public float EndYawSmoothing = 10.0f;   // higher = faster settle to final heading
-        [Export] public float EndStopPosEps = 0.01f;     // meters to consider “arrived”
 
         // External terrain sampler
         private TerrainDisk _terrain = null!;

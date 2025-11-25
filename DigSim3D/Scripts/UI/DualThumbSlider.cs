@@ -60,17 +60,6 @@ namespace DigSim3D.UI
             }
         }
         
-        public Color AccentColor
-        {
-            get => _accentColor;
-            set 
-            { 
-                _accentColor = value;
-                _rangeColor = new Color(value.R, value.G, value.B, 0.3f);
-                QueueRedraw();
-            }
-        }
-        
         public override void _Ready()
         {
             CustomMinimumSize = new Vector2(200, 32);

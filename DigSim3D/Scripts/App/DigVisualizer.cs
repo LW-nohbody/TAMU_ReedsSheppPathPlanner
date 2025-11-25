@@ -10,9 +10,7 @@ namespace DigSim3D.App
     {
         [Export] public bool ShowDigCones = true;
         [Export] public bool ShowPayloadBars = true;
-        [Export] public Color DigConeColor = new(1.0f, 0.5f, 0f, 0.3f);  // Orange, semi-transparent
         [Export] public Color PayloadBarColor = new(0.2f, 1.0f, 0.2f, 1f);  // Bright green
-        [Export] public float DigConeHeight = 1.5f;
 
         public override void _Ready()
         {
