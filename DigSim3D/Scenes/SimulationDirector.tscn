@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
 [ext_resource type="Script" uid="uid://y3xj5surludi" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
-[ext_resource type="PackedScene" uid="uid://7bawumdlq6sd" path="res://Scenes/Vehicles/DifferentialDriveVehicle/los-alamos-differential-drive.tscn" id="2_xklxq"]
+[ext_resource type="PackedScene" uid="uid://dddgpe1f1e82x" path="res://Scenes/Vehicles/CenterArticulatedVehicle/los-alamos-center-articulated.tscn" id="2_xklxq"]
 [ext_resource type="Script" uid="uid://ytlhjpjwably" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
 [ext_resource type="Material" uid="uid://d0aiqbs32qvub" path="res://Materials/concrete.tres" id="3_qfmbg"]
 [ext_resource type="Script" uid="uid://b13ashnn4eika" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
