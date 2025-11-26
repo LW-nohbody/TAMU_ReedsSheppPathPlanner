@@ -10,8 +10,8 @@ namespace DigSim3D.App
         [Export(PropertyHint.Range, "32,1024,1")] public int Resolution = 256;
 
         // Terrain look
-        [Export] public float Amplitude = 0.35f;
-        [Export] public float Frequency = 0.04f;
+        [Export] public float Amplitude = 0.5f;
+        [Export] public float Frequency = 0.1f;
         [Export] public int Octaves = 2;
         [Export] public float Lacunarity = 2.0f;
         [Export] public float Gain = 0.4f;
@@ -45,8 +45,8 @@ namespace DigSim3D.App
         public override void _Ready()
         {
             EnsureChildren();
-            Rebuild();
             FloorYFromNode();
+            Rebuild();
             if (Engine.IsEditorHint()) SetProcess(false);
         }
 
@@ -84,6 +84,7 @@ namespace DigSim3D.App
             _N = N;
             _step = step;
             _heights = new float[N, N];
+
             _norms = new Vector3[N, N];
 
             bool Inside(float x, float z) => (x * x + z * z) <= (Radius * Radius);
@@ -98,7 +99,13 @@ namespace DigSim3D.App
                     if (Inside(x, z))
                     {
                         float n = Smoothed(x, z, blurR);
-                        _heights[i, j] = Amplitude * n;
+                        float h = Amplitude * n;
+                        if (h < FloorY)
+                            h = FloorY + (FloorY - h);
+                        // Ensure minimum height > 0.01f
+                        if (h < 0.011f)
+                            h = 0.011f;
+                        _heights[i, j] = h;
                     }
                     else
                     {
@@ -209,6 +216,16 @@ namespace DigSim3D.App
             _staticBody.CollisionLayer = ColliderLayer;
             _staticBody.CollisionMask = ColliderMask;
             _colShape.Disabled = false;
+
+            int under = 0; float minH = 1e9f, maxH = -1e9f;
+            for (int j=0;j<_N;j++)
+            for (int i=0;i<_N;i++)
+            {
+                float h = _heights[i,j];
+                if (h < FloorY - 1e-6f) under++;
+                if (h < minH) minH = h; if (h > maxH) maxH = h;
+            }
+            GD.Print($"[TerrainDisk] min={minH:F6} max={maxH:F6} floor={FloorY:F6} underFloor={under}");
         }
 
         // -------------------------------------------------------------------------
@@ -451,12 +468,22 @@ namespace DigSim3D.App
         }
         private void FloorYFromNode()
         {
-            var cyl = GetNodeOrNull<CsgCylinder3D>(FloorNodePath);
-            if (cyl == null) return;
+            if (FloorNodePath == null || FloorNodePath.IsEmpty)
+                return; // fallback: use whatever FloorY is already
 
-            // top cap world Y = centerY + (height/2) * worldScaleY
-            float scaleY = cyl.GlobalTransform.Basis.Y.Length();
-            FloorY = cyl.GlobalTransform.Origin.Y + 0.5f * cyl.Height * scaleY;
+            var cyl = GetNodeOrNull<CsgCylinder3D>(FloorNodePath);
+            if (cyl == null)
+            {
+                // Not a CsgCylinder3D? Use the node's origin as floor.
+                var n = GetNodeOrNull<Node3D>(FloorNodePath);
+                if (n != null) FloorY = n.GlobalTransform.Origin.Y;
+                return;
+            }
+
+            // Top cap world Y = centerY + (height/2) * worldScaleY
+            float worldScaleY = cyl.GlobalTransform.Basis.Y.Length();
+            FloorY = cyl.GlobalTransform.Origin.Y + 0.5f * cyl.Height * worldScaleY;
+            GD.Print($"[TerrainDisk] Floor from node '{cyl.Name}': topY={FloorY:F4}");
         }
 
         /// <summary>
