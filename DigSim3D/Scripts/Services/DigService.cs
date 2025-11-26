@@ -18,7 +18,7 @@ namespace DigSim3D.Services
         // OPTIMIZATION: Batch mesh updates instead of updating every dig operation
         private bool _terrainModifiedSinceLastUpdate = false;
         private float _timeSinceLastMeshUpdate = 0f;
-        private const float MeshUpdateInterval = 0.1f; // Update mesh 10 times per second
+        private const float MeshUpdateInterval = 0.2f; // Update mesh 10 times per second
 
         public DigService(TerrainDisk terrain, DigConfig config)
         {
@@ -75,6 +75,8 @@ namespace DigSim3D.Services
             float removedInSitu = _terrain.LowerAreaWithoutMeshUpdate(pos, r, depthToApply);
             if (removedInSitu <= 0f)
                 return (0f, 0f);
+
+            _totalTerrainVolumeRemoved += removedInSitu;
 
             // Mark that terrain has been modified (mesh update will happen in Update())
             _terrainModifiedSinceLastUpdate = true;

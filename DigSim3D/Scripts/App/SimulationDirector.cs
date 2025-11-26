@@ -74,9 +74,12 @@ namespace DigSim3D.App
         private List<VehicleBrain> _robotBrains = new();
         private float _initialTerrainVolume = 0f;  // Store initial volume at startup
 
+        private bool _simPaused = false;
+
         // === UI ===
         private DigSim3D.UI.DigSimUI? _digSimUI = null!;
         private DigSim3D.UI.UIToggleSwitch? _uiToggle = null!;
+        private readonly Dictionary<int, MeshInstance3D> _pathMeshes = new();
 
         [Export] public bool DynamicAvoidanceEnabled = false;
 
@@ -162,9 +165,11 @@ namespace DigSim3D.App
             // === Initialize Dig Service ===
             _digService = new DigService(_terrain, _digConfig);
 
+
             // Create dig visualizer
             _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
             AddChild(_digVisualizer);
+
 
             // Create sector visualizer to show robot sectors
             _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
@@ -229,7 +234,7 @@ namespace DigSim3D.App
 
                 PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, worldState);
 
-                DrawPathProjectedToTerrain(path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
+                DrawPathProjectedToTerrain(k, path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
                 DrawMarkerProjected(start, new Color(0, 1, 0));
                 DrawMarkerProjected(digPos, new Color(0, 0, 1));
 
@@ -276,7 +281,7 @@ namespace DigSim3D.App
             _uiToggle = new UIToggleSwitch();
             toggleLayer.AddChild(_uiToggle);
             _uiToggle.SetTargetUI(_digSimUI);
-            
+
             // Set Camera Mode before returning from Ready
             SetCameraMode(CameraMode.TopDown);
         }
@@ -294,6 +299,18 @@ namespace DigSim3D.App
                     case Key.Key3: SetCameraMode(CameraMode.Free); return;
                     case Key.Key4: SetCameraMode(CameraMode.VehicleFollow); return;
 
+                    case Key.R:
+                        GetTree().ReloadCurrentScene();
+                        return;
+
+                    case Key.P:
+                        _simPaused = !_simPaused;
+                        GD.Print($"Sim paused: {_simPaused}");
+                        // Tell all vehicles to respect sim pause
+                        foreach (var v in _vehicles)
+                            v.SimPaused = _simPaused;
+                        return;
+
                     case Key.Left:
                         if (_mode == CameraMode.VehicleFollow) { CycleFollowTarget(-1); return; }
                         break;
@@ -303,7 +320,6 @@ namespace DigSim3D.App
                 }
             }
 
-            // ---- (keep your existing mouse handlers below) ----
             if (e is InputEventMouseMotion mm && _rotatingFreeCam)
             {
                 _freeYaw += -mm.Relative.X * MouseSensitivity;
@@ -395,48 +411,50 @@ namespace DigSim3D.App
             return (float)totalVolume;
         }
 
-
-public override void _Process(double delta)
-{
-            // OPTIMIZATION: Update DigService to batch terrain mesh updates
-            _digService?.Update((float)delta);
-
-    foreach (var brain in _robotBrains)
-    {
-        brain.UpdateDigBehavior((float)delta);
-
-        if(DynamicAvoidanceEnabled){
-            if (_dynamicObstacleManager != null)
+        public override void _Process(double delta)
+        {
+            // Only advance digging + brains when NOT paused
+            if (!_simPaused)
             {
-                int myIndex = _robotBrains.IndexOf(brain);
-                bool shouldPause = false;
+                // Update terrain dig batching
+                _digService?.Update((float)delta);
 
-                foreach (var other in _robotBrains)
+                foreach (var brain in _robotBrains)
                 {
-                    if (other == brain) continue;
+                    brain.UpdateDigBehavior((float)delta);
 
-                    int otherIndex = _robotBrains.IndexOf(other);
-                    float dist = brain.Agent.GlobalTransform.Origin.DistanceTo(other.Agent.GlobalTransform.Origin);
-
-                    if (dist < _dynamicObstacleManager.AvoidanceRadius)
+                    if (DynamicAvoidanceEnabled)
                     {
-                        if (otherIndex > myIndex)
+                        if (_dynamicObstacleManager != null)
                         {
-                            shouldPause = true;
-                            break;
+                            int myIndex = _robotBrains.IndexOf(brain);
+                            bool shouldPause = false;
+
+                            foreach (var other in _robotBrains)
+                            {
+                                if (other == brain) continue;
+
+                                int otherIndex = _robotBrains.IndexOf(other);
+                                float dist = brain.Agent.GlobalTransform.Origin.DistanceTo(other.Agent.GlobalTransform.Origin);
+
+                                if (dist < _dynamicObstacleManager.AvoidanceRadius)
+                                {
+                                    if (otherIndex > myIndex)
+                                    {
+                                        shouldPause = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (shouldPause)
+                                brain.FreezeForPriority();     // ← replan happens once inside this
+                            else
+                                brain.UnfreezeFromPriority();  // ← resets the "allowed to replan" flag
                         }
                     }
                 }
-
-                if (shouldPause)
-                    brain.FreezeForPriority();     // ← replan happens once inside this
-                else
-                    brain.UnfreezeFromPriority();  // ← resets the "allowed to replan" flag
             }
-        }
-    }
-
-
 
             // Update UI with robot stats
             if (_digSimUI != null && _robotBrains.Count > 0)
@@ -446,13 +464,17 @@ public override void _Process(double delta)
                     var brain = _robotBrains[i];
                     var state = brain.DigState;
                     var robotPos = brain.Agent.GlobalTransform.Origin;
-                    
+
                     float payloadPercent = state.MaxPayload > 0 ? (state.CurrentPayload / state.MaxPayload) : 0f;
                     _digSimUI.UpdateRobotPayload(i, payloadPercent, robotPos, state.State.ToString());
                 }
 
-                // Update terrain progress
-                float remainingVolume = CalculateTerrainVolume();
+                // Use incremental stats instead of rescanning the grid
+                float removedVolume = (_digService != null) ? _digService.GetTotalVolumeRemoved() : 0f;
+
+                // "Remaining" = initial - removed so the existing UI math still works
+                float remainingVolume = Mathf.Max(0f, _initialTerrainVolume - removedVolume);
+
                 _digSimUI.UpdateTerrainProgress(remainingVolume, _initialTerrainVolume);
             }
 
@@ -653,7 +675,7 @@ public override void _Process(double delta)
         {
             if (_terrain != null && _terrain.SampleHeightNormal(xz, out var hit, out var _))
                 return hit.Y;
-            // fallback simple ray if terrain not present; should not happen in this setup
+
             var space = GetWorld3D().DirectSpaceState;
             var from = xz + new Vector3(0, 100f, 0);
             var to = xz + new Vector3(0, -1000f, 0);
@@ -663,11 +685,21 @@ public override void _Process(double delta)
             return 0f;
         }
 
-        private void DrawPathProjectedToTerrain(Vector3[] points, Color col)
+        private void DrawPathProjectedToTerrain(int robotIndex, Vector3[] points, Color col)
         {
             if (points == null || points.Length < 2) return;
 
-            var mi = new MeshInstance3D();
+            // Remove previous path for this robot, if any
+            if (_pathMeshes.TryGetValue(robotIndex, out var oldPath))
+            {
+                oldPath.QueueFree();
+                _pathMeshes.Remove(robotIndex);
+            }
+
+            var mi = new MeshInstance3D
+            {
+                Name = $"Path_{robotIndex:00}"
+            };
             var im = new ImmediateMesh();
             mi.Mesh = im;
             AddChild(mi);
@@ -681,10 +713,17 @@ public override void _Process(double delta)
             }
             im.SurfaceEnd();
 
-            var mat = new StandardMaterial3D { AlbedoColor = col, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
-            mat.NoDepthTest = DebugPathOnTop;
+            var mat = new StandardMaterial3D
+            {
+                AlbedoColor = col,
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                NoDepthTest = DebugPathOnTop
+            };
+
             if (mi.Mesh != null && mi.Mesh.GetSurfaceCount() > 0)
                 mi.SetSurfaceOverrideMaterial(0, mat);
+
+            _pathMeshes[robotIndex] = mi;
         }
 
         private void DrawMarkerProjected(Vector3 pos, Color col)
@@ -713,16 +752,19 @@ public override void _Process(double delta)
             // Check if mouse is over the UI panel or any of its children
             if (noDigSimUI)
             {
-                return _uiToggle.IsPointInUI(mousePos);
+                // Here we know _uiToggle is not null and Visible
+                return _uiToggle!.IsPointInUI(mousePos);
             }
             else if (noUIToggle)
-            {   
-                return _digSimUI.IsPointInUI(mousePos);
+            {
+                // Here we know _digSimUI is not null and Visible
+                return _digSimUI!.IsPointInUI(mousePos);
             }
             else
             {
-                return (_digSimUI.IsPointInUI(mousePos) || _uiToggle.IsPointInUI(mousePos));
+                // Here both are non-null and visible
+                return (_digSimUI!.IsPointInUI(mousePos) || _uiToggle!.IsPointInUI(mousePos));
             }
-        }     
+        }
     }
 }

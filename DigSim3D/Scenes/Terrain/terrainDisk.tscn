@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://jvambkvdo1tv"]
 
-[ext_resource type="Script" uid="uid://w1umu536g1mh" path="res://Scripts/App/TerrainDisk.cs" id="1_jyadk"]
+[ext_resource type="Script" uid="uid://ba70r3v4dwple" path="res://Scripts/App/TerrainDisk.cs" id="1_jyadk"]
 [ext_resource type="Material" uid="uid://c4mo3uu4w8b1c" path="res://Materials/dirt.tres" id="2_joccj"]
 
 [node name="Node3D" type="Node3D"]

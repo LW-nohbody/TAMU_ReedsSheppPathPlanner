@@ -1,12 +1,12 @@
 [gd_scene load_steps=21 format=3 uid="uid://cc5m8lpvnpnfv"]
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
-[ext_resource type="Script" uid="uid://y3xj5surludi" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
-[ext_resource type="PackedScene" uid="uid://dddgpe1f1e82x" path="res://Scenes/Vehicles/CenterArticulatedVehicle/los-alamos-center-articulated.tscn" id="2_xklxq"]
-[ext_resource type="Script" uid="uid://ytlhjpjwably" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
+[ext_resource type="Script" uid="uid://bjy5klmfh1o1x" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
+[ext_resource type="PackedScene" uid="uid://b5fyd3u7xnm52" path="res://Scenes/Vehicles/DifferentialDriveVehicle/Differential_Drive_Vehicle.tscn" id="2_qfmbg"]
+[ext_resource type="Script" uid="uid://crlual7ri4lci" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
 [ext_resource type="Material" uid="uid://d0aiqbs32qvub" path="res://Materials/concrete.tres" id="3_qfmbg"]
-[ext_resource type="Script" uid="uid://b13ashnn4eika" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
-[ext_resource type="Script" uid="uid://chaide3q2pxey" path="res://Scripts/App/DynamicObstacleManager.cs" id="7_xklxq"]
+[ext_resource type="Script" uid="uid://dijjqekvx8xfe" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
+[ext_resource type="Script" uid="uid://cch51675n1n74" path="res://Scripts/App/DynamicObstacleManager.cs" id="7_xklxq"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tjpb3"]
 sky_top_color = Color(0.361634, 0.42475, 0.999998, 1)
@@ -87,7 +87,7 @@ CameraChasePath = NodePath("Cameras/CameraChase")
 CameraFreePath = NodePath("Cameras/CameraFree")
 CameraOrbitPath = NodePath("Cameras/CameraOrbit")
 TerrainPath = NodePath("Terrain")
-VehicleCount = 3
+VehicleCount = 2
 VehicleLength = 0.75
 VehicleWidth = 0.5
 GoalAdvance = 10.0
@@ -96,7 +96,6 @@ SampleStepMeters = 0.15
 DebugPathOnTop = false
 ObstacleManagerPath = NodePath("ObstacleManager")
 DynamicObstacleManagerPath = NodePath("DynamicObstacleManager")
-DynamicAvoidanceEnabled = true
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_q02dg")
@@ -126,10 +125,10 @@ transform = Transform3D(1.01535, 0, 0, 0, 0.999925, 0.176314, 0, -0.176314, 0.99
 Radius = 15.2
 Frequency = 0.15
 Octaves = 2
-FloorY = 0.000492442
 FloorNodePath = NodePath("../Tank_Outer/Tank_Floor")
 
 [node name="Tank_Outer" type="CSGCylinder3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 radius = 15.3
 height = 3.0
 sides = 48
@@ -143,8 +142,9 @@ sides = 48
 material = ExtResource("3_qfmbg")
 
 [node name="Tank_Floor" type="CSGCylinder3D" parent="Tank_Outer"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.65, 0)
 radius = 15.3
-height = 0.001
+height = 0.3
 sides = 48
 material = ExtResource("3_qfmbg")
 
