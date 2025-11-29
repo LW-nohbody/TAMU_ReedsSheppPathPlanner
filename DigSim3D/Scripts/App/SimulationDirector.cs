@@ -85,12 +85,18 @@ namespace DigSim3D.App
 
         public override void _Ready()
         {
+
             // Nodes
-            _vehiclesRoot = GetNode<Node3D>(VehiclesRootPath);
-            _camTop = GetNode<Camera3D>(CameraTopPath);
-            _camChase = GetNode<Camera3D>(CameraChasePath);
-            _camFree = GetNode<Camera3D>(CameraFreePath);
-            _camOrbit = GetNode<Camera3D>(CameraOrbitPath);
+            _vehiclesRoot = GetNodeOrNull<Node3D>(VehiclesRootPath);
+            _camTop = GetNodeOrNull<Camera3D>(CameraTopPath);
+            _camChase = GetNodeOrNull<Camera3D>(CameraChasePath);
+            _camFree = GetNodeOrNull<Camera3D>(CameraFreePath);
+            _camOrbit = GetNodeOrNull<Camera3D>(CameraOrbitPath);
+            if (_vehiclesRoot == null || _camTop == null || _camChase == null || _camFree == null || _camOrbit == null)
+            {
+                GD.PushError("SimulationDirector: One or more camera or vehicle root paths are not set correctly.");
+                return;
+            }
 
             // Terrain (strict)
             _terrain = GetNodeOrNull<TerrainDisk>(TerrainPath);

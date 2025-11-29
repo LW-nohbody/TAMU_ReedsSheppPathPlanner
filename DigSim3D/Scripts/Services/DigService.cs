@@ -36,7 +36,7 @@ namespace DigSim3D.Services
                 _timeSinceLastMeshUpdate += deltaSeconds;
                 if (_timeSinceLastMeshUpdate >= MeshUpdateInterval)
                 {
-                    _terrain.RebuildMeshOnly();
+                    _terrain.RebuildMesh();
                     _terrainModifiedSinceLastUpdate = false;
                     _timeSinceLastMeshUpdate = 0f;
                 }

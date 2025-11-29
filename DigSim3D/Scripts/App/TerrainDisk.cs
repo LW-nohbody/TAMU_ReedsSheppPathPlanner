@@ -19,8 +19,6 @@ namespace DigSim3D.App
         [Export(PropertyHint.Range, "0,1,0.01")] public float Smooth = 0.6f;
         [Export] public float FloorY = 0.0f;
 
-        [Export] public Material MaterialOverride = null!;
-
         // --- children ------------------------------------------------------------
         [Export] private MeshInstance3D _meshMI = null!;
         [Export] private StaticBody3D _staticBody = null!;
@@ -221,20 +219,6 @@ namespace DigSim3D.App
             st.Index();
             st.GenerateTangents();
             st.Commit(arrayMesh);
-            
-            // Set material for the mesh if null otherwise use the given material
-            if (MaterialOverride != null)
-                _meshMI.SetSurfaceOverrideMaterial(0, MaterialOverride);
-            else
-            {
-                var mat = new StandardMaterial3D
-                {
-                    AlbedoColor = new Color(0.36f, 0.31f, 0.27f),
-                    Roughness = 1.0f,
-                    ShadingMode = BaseMaterial3D.ShadingModeEnum.PerPixel
-                };
-                _meshMI.SetSurfaceOverrideMaterial(0, mat);
-            }
 
             // --- physics collider (trimesh) --------------------------------------
             var faces = arrayMesh.GetFaces(); // PoolVector3Array of all triangle verts
@@ -316,9 +300,13 @@ namespace DigSim3D.App
             return true;
         }
 
-        public void RebuildMeshOnly()
+        public void RebuildMesh()
         {
             if (_heights == null || _norms == null) return;
+
+            var arrayMesh = (ArrayMesh)_meshMI.Mesh;
+            // remove old triangles
+            arrayMesh.ClearSurfaces(); 
 
             // Recompute normals based on current heights
             for (int j = 0; j < _N; j++)
@@ -423,36 +411,19 @@ namespace DigSim3D.App
             st.Index();
             st.GenerateTangents();
 
-            var mesh = st.Commit();
-            _meshMI.Mesh = mesh;
+            // var mesh = st.Commit();
+            // _meshMI.Mesh = mesh;
+            st.Commit(arrayMesh);
 
-            if (MaterialOverride != null)
-                _meshMI.SetSurfaceOverrideMaterial(0, MaterialOverride);
+            // --- physics collider (trimesh) --------------------------------------
+            var faces = arrayMesh.GetFaces(); // PoolVector3Array of all triangle verts
+            var concave = new ConcavePolygonShape3D { Data = faces };
+            _colShape.Shape = concave;
         }
 
         // -------------------------------------------------------------------------
         // Internals
         // -------------------------------------------------------------------------
-        // private void FloorYFromNode()
-        // {
-        //     if (FloorNodePath == null || FloorNodePath.IsEmpty)
-        //         return; // fallback: use whatever FloorY is already
-
-        //     var cyl = GetNodeOrNull<CsgCylinder3D>(FloorNodePath);
-        //     if (cyl == null)
-        //     {
-        //         // Not a CsgCylinder3D? Use the node's origin as floor.
-        //         var n = GetNodeOrNull<Node3D>(FloorNodePath);
-        //         if (n != null) FloorY = n.GlobalTransform.Origin.Y;
-        //         return;
-        //     }
-
-        //     // Top cap world Y = centerY + (height/2) * worldScaleY
-        //     float worldScaleY = cyl.GlobalTransform.Basis.Y.Length();
-        //     FloorY = cyl.GlobalTransform.Origin.Y + 0.5f * cyl.Height * worldScaleY;
-        //     GD.Print($"[TerrainDisk] Floor from node '{cyl.Name}': topY={FloorY:F4}");
-        // }
-
         /// <summary>
         /// Lower terrain in circular area WITHOUT rebuilding mesh.
         /// Mesh update must be called separately (allows batching multiple dig operations).
@@ -517,10 +488,7 @@ namespace DigSim3D.App
             float maxSlope = MathF.Tan(Mathf.DegToRad(clampedAngle));
             ApplyAngleOfRepose(worldXZ, radiusMeters * 1.5f, maxSlope, iterations: 2);
 
-            // Soften edge to reduce sharpness (not currently working)
-            // SoftenFloorRim(0.05f, 0.5f);
-
-            // NOTE: Mesh update is NOT called here - caller must call RebuildMeshOnly() when ready
+            // NOTE: Mesh update is NOT called here - caller must call RebuildMesh() when ready
             return removedVolume; // in-situ m³ actually removed
         }
 
@@ -654,51 +622,6 @@ namespace DigSim3D.App
                     deltaLocal[ni - baseI, nj - baseJ] -= move;
                 }
             }
-        }
-
-        public void SoftenFloorRim(float band = 0.05f, float lerpFactor = 0.5f)
-        {
-            if (_heights == null) return;
-
-            var tmp = (float[,])_heights.Clone();
-
-            for (int j = 1; j < _N - 1; j++)
-            {
-                for (int i = 1; i < _N - 1; i++)
-                {
-                    float h = _heights[i, j];
-                    if (float.IsNaN(h)) continue;
-
-                    // Only smooth cells slightly above the floor, not the floor itself
-                    const float floorEps = 0.001f;  // small tolerance
-
-                    if (h <= FloorY + floorEps || h >= FloorY + band)
-                        continue;
-
-                    float sum = 0f;
-                    int count = 0;
-
-                    // 4-neighbor average (you can use 8 if you want smoother)
-                    int[,] offs = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
-                    for (int k = 0; k < 4; k++)
-                    {
-                        int ni = i + offs[k, 0];
-                        int nj = j + offs[k, 1];
-                        float nh = _heights[ni, nj];
-                        if (float.IsNaN(nh)) continue;
-                        sum += nh;
-                        count++;
-                    }
-
-                    if (count > 0)
-                    {
-                        float avg = sum / count;
-                        tmp[i, j] = Mathf.Lerp(h, avg, lerpFactor);
-                    }
-                }
-            }
-
-            _heights = tmp;
         }
     }
 }
