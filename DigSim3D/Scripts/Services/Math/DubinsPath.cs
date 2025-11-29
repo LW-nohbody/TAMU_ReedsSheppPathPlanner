@@ -3,51 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 
-// public enum Steering { LEFT = -1, RIGHT = 1, STRAIGHT = 0 }
-// public enum Gear { FORWARD = 1 }
-
-// public record PathElement(double Param, Steering Steering, Gear Gear)
-// {
-//     public static PathElement Create(double param, Steering steering, Gear gear)
-//         => new PathElement(param, steering, gear);
-
-//     public override string ToString()
-//         => $"{{ Steering: {Steering}\tGear: {Gear}\tdistance: {Math.Round(Param, 3)} }}";
-// }
-
-// public static class Utils
-// {
-//     public static double M(double angle) // wrap to [0,2π)
-//     {
-//         double twoPi = 2 * Math.PI;
-//         angle %= twoPi;
-//         if (angle < 0) angle += twoPi;
-//         return angle;
-//     }
-
-//     public static (double rho, double theta) R(double x, double y)
-//     {
-//         double rho = Math.Sqrt(x * x + y * y);
-//         double theta = M(Math.Atan2(y, x));
-//         return (rho, theta);
-//     }
-
-//     // start/end: (x,y,thetaRadians). Returns end in start's local frame, theta in radians.
-//     public static (double x, double y, double theta) ChangeOfBasis(
-//         (double x, double y, double theta) start,
-//         (double x, double y, double theta) end)
-//     {
-//         double dx = end.x - start.x;
-//         double dy = end.y - start.y;
-//         double dtheta = M(end.theta - start.theta);
-
-//         double cos = Math.Cos(-start.theta);
-//         double sin = Math.Sin(-start.theta);
-//         double xNew = dx * cos - dy * sin;
-//         double yNew = dx * sin + dy * cos;
-//         return (xNew, yNew, dtheta);
-//     }
-// }
 namespace DigSim3D.Services
 {
     public static class DubinsPaths
@@ -56,19 +11,6 @@ namespace DigSim3D.Services
         public static List<PathElement> Path1(double x, double y, double phi)
         {
             phi = Utils.M(phi);
-            // var path = new List<PathElement>();
-            // var (rho, t1) = Utils.R(x + Math.Sin(phi), y - 1 - Math.Cos(phi));
-            // if (rho <= 4.0)
-            // {
-            //     double a = Math.Acos(rho / 4.0);
-            //     double t = Utils.M(t1 + Math.PI / 2.0 - a);
-            //     double u = Utils.M(Math.PI - 2.0 * a);
-            //     double v = Utils.M(phi - t - u);
-            //     path.Add(PathElement.Create(t, Steering.LEFT, Gear.FORWARD));
-            //     path.Add(PathElement.Create(u, Steering.RIGHT, Gear.FORWARD));
-            //     path.Add(PathElement.Create(v, Steering.LEFT, Gear.FORWARD));
-            // }
-            // return path;
             var path = new List<PathElement>();
             double xi = x - Math.Sin(phi);
             double eta = y - 1 + Math.Cos(phi);
@@ -88,22 +30,7 @@ namespace DigSim3D.Services
 
         public static List<PathElement> Path2(double x, double y, double phi)
         {
-            // y = -y;
-            // phi = -phi;
             phi = Utils.M(phi);
-            // var path = new List<PathElement>();
-            // var (rho, t1) = Utils.R(x - Math.Sin(phi), y - 1 + Math.Cos(phi));
-            // if (rho <= 4.0)
-            // {
-            //     double a = Math.Acos(rho / 4.0);
-            //     double u = Utils.M(Math.PI - 2.0 * a);
-            //     double t = Utils.M(t1 - Math.PI / 2.0 + a);
-            //     double v = Utils.M(phi - t - u);
-            //     path.Add(PathElement.Create(t, Steering.RIGHT, Gear.FORWARD));
-            //     path.Add(PathElement.Create(u, Steering.LEFT, Gear.FORWARD));
-            //     path.Add(PathElement.Create(v, Steering.RIGHT, Gear.FORWARD));
-            // }
-            // return path;
             var path = new List<PathElement>();
             double xi = x + Math.Sin(phi);
             double eta = -y - 1 + Math.Cos(phi);

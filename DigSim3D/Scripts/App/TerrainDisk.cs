@@ -18,18 +18,13 @@ namespace DigSim3D.App
         [Export] public int Seed = 1337;
         [Export(PropertyHint.Range, "0,1,0.01")] public float Smooth = 0.6f;
         [Export] public float FloorY = 0.0f;
-        [Export] public NodePath FloorNodePath = null!;
 
         [Export] public Material MaterialOverride = null!;
 
-        // (Optional) put the collider on a specific layer/mask
-        [Export] public uint ColliderLayer = 1;
-        [Export] public uint ColliderMask = 1;
-
         // --- children ------------------------------------------------------------
-        private MeshInstance3D _meshMI = null!;
-        private StaticBody3D _staticBody = null!;
-        private CollisionShape3D _colShape = null!;
+        [Export] private MeshInstance3D _meshMI = null!;
+        [Export] private StaticBody3D _staticBody = null!;
+        [Export] private CollisionShape3D _colShape = null!;
 
         // --- cached grid for exact sampling -------------------------------------
         private float[,] _heights = null!;   // size: _N x _N (local-space Y)
@@ -50,15 +45,30 @@ namespace DigSim3D.App
 
         public override void _Ready()
         {
-            EnsureChildren();
-            FloorYFromNode();
-            Rebuild();
+            if (_meshMI == null || _staticBody == null || _colShape == null)
+            {
+                GD.PushError("TerrainDisk: Missing assigned nodes. Please assign Mesh, Collider, and Shape.");
+                return;
+            }
+
+            // FloorYFromNode();
+            Build();
             if (Engine.IsEditorHint()) SetProcess(false);
         }
 
-        // Call this after you change parameters at runtime if needed.
-        public void Rebuild()
+        // Initial terrain build
+        public void Build()
         {
+            if (_meshMI == null || _staticBody == null || _colShape == null)
+            {
+                GD.PushError("TerrainDisk: Missing assigned nodes. Please assign Mesh, Collider, and Shape.");
+                return;
+            }
+
+            ArrayMesh arrayMesh = _meshMI.Mesh as ArrayMesh;
+            if (arrayMesh.GetSurfaceCount() > 0)
+                arrayMesh.ClearSurfaces();
+
             // --- noise setup -----------------------------------------------------
             var noise = new FastNoiseLite
             {
@@ -210,10 +220,9 @@ namespace DigSim3D.App
 
             st.Index();
             st.GenerateTangents();
-
-            var mesh = st.Commit();
-            _meshMI.Mesh = mesh;
-
+            st.Commit(arrayMesh);
+            
+            // Set material for the mesh if null otherwise use the given material
             if (MaterialOverride != null)
                 _meshMI.SetSurfaceOverrideMaterial(0, MaterialOverride);
             else
@@ -228,14 +237,11 @@ namespace DigSim3D.App
             }
 
             // --- physics collider (trimesh) --------------------------------------
-            var faces = mesh.GetFaces(); // PoolVector3Array of all triangle verts
+            var faces = arrayMesh.GetFaces(); // PoolVector3Array of all triangle verts
             var concave = new ConcavePolygonShape3D { Data = faces };
             _colShape.Shape = concave;
 
-            _staticBody.CollisionLayer = ColliderLayer;
-            _staticBody.CollisionMask = ColliderMask;
-            _colShape.Disabled = false;
-
+            // --- debug info (checks points under floor and gets max/min height) ---
             int under = 0; float minH = 1e9f, maxH = -1e9f;
             for (int j = 0; j < _N; j++)
                 for (int i = 0; i < _N; i++)
@@ -310,66 +316,6 @@ namespace DigSim3D.App
             return true;
         }
 
-        // -------------------------------------------------------------------------
-        // Terrain deformation: reduce height at grid points (for excavation)
-        // -------------------------------------------------------------------------
-        /// <summary>
-        /// Reduce terrain height at specific grid indices by the given amount.
-        /// Call Rebuild() after modifications to update the mesh.
-        /// Clamps to not go below FloorY.
-        /// </summary>
-        public void ReduceHeightAt(int gridI, int gridJ, float amount)
-        {
-            if (_heights == null || gridI < 0 || gridI >= _N || gridJ < 0 || gridJ >= _N)
-                return;
-
-            if (!float.IsNaN(_heights[gridI, gridJ]))
-            {
-                float newHeight = _heights[gridI, gridJ] - amount;
-                _heights[gridI, gridJ] = Mathf.Max(newHeight, FloorY);
-            }
-        }
-
-        /// <summary>
-        /// Reduce terrain height in a circular region around a world position.
-        /// </summary>
-        public void ReduceHeightCircle(Vector3 worldCenter, float radiusMeters, float depthMeters)
-        {
-            if (_heights == null) return;
-
-            Vector3 local = ToLocal(worldCenter);
-            float cx = local.X;
-            float cz = local.Z;
-
-            float fx = (cx + Radius) / _step;
-            float fz = (cz + Radius) / _step;
-
-            int ci = Mathf.FloorToInt(fx);
-            int cj = Mathf.FloorToInt(fz);
-
-            int radiusInCells = Mathf.CeilToInt(radiusMeters / _step) + 1;
-
-            for (int i = Mathf.Max(0, ci - radiusInCells); i <= Mathf.Min(_N - 1, ci + radiusInCells); i++)
-            {
-                for (int j = Mathf.Max(0, cj - radiusInCells); j <= Mathf.Min(_N - 1, cj + radiusInCells); j++)
-                {
-                    if (float.IsNaN(_heights[i, j])) continue;
-
-                    float xi = -Radius + i * _step;
-                    float zj = -Radius + j * _step;
-                    float dist = Mathf.Sqrt((xi - cx) * (xi - cx) + (zj - cz) * (zj - cz));
-
-                    if (dist <= radiusMeters)
-                    {
-                        // Falloff: stronger at center, weaker at edges
-                        float falloff = 1f - (dist / radiusMeters);
-                        falloff = falloff * falloff;  // quadratic
-
-                        ReduceHeightAt(i, j, depthMeters * falloff);
-                    }
-                }
-            }
-        }
         public void RebuildMeshOnly()
         {
             if (_heights == null || _norms == null) return;
@@ -487,48 +433,25 @@ namespace DigSim3D.App
         // -------------------------------------------------------------------------
         // Internals
         // -------------------------------------------------------------------------
-        private void EnsureChildren()
-        {
-            _meshMI = GetNodeOrNull<MeshInstance3D>("Mesh");
-            if (_meshMI == null)
-            {
-                _meshMI = new MeshInstance3D { Name = "Mesh" };
-                AddChild(_meshMI);
-            }
+        // private void FloorYFromNode()
+        // {
+        //     if (FloorNodePath == null || FloorNodePath.IsEmpty)
+        //         return; // fallback: use whatever FloorY is already
 
-            _staticBody = GetNodeOrNull<StaticBody3D>("Collider");
-            if (_staticBody == null)
-            {
-                _staticBody = new StaticBody3D { Name = "Collider" };
-                AddChild(_staticBody);
-            }
+        //     var cyl = GetNodeOrNull<CsgCylinder3D>(FloorNodePath);
+        //     if (cyl == null)
+        //     {
+        //         // Not a CsgCylinder3D? Use the node's origin as floor.
+        //         var n = GetNodeOrNull<Node3D>(FloorNodePath);
+        //         if (n != null) FloorY = n.GlobalTransform.Origin.Y;
+        //         return;
+        //     }
 
-            _colShape = _staticBody.GetNodeOrNull<CollisionShape3D>("Shape");
-            if (_colShape == null)
-            {
-                _colShape = new CollisionShape3D { Name = "Shape" };
-                _staticBody.AddChild(_colShape);
-            }
-        }
-        private void FloorYFromNode()
-        {
-            if (FloorNodePath == null || FloorNodePath.IsEmpty)
-                return; // fallback: use whatever FloorY is already
-
-            var cyl = GetNodeOrNull<CsgCylinder3D>(FloorNodePath);
-            if (cyl == null)
-            {
-                // Not a CsgCylinder3D? Use the node's origin as floor.
-                var n = GetNodeOrNull<Node3D>(FloorNodePath);
-                if (n != null) FloorY = n.GlobalTransform.Origin.Y;
-                return;
-            }
-
-            // Top cap world Y = centerY + (height/2) * worldScaleY
-            float worldScaleY = cyl.GlobalTransform.Basis.Y.Length();
-            FloorY = cyl.GlobalTransform.Origin.Y + 0.5f * cyl.Height * worldScaleY;
-            GD.Print($"[TerrainDisk] Floor from node '{cyl.Name}': topY={FloorY:F4}");
-        }
+        //     // Top cap world Y = centerY + (height/2) * worldScaleY
+        //     float worldScaleY = cyl.GlobalTransform.Basis.Y.Length();
+        //     FloorY = cyl.GlobalTransform.Origin.Y + 0.5f * cyl.Height * worldScaleY;
+        //     GD.Print($"[TerrainDisk] Floor from node '{cyl.Name}': topY={FloorY:F4}");
+        // }
 
         /// <summary>
         /// Lower terrain in circular area WITHOUT rebuilding mesh.

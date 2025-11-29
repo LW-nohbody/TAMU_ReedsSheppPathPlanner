@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
 [ext_resource type="Script" uid="uid://y3xj5surludi" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
-[ext_resource type="PackedScene" uid="uid://dddgpe1f1e82x" path="res://Scenes/Vehicles/CenterArticulatedVehicle/los-alamos-center-articulated.tscn" id="2_xklxq"]
+[ext_resource type="PackedScene" uid="uid://dflbx67x3em5y" path="res://Scenes/Vehicles/BicycleVehicle/bicycle.tscn" id="2_xklxq"]
 [ext_resource type="Script" uid="uid://ytlhjpjwably" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
 [ext_resource type="Material" uid="uid://d0aiqbs32qvub" path="res://Materials/concrete.tres" id="3_qfmbg"]
 [ext_resource type="Script" uid="uid://b13ashnn4eika" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
@@ -129,7 +129,6 @@ Frequency = 0.15
 Octaves = 2
 Smooth = 0.9
 FloorY = -0.492442
-FloorNodePath = NodePath("../Tank_Outer/Tank_Floor")
 
 [node name="Tank_Outer" type="CSGCylinder3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
