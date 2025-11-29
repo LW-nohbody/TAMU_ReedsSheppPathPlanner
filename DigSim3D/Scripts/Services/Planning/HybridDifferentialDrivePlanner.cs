@@ -307,8 +307,9 @@ private (List<Vector3>, List<int>) ComputeRSWithSubdivision(
                 float distFromCenter = Mathf.Sqrt(p.X * p.X + p.Z * p.Z);
                 if (distFromCenter > maxAllowedRadius)
                 {
-                    GD.PrintErr($"❌ DD path goes through wall buffer: point=({p.X:F2},{p.Z:F2}) " +
-                                $"distFromCenter={distFromCenter:F2} > maxAllowed={maxAllowedRadius:F2}");
+                    // PathIsValid error fills up all logs, so commented out
+                    // GD.PrintErr($"❌ DD path goes through wall buffer: point=({p.X:F2},{p.Z:F2}) " +
+                    //             $"distFromCenter={distFromCenter:F2} > maxAllowed={maxAllowedRadius:F2}");
                     return false;
                 }
                 
