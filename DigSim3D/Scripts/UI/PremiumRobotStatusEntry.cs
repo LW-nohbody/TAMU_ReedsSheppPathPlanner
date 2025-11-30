@@ -51,10 +51,9 @@ namespace DigSim3D.UI
             _nameLabel = new Label
             {
                 Text = $"Agent {_robotId}",
-                Modulate = _robotColor
             };
             _nameLabel.AddThemeFontSizeOverride("font_size", 12);
-            _nameLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.65f, 0.20f, 1.0f)); // Neon orange accent
+            _nameLabel.AddThemeColorOverride("font_color", _robotColor); // Neon orange accent
             vbox.AddChild(_nameLabel);
             
             // Payload bar - dark theme

@@ -255,7 +255,7 @@ namespace DigSim3D.App
             AddChild(uiLayer);
             GD.Print($"[Director] Created CanvasLayer for UI");
 
-            _digSimUI = new DigSim3D.UI.DigSimUI();
+            _digSimUI = new DigSimUI();
             uiLayer.AddChild(_digSimUI);
             GD.Print($"[Director] Added DigSimUI to CanvasLayer");
 
