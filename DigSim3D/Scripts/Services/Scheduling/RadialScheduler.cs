@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Godot;
 using DigSim3D.App;
 using DigSim3D.Domain;
+using DigSim3D.App.Vehicles;
 
 namespace DigSim3D.Services
 {
@@ -13,7 +14,7 @@ namespace DigSim3D.Services
         /// Original API – unchanged behavior (no obstacle logic).
         /// </summary>
         public IReadOnlyList<(Vector3 digPos, float approachYaw)> PlanFirstDigTargets(
-            IReadOnlyList<VehicleBrain> vehicles,
+            IReadOnlyList<VehicleAgent> vehicles,
             TerrainDisk terrain,
             Vector3 center,
             DigScoring cfg,
@@ -32,7 +33,7 @@ namespace DigSim3D.Services
         /// New API – identical to original, plus obstacle keep-out using the SAME inflation as your planner/grid.
         /// </summary>
         public IReadOnlyList<(Vector3 digPos, float approachYaw)> PlanFirstDigTargets(
-            IReadOnlyList<VehicleBrain> vehicles,
+            IReadOnlyList<VehicleAgent> vehicles,
             TerrainDisk terrain,
             Vector3 center,
             DigScoring cfg,
@@ -71,8 +72,8 @@ namespace DigSim3D.Services
                 float theta1 = SectorTheta1(k);
 
                 var car = vehicles[k];
-                var carPos = car.Agent.GlobalTransform.Origin;
-                var carFwd = (-car.Agent.GlobalTransform.Basis.Z).WithY(0).Normalized();
+                var carPos = car.currentVehicle.GlobalTransform.Origin;
+                var carFwd = (-car.currentVehicle.GlobalTransform.Basis.Z).WithY(0).Normalized();
 
                 float bestScore = float.NegativeInfinity;
                 Vector3 bestP = carPos;

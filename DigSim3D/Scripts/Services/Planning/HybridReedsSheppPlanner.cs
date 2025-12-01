@@ -36,7 +36,8 @@ namespace DigSim3D.Services
 
         public PlannedPath Plan(Pose start, Pose goal, VehicleSpec spec, WorldState world)
         {
-            //GD.Print($"[HybridReedsSheppPlanner] DEBUG: Running Plan() — obstacles={world?.Obstacles?.Count() ?? 0}");
+            double turnRadius = spec.TurnRadius 
+                ?? throw new ArgumentException("HybridReedsSheppPlanner requires a non-null TurnRadius in VehicleSpec.");
 
             var startPos = new Vector3((float)start.X, 0, (float)start.Z);
             var goalPos = new Vector3((float)goal.X, 0, (float)goal.Z);
@@ -60,7 +61,7 @@ namespace DigSim3D.Services
             var (rsPoints, rsGears) = RSAdapter.ComputePath3D(
                 startPos, start.Yaw,
                 goalPos, goal.Yaw,
-                turnRadiusMeters: spec.TurnRadius,
+                turnRadiusMeters: turnRadius,
                 sampleStepMeters: _sampleStep
             );
 
@@ -91,7 +92,7 @@ namespace DigSim3D.Services
             }
 
             // Attempt to replan
-            var merged = TryReplanWithMidpoints(startPos, goalPos, spec.TurnRadius, gridPath, obstacles, startGear: 1, goal.Yaw, arenaRadius);
+            var merged = TryReplanWithMidpoints(startPos, goalPos, turnRadius, gridPath, obstacles, startGear: 1, goal.Yaw, arenaRadius);
 
             if (merged.points != null)
             {

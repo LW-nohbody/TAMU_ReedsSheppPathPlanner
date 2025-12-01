@@ -6,6 +6,7 @@ using DigSim3D.UI;
 
 using DigSim3D.Domain;
 using DigSim3D.Services;
+using DigSim3D.App.Vehicles;
 
 namespace DigSim3D.App
 {
@@ -23,9 +24,6 @@ namespace DigSim3D.App
         // Spawn / geometry
         [Export] public int VehicleCount = 8;
         [Export] public float SpawnRadius = 2.0f;
-        [Export] public float VehicleLength = 2.0f;
-        [Export] public float VehicleWidth = 1.2f;
-        [Export] public float RideHeight = 0.25f;
         [Export] public float NormalBlend = 0.2f;
 
         // RS params and “go 5m forward then +90° right”
@@ -47,7 +45,7 @@ namespace DigSim3D.App
 
         private TerrainDisk _terrain = null!;
         private Node3D _vehiclesRoot = null!;
-        private readonly List<VehicleVisualizer> _vehicles = new();
+        private readonly List<VehicleAgent> _vehicles = new();
 
         private Camera3D _camTop = null!, _camChase = null!, _camFree = null!, _camOrbit = null!;
         private enum CameraMode { Free, Orbit, TopDown, VehicleFollow }
@@ -68,10 +66,8 @@ namespace DigSim3D.App
         // === Dig System ===
         private DigService _digService = null!;
         private DigConfig _digConfig = DigConfig.Default;
-        private DigVisualizer _digVisualizer = null!;
         private SectorVisualizer _sectorVisualizer = null!;
         private BufferVisualizer _bufferVisualizer = null!;
-        private List<VehicleBrain> _robotBrains = new();
         private float _initialTerrainVolume = 0f;  // Store initial volume at startup
 
         private bool _simPaused = false;
@@ -128,16 +124,21 @@ namespace DigSim3D.App
                 var outward = new Vector3(Mathf.Cos(theta), 0, Mathf.Sin(theta)).Normalized();
                 var spawnXZ = outward * SpawnRadius;
 
-                var car = VehicleScene.Instantiate<VehicleVisualizer>();
+                // var car = VehicleScene.Instantiate<VehicleVisualizer>();
+                var car = VehicleScene.Instantiate<VehicleAgent>();
                 _vehiclesRoot.AddChild(car);
-                car.SetTerrain(_terrain);
+                // car.SetTerrain(_terrain);
                 car.GlobalTransform = new Transform3D(Basis.Identity, spawnXZ);
 
                 PlaceOnTerrain(car, outward);
+                
+                // Ensure vehicle physics is active after placement
+                if (car.currentVehicle != null)
+                {
+                    car.currentVehicle.Activate();
+                }
 
-                car.Wheelbase = VehicleLength;
-                car.TrackWidth = VehicleWidth;
-                car._vehicleID = $"RS-{(i + 1):00}";
+                car._vehicleID = $"Bicycle-{(i + 1):00}";
 
                 _vehicles.Add(car);
 
@@ -160,21 +161,14 @@ namespace DigSim3D.App
 
             // === PLAN FIRST DIG TARGETS (after all cars exist) ===
             var scheduler = new RadialScheduler();
-            _robotBrains = new List<VehicleBrain>(_vehicles.Count);
-            foreach (var v in _vehicles)
-            {
-                var brain = new VehicleBrain();
-                v.AddChild(brain);
-                _robotBrains.Add(brain);
-            }
 
             // === Initialize Dig Service ===
             _digService = new DigService(_terrain, _digConfig);
 
 
             // Create dig visualizer
-            _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
-            AddChild(_digVisualizer);
+            // _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
+            // AddChild(_digVisualizer);
 
 
             // Create sector visualizer to show robot sectors
@@ -203,16 +197,16 @@ namespace DigSim3D.App
             var hybridPlanner = new HybridReedsSheppPlanner();
 
             // Initialize brain dig system with path drawing callback
-            foreach (var brain in _robotBrains)
+            foreach (var vehicle in _vehicles)
             {
-                int robotIndex = _robotBrains.IndexOf(brain);
-                int totalRobots = _robotBrains.Count;
+                int robotIndex = _vehicles.IndexOf(vehicle);
+                int totalRobots = _vehicles.Count;
                 GD.Print($"🎮 [Director] Initializing brain {robotIndex} with DigConfig.DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
-                brain.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, _digVisualizer, DrawPathProjectedToTerrain, robotIndex, totalRobots);
+                vehicle.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, DrawPathProjectedToTerrain, robotIndex, totalRobots);
             }
 
             var digTargets = scheduler.PlanFirstDigTargets(
-                _robotBrains, _terrain, Vector3.Zero, DigScoring.Default,
+                _vehicles, _terrain, Vector3.Zero, DigScoring.Default,
                 keepoutR: 2.0f, randomizeOrder: true,
                 obstacles: obstacleList, inflation: 0.5f);  // Pass obstacles for manual checking
 
@@ -220,23 +214,22 @@ namespace DigSim3D.App
             for (int k = 0; k < _vehicles.Count; k++)
             {
                 var car = _vehicles[k];
-                var brain = _robotBrains[k];
                 var (digPos, approachYaw) = digTargets[k];
 
                 // Set dig target on brain
-                brain.SetDigTarget(digPos, approachYaw);
+                car.SetDigTarget(digPos, approachYaw);
 
                 // current forward yaw in XZ (Godot forward is -Z)
-                var fwd = -car.GlobalTransform.Basis.Z;
+                var fwd = -car.currentVehicle.GlobalTransform.Basis.Z;
                 double startYaw = MathF.Atan2(fwd.Z, fwd.X);
-                var start = car.GlobalTransform.Origin;
+                var start = car.currentVehicle.GlobalTransform.Origin;
 
                 // Planner poses use X/Z + yaw
                 var startPose = new Pose(start.X, start.Z, startYaw);
                 var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
 
                 // Vehicle spec
-                VehicleSpec spec = car.Spec;
+                VehicleSpec spec = car.currentVehicle.Spec;
 
                 PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, worldState);
 
@@ -244,7 +237,7 @@ namespace DigSim3D.App
                 DrawMarkerProjected(start, new Color(0, 1, 0));
                 DrawMarkerProjected(digPos, new Color(0, 0, 1));
 
-                car.SetPath(path.Points.ToArray(), path.Gears.ToArray());
+                car.currentVehicle.SetPath(path.Points.ToArray(), path.Gears.ToArray());
 
                 GD.Print($"[Director] {car.Name} path: {path.Points.Count} samples");
             }
@@ -260,10 +253,10 @@ namespace DigSim3D.App
             GD.Print($"[Director] Added DigSimUI to CanvasLayer");
 
             // Add robots to UI
-            for (int i = 0; i < _robotBrains.Count; i++)
+            for (int i = 0; i < _vehicles.Count; i++)
             {
                 var car = _vehicles[i];
-                _digSimUI.AddRobot(i, car._vehicleID, new Color((float)i / _robotBrains.Count, 0.6f, 1.0f));
+                _digSimUI.AddRobot(i, car._vehicleID, new Color((float)i / _vehicles.Count, 0.6f, 1.0f));
             }
 
             // Calculate and store initial terrain volume
@@ -425,23 +418,23 @@ namespace DigSim3D.App
                 // Update terrain dig batching
                 _digService?.Update((float)delta);
 
-                foreach (var brain in _robotBrains)
+                foreach (var vehicle in _vehicles)
                 {
-                    brain.UpdateDigBehavior((float)delta);
+                    vehicle.UpdateDigBehavior((float)delta);
 
                     if (DynamicAvoidanceEnabled)
                     {
                         if (_dynamicObstacleManager != null)
                         {
-                            int myIndex = _robotBrains.IndexOf(brain);
+                            int myIndex = _vehicles.IndexOf(vehicle);
                             bool shouldPause = false;
 
-                            foreach (var other in _robotBrains)
+                            foreach (var other in _vehicles)
                             {
-                                if (other == brain) continue;
+                                if (other == vehicle) continue;
 
-                                int otherIndex = _robotBrains.IndexOf(other);
-                                float dist = brain.Agent.GlobalTransform.Origin.DistanceTo(other.Agent.GlobalTransform.Origin);
+                                int otherIndex = _vehicles.IndexOf(other);
+                                float dist = vehicle.currentVehicle.GlobalTransform.Origin.DistanceTo(other.currentVehicle.GlobalTransform.Origin);
 
                                 if (dist < _dynamicObstacleManager.AvoidanceRadius)
                                 {
@@ -454,22 +447,22 @@ namespace DigSim3D.App
                             }
 
                             if (shouldPause)
-                                brain.FreezeForPriority();     // ← replan happens once inside this
+                                vehicle.FreezeForPriority();     // ← replan happens once inside this
                             else
-                                brain.UnfreezeFromPriority();  // ← resets the "allowed to replan" flag
+                                vehicle.UnfreezeFromPriority();  // ← resets the "allowed to replan" flag
                         }
                     }
                 }
             }
 
             // Update UI with robot stats
-            if (_digSimUI != null && _robotBrains.Count > 0)
+            if (_digSimUI != null && _vehicles.Count > 0)
             {
-                for (int i = 0; i < _robotBrains.Count; i++)
+                for (int i = 0; i < _vehicles.Count; i++)
                 {
-                    var brain = _robotBrains[i];
-                    var state = brain.DigState;
-                    var robotPos = brain.Agent.GlobalTransform.Origin;
+                    var vehicle = _vehicles[i];
+                    var state = vehicle.DigState;
+                    var robotPos = vehicle.currentVehicle.GlobalTransform.Origin;
 
                     float payloadPercent = state.MaxPayload > 0 ? (state.CurrentPayload / state.MaxPayload) : 0f;
                     _digSimUI.UpdateRobotPayload(i, payloadPercent, robotPos, state.State.ToString());
@@ -636,11 +629,11 @@ namespace DigSim3D.App
         // ------------------------------------------------
 
         // === Placement on terrain using FL/FR/RC (unchanged) =======================
-        private void PlaceOnTerrain(VehicleVisualizer car, Vector3 outward)
+        private void PlaceOnTerrain(VehicleAgent car, Vector3 outward)
         {
             var yawBasis = Basis.LookingAt(outward, Vector3.Up);
-            float halfL = VehicleLength * 0.5f;
-            float halfW = VehicleWidth * 0.5f;
+            float halfL = car.currentVehicle.VehicleLength * 0.5f;
+            float halfW = car.currentVehicle.VehicleWidth * 0.5f;
 
             Vector3 f = -yawBasis.Z;      // Godot forward is -Z
             Vector3 r = yawBasis.X;
@@ -669,8 +662,8 @@ namespace DigSim3D.App
             Vector3 zAxis = -fProj;
             var basis = new Basis(right, n, zAxis).Orthonormalized();
 
-            float ride = Mathf.Clamp(RideHeight, 0.02f, 0.12f);
-            Vector3 pos = hC + n * ride;
+            // float ride = Mathf.Clamp(RideHeight, 0.02f, 0.12f);
+            Vector3 pos = hC + n * 0.2f;
 
             car.GlobalTransform = new Transform3D(basis, pos);
         }

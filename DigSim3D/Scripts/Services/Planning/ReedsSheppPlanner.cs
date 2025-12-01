@@ -17,6 +17,9 @@ namespace DigSim3D.Services
 
         public PlannedPath Plan(Pose start, Pose goal, VehicleSpec spec, WorldState _world)
         {
+            double turnRadius = spec.TurnRadius 
+                ?? throw new ArgumentException("ReedsSheppPlanner requires a non-null TurnRadius in VehicleSpec.");
+
             var startPos = new Vector3((float)start.X, 0, (float)start.Z);
             var goalPos = new Vector3((float)goal.X, 0, (float)goal.Z);
 
@@ -25,12 +28,12 @@ namespace DigSim3D.Services
             DebugPath.Check(pathId, "inputs_world",
                 ("s.x", startPos.X), ("s.y", startPos.Z), ("s.th", start.Yaw),
                 ("g.x", goalPos.X), ("g.y", goalPos.Z), ("g.th", goal.Yaw),
-                ("R", spec.TurnRadius), ("stepM", _sampleStep));
+                ("R", turnRadius), ("stepM", _sampleStep));
 
 
             var (pts, gears) = RSAdapter.ComputePath3D(
                 startPos, start.Yaw, goalPos, goal.Yaw,
-                turnRadiusMeters: spec.TurnRadius,
+                turnRadiusMeters: turnRadius,
                 sampleStepMeters: _sampleStep
             );
 

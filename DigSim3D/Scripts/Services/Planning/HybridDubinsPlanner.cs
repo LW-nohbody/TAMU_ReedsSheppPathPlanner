@@ -37,7 +37,8 @@ namespace DigSim3D.Services
 
         public PlannedPath Plan(Pose start, Pose goal, VehicleSpec spec, WorldState world)
         {
-            //GD.Print($"[HybridReedsSheppPlanner] DEBUG: Running Plan() — obstacles={world?.Obstacles?.Count() ?? 0}");
+            double turnRadius = spec.TurnRadius 
+                ?? throw new ArgumentException("HybridDubinsPlanner requires a non-null TurnRadius in VehicleSpec.");
 
             var startPos = new Vector3((float)start.X, 0, (float)start.Z);
             var goalPos = new Vector3((float)goal.X, 0, (float)goal.Z);
@@ -54,7 +55,7 @@ namespace DigSim3D.Services
             float angleWallDiff = angleToWall - (float)goal.Yaw;
             float angleWallDist = MathF.Atan2(MathF.Sin(angleWallDiff), MathF.Cos(angleWallDiff));
 
-            if(Math.Abs(angleWallDist) < 0.48 && d < spec.TurnRadius+0.75)
+            if(Math.Abs(angleWallDist) < 0.48 && d < turnRadius + 0.75)
             {
                 GD.Print("[HybridDubinsPlanner] Reassigning goal orientation to avoid wall");
                 var yawSign = angleWallDiff / Math.Abs(angleWallDiff);
@@ -64,7 +65,7 @@ namespace DigSim3D.Services
             var (dPoints, dGears) = DAdapter.ComputePath3D(
                 startPos, start.Yaw,
                 goalPos, goal.Yaw,
-                turnRadiusMeters: spec.TurnRadius,
+                turnRadiusMeters: turnRadius,
                 fieldRadius: world.Terrain.Radius,
                 sampleStepMeters: _sampleStep
             );
@@ -72,7 +73,7 @@ namespace DigSim3D.Services
             GD.Print($"[HybridDubinsPlanner] Goal Pos: ({goalPos.X}, {goalPos.Z}) and orientation: {goal.Yaw}");
 
             var rsPts = dPoints.ToList();
-            if (obstacles.Count == 0 || PathIsValid(rsPts, obstacles, goal.Yaw, spec.TurnRadius, world.Terrain.Radius))
+            if (obstacles.Count == 0 || PathIsValid(rsPts, obstacles, goal.Yaw, turnRadius, world.Terrain.Radius))
             {
                 //GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
 #if DEBUG
@@ -99,7 +100,7 @@ namespace DigSim3D.Services
             }
 
             // Attempt to replan
-            var merged = TryReplanWithMidpoints(startPos, goalPos, spec.TurnRadius, gridPath, obstacles, startGear: 1, world,
+            var merged = TryReplanWithMidpoints(startPos, goalPos, turnRadius, gridPath, obstacles, startGear: 1, world,
             goal.Yaw, start.Yaw, arenaRadius);
 
             if (merged.points != null)

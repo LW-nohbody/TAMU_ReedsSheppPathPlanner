@@ -81,7 +81,7 @@ namespace DigSim3D.Services
 
             // Attempt to replan
             var merged = TryReplanWithMidpoints(startPos, goalPos, gridPath, obstacles, startGear: 1, 
-    goal.Yaw, arenaRadius);
+            goal.Yaw, arenaRadius);
 
             if (merged.points != null)
             {
@@ -100,176 +100,176 @@ namespace DigSim3D.Services
         // 🔧 Replanning logic — old midpoint-subdivision logic modernized
         // ================================================================
 
-private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
-    Vector3 start,
-    Vector3 goal,
-    List<Vector3> gridPath,
-    List<CylinderObstacle> obstacles,
-    int startGear,
-    double goalYaw,
-    float arenaRadius)
-{
-    if (gridPath == null || gridPath.Count < 2)
-        return (null, null);
-
-    // --- 1️⃣ Simplify the A* path (remove nearly-collinear points) ---
-    var simplifiedPath = new List<Vector3> { gridPath[0] };
-    const float angleThreshold = 5f * (float)(Math.PI / 180.0); 
-    for (int i = 1; i < gridPath.Count - 1; i++)
-    {
-        Vector3 prev = simplifiedPath.Last();
-        Vector3 curr = gridPath[i];
-        Vector3 next = gridPath[i + 1];
-        Vector3 v1 = (curr - prev).WithY(0).Normalized();
-        Vector3 v2 = (next - curr).WithY(0).Normalized();
-        float angle = (float)Math.Acos(Math.Clamp(v1.Dot(v2), -1f, 1f));
-        if (Math.Abs(angle) > angleThreshold)
-            simplifiedPath.Add(curr);
-    }
-    simplifiedPath.Add(gridPath[^1]);
-
-    // --- 2️⃣ Build initial RS path along simplified path ---
-    var mergedPoints = new List<Vector3> { start };
-    var mergedGears = new List<int> { startGear };
-    double prevYaw = Math.Atan2((simplifiedPath[0] - start).Z, (simplifiedPath[0] - start).X);
-
-    int index = 0;
-    while (index < simplifiedPath.Count)
-    {
-        Vector3 segStart = mergedPoints.Last();
-        int farthestReachable = index;
-
-        // Try skipping as many A* points as possible
-        for (int j = index; j < simplifiedPath.Count; j++)
+        private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
+            Vector3 start,
+            Vector3 goal,
+            List<Vector3> gridPath,
+            List<CylinderObstacle> obstacles,
+            int startGear,
+            double goalYaw,
+            float arenaRadius)
         {
-            Vector3 segEnd = simplifiedPath[j];
-            double segYaw = Math.Atan2((segEnd - segStart).Z, (segEnd - segStart).X);
+            if (gridPath == null || gridPath.Count < 2)
+                return (null, null);
 
-            var (rsTest, rsGearsTest) = DDAdapter.ComputePath3D(segStart, prevYaw, segEnd, segYaw, _sampleStep);
-            if (rsTest.Length == 0 || !PathIsValid(rsTest.ToList(), obstacles, arenaRadius))
-                break;
-
-            farthestReachable = j;
-        }
-
-        Vector3 target = simplifiedPath[farthestReachable];
-        double targetYaw = Math.Atan2((target - segStart).Z, (target - segStart).X);
-
-        var (rsSegment, rsGears) = DDAdapter.ComputePath3D(segStart, prevYaw, target, targetYaw, _sampleStep);
-
-        int subdiv = 0;
-        while ((rsSegment.Length == 0 || !PathIsValid(rsSegment.ToList(), obstacles, arenaRadius)) && subdiv < 5)
-        {
-            subdiv++;
-            Vector3 mid = segStart.Lerp(target, 0.5f);
-            double midYaw = Math.Atan2((mid - segStart).Z, (mid - segStart).X);
-
-            var (rs1, rsGears1) = DDAdapter.ComputePath3D(segStart, prevYaw, mid, midYaw, _sampleStep);
-            var (rs2, rsGears2) = DDAdapter.ComputePath3D(mid, midYaw, target, targetYaw, _sampleStep);
-
-            if (rs1.Length == 0 || rs2.Length == 0 ||
-                !PathIsValid(rs1.ToList(), obstacles, arenaRadius) || !PathIsValid(rs2.ToList(), obstacles, arenaRadius))
-                break;
-
-            mergedPoints.AddRange(rs1.Skip(1));
-            mergedPoints.AddRange(rs2.Skip(1));
-            mergedGears.AddRange(rsGears1.Skip(1));
-            mergedGears.AddRange(rsGears2.Skip(1));
-
-            prevYaw = targetYaw;
-            rsSegment = new Vector3[] { };
-        }
-
-        if (rsSegment.Length > 0)
-        {
-            mergedPoints.AddRange(rsSegment.Skip(1));
-            mergedGears.AddRange(rsGears.Skip(1));
-            prevYaw = targetYaw;
-        }
-
-        index = farthestReachable + 1;
-    }
-
-    // --- 3️⃣ Post-process: simplify RS path by skipping intermediate points ---
-    var simplifiedRSPoints = new List<Vector3> { mergedPoints[0] };
-    var simplifiedGears = new List<int> { mergedGears[0] };
-    int cur = 0;
-    while (cur < mergedPoints.Count - 1)
-    {
-        int farthest = cur + 1;
-        for (int j = mergedPoints.Count - 1; j > cur; j--)
-        {
-            double segYaw = Math.Atan2((mergedPoints[j] - mergedPoints[cur]).Z,
-                                       (mergedPoints[j] - mergedPoints[cur]).X);
-            var (rsTest, rsGearsTest) = DDAdapter.ComputePath3D(mergedPoints[cur], prevYaw,
-                                                                mergedPoints[j], segYaw, _sampleStep);
-            if (rsTest.Length > 0 && PathIsValid(rsTest.ToList(), obstacles, arenaRadius))
+            // --- 1️⃣ Simplify the A* path (remove nearly-collinear points) ---
+            var simplifiedPath = new List<Vector3> { gridPath[0] };
+            const float angleThreshold = 5f * (float)(Math.PI / 180.0); 
+            for (int i = 1; i < gridPath.Count - 1; i++)
             {
-                farthest = j;
-                break;
+                Vector3 prev = simplifiedPath.Last();
+                Vector3 curr = gridPath[i];
+                Vector3 next = gridPath[i + 1];
+                Vector3 v1 = (curr - prev).WithY(0).Normalized();
+                Vector3 v2 = (next - curr).WithY(0).Normalized();
+                float angle = (float)Math.Acos(Math.Clamp(v1.Dot(v2), -1f, 1f));
+                if (Math.Abs(angle) > angleThreshold)
+                    simplifiedPath.Add(curr);
             }
+            simplifiedPath.Add(gridPath[^1]);
+
+            // --- 2️⃣ Build initial RS path along simplified path ---
+            var mergedPoints = new List<Vector3> { start };
+            var mergedGears = new List<int> { startGear };
+            double prevYaw = Math.Atan2((simplifiedPath[0] - start).Z, (simplifiedPath[0] - start).X);
+
+            int index = 0;
+            while (index < simplifiedPath.Count)
+            {
+                Vector3 segStart = mergedPoints.Last();
+                int farthestReachable = index;
+
+                // Try skipping as many A* points as possible
+                for (int j = index; j < simplifiedPath.Count; j++)
+                {
+                    Vector3 segEnd = simplifiedPath[j];
+                    double segYaw = Math.Atan2((segEnd - segStart).Z, (segEnd - segStart).X);
+
+                    var (rsTest, rsGearsTest) = DDAdapter.ComputePath3D(segStart, prevYaw, segEnd, segYaw, _sampleStep);
+                    if (rsTest.Length == 0 || !PathIsValid(rsTest.ToList(), obstacles, arenaRadius))
+                        break;
+
+                    farthestReachable = j;
+                }
+
+                Vector3 target = simplifiedPath[farthestReachable];
+                double targetYaw = Math.Atan2((target - segStart).Z, (target - segStart).X);
+
+                var (rsSegment, rsGears) = DDAdapter.ComputePath3D(segStart, prevYaw, target, targetYaw, _sampleStep);
+
+                int subdiv = 0;
+                while ((rsSegment.Length == 0 || !PathIsValid(rsSegment.ToList(), obstacles, arenaRadius)) && subdiv < 5)
+                {
+                    subdiv++;
+                    Vector3 mid = segStart.Lerp(target, 0.5f);
+                    double midYaw = Math.Atan2((mid - segStart).Z, (mid - segStart).X);
+
+                    var (rs1, rsGears1) = DDAdapter.ComputePath3D(segStart, prevYaw, mid, midYaw, _sampleStep);
+                    var (rs2, rsGears2) = DDAdapter.ComputePath3D(mid, midYaw, target, targetYaw, _sampleStep);
+
+                    if (rs1.Length == 0 || rs2.Length == 0 ||
+                        !PathIsValid(rs1.ToList(), obstacles, arenaRadius) || !PathIsValid(rs2.ToList(), obstacles, arenaRadius))
+                        break;
+
+                    mergedPoints.AddRange(rs1.Skip(1));
+                    mergedPoints.AddRange(rs2.Skip(1));
+                    mergedGears.AddRange(rsGears1.Skip(1));
+                    mergedGears.AddRange(rsGears2.Skip(1));
+
+                    prevYaw = targetYaw;
+                    rsSegment = new Vector3[] { };
+                }
+
+                if (rsSegment.Length > 0)
+                {
+                    mergedPoints.AddRange(rsSegment.Skip(1));
+                    mergedGears.AddRange(rsGears.Skip(1));
+                    prevYaw = targetYaw;
+                }
+
+                index = farthestReachable + 1;
+            }
+
+            // --- 3️⃣ Post-process: simplify RS path by skipping intermediate points ---
+            var simplifiedRSPoints = new List<Vector3> { mergedPoints[0] };
+            var simplifiedGears = new List<int> { mergedGears[0] };
+            int cur = 0;
+            while (cur < mergedPoints.Count - 1)
+            {
+                int farthest = cur + 1;
+                for (int j = mergedPoints.Count - 1; j > cur; j--)
+                {
+                    double segYaw = Math.Atan2((mergedPoints[j] - mergedPoints[cur]).Z,
+                                            (mergedPoints[j] - mergedPoints[cur]).X);
+                    var (rsTest, rsGearsTest) = DDAdapter.ComputePath3D(mergedPoints[cur], prevYaw,
+                                                                        mergedPoints[j], segYaw, _sampleStep);
+                    if (rsTest.Length > 0 && PathIsValid(rsTest.ToList(), obstacles, arenaRadius))
+                    {
+                        farthest = j;
+                        break;
+                    }
+                }
+
+                // Add RS segment to simplified list
+                double yawToAdd = Math.Atan2((mergedPoints[farthest] - mergedPoints[cur]).Z,
+                                            (mergedPoints[farthest] - mergedPoints[cur]).X);
+                var (rsFinal, rsFinalGears) = DDAdapter.ComputePath3D(mergedPoints[cur], prevYaw,
+                                                                    mergedPoints[farthest], yawToAdd, _sampleStep);
+                if (rsFinal.Length > 0)
+                {
+                    simplifiedRSPoints.AddRange(rsFinal.Skip(1));
+                    simplifiedGears.AddRange(rsFinalGears.Skip(1));
+                    prevYaw = yawToAdd;
+                }
+
+                cur = farthest;
+            }
+
+            if (simplifiedRSPoints.Count > 1)
+                simplifiedGears[^1] = 1;
+
+            //GD.Print($"[HybridReedsSheppPlanner] RS replanning + simplification finished with {simplifiedRSPoints.Count} points.");
+            return (simplifiedRSPoints, simplifiedGears);
         }
 
-        // Add RS segment to simplified list
-        double yawToAdd = Math.Atan2((mergedPoints[farthest] - mergedPoints[cur]).Z,
-                                     (mergedPoints[farthest] - mergedPoints[cur]).X);
-        var (rsFinal, rsFinalGears) = DDAdapter.ComputePath3D(mergedPoints[cur], prevYaw,
-                                                              mergedPoints[farthest], yawToAdd, _sampleStep);
-        if (rsFinal.Length > 0)
-        {
-            simplifiedRSPoints.AddRange(rsFinal.Skip(1));
-            simplifiedGears.AddRange(rsFinalGears.Skip(1));
-            prevYaw = yawToAdd;
-        }
 
-        cur = farthest;
+
+
+    // Recursive RS computation with midpoint subdivision
+    private (List<Vector3>, List<int>) ComputeRSWithSubdivision(
+        Vector3 start,
+        Vector3 end,
+        double startYaw,
+        double endYaw,
+        List<CylinderObstacle> obstacles,
+        int depth,
+        int maxDepth,
+        float arenaRadius)
+    {
+        if (depth > maxDepth)
+            return (null, null);
+
+        var (rsSegment, rsGears) = DDAdapter.ComputePath3D(start, startYaw, end, endYaw, _sampleStep);
+        if (rsSegment.Length > 0 && PathIsValid(rsSegment.ToList(), obstacles, arenaRadius))
+            return (rsSegment.ToList(), rsGears.ToList());
+
+        // Subdivide at midpoint
+        Vector3 mid = start.Lerp(end, 0.5f);
+        double midYaw = Math.Atan2((mid - start).Z, (mid - start).X);
+
+        var (firstHalf, gears1) = ComputeRSWithSubdivision(start, mid, startYaw, midYaw, obstacles, depth + 1, maxDepth, arenaRadius);
+        var (secondHalf, gears2) = ComputeRSWithSubdivision(mid, end, midYaw, endYaw, obstacles, depth + 1, maxDepth, arenaRadius);
+
+        if (firstHalf == null || secondHalf == null)
+            return (null, null);
+
+        // Merge, skip duplicate midpoint
+        var merged = new List<Vector3>(firstHalf);
+        merged.AddRange(secondHalf.Skip(1));
+        var mergedGears = new List<int>(gears1);
+        mergedGears.AddRange(gears2.Skip(1));
+        return (merged, mergedGears);
     }
-
-    if (simplifiedRSPoints.Count > 1)
-        simplifiedGears[^1] = 1;
-
-    //GD.Print($"[HybridReedsSheppPlanner] RS replanning + simplification finished with {simplifiedRSPoints.Count} points.");
-    return (simplifiedRSPoints, simplifiedGears);
-}
-
-
-
-
-// Recursive RS computation with midpoint subdivision
-private (List<Vector3>, List<int>) ComputeRSWithSubdivision(
-    Vector3 start,
-    Vector3 end,
-    double startYaw,
-    double endYaw,
-    List<CylinderObstacle> obstacles,
-    int depth,
-    int maxDepth,
-    float arenaRadius)
-{
-    if (depth > maxDepth)
-        return (null, null);
-
-    var (rsSegment, rsGears) = DDAdapter.ComputePath3D(start, startYaw, end, endYaw, _sampleStep);
-    if (rsSegment.Length > 0 && PathIsValid(rsSegment.ToList(), obstacles, arenaRadius))
-        return (rsSegment.ToList(), rsGears.ToList());
-
-    // Subdivide at midpoint
-    Vector3 mid = start.Lerp(end, 0.5f);
-    double midYaw = Math.Atan2((mid - start).Z, (mid - start).X);
-
-    var (firstHalf, gears1) = ComputeRSWithSubdivision(start, mid, startYaw, midYaw, obstacles, depth + 1, maxDepth, arenaRadius);
-    var (secondHalf, gears2) = ComputeRSWithSubdivision(mid, end, midYaw, endYaw, obstacles, depth + 1, maxDepth, arenaRadius);
-
-    if (firstHalf == null || secondHalf == null)
-        return (null, null);
-
-    // Merge, skip duplicate midpoint
-    var merged = new List<Vector3>(firstHalf);
-    merged.AddRange(secondHalf.Skip(1));
-    var mergedGears = new List<int>(gears1);
-    mergedGears.AddRange(gears2.Skip(1));
-    return (merged, mergedGears);
-}
 
 
 
@@ -292,7 +292,9 @@ private (List<Vector3>, List<int>) ComputeRSWithSubdivision(
             path.Points.AddRange(pts);
             path.Gears.AddRange(gears);
             return path;
-        }        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, float arenaRadius)
+        }        
+        
+        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, float arenaRadius)
         {
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
 

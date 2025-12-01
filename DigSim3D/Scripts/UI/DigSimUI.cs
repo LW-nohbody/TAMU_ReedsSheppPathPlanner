@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DigSim3D.Domain;
 using DigSim3D.App;
+using DigSim3D.App.Vehicles;
 
 namespace DigSim3D.UI
 {
@@ -30,7 +31,7 @@ namespace DigSim3D.UI
         private DigConfig _digConfig = null!;
         private float _initialTerrainVolume = 0f;
         private PremiumUIPanel _settingsPanel = null!;
-        private List<VehicleVisualizer> _vehicles = new();
+        private List<VehicleAgent> _vehicles = new();
 
         // Draggable state
         private bool _isDraggingLeftPanel = false;
@@ -448,9 +449,9 @@ namespace DigSim3D.UI
 
         public void SetInitialVolume(float volume) => _initialTerrainVolume = volume;
 
-        public void SetVehicles(List<VehicleVisualizer> vehicles) => _vehicles = vehicles;
+        public void SetVehicles(List<VehicleAgent> vehicles) => _vehicles = vehicles;
 
-        // Preset callbacks
+        // Preset callbacks 
         private void OnSpeedPresetSelected(float value)
         {
             if (_speedSlider == null) return;
@@ -483,7 +484,7 @@ namespace DigSim3D.UI
             float speed = (float)value;
             foreach (var vehicle in _vehicles)
             {
-                vehicle.SpeedMps = speed;
+                vehicle.speed = speed;
             }
             GD.Print($"[Parameters] Agent velocity set to {speed:F2} m/s");
         }
