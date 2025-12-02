@@ -3,6 +3,9 @@ using System;
 
 namespace DigSim3D.Domain
 {
+    /// <summary>
+    /// Abstract class for obstacles
+    /// </summary>
     public abstract partial class Obstacle3D : Node3D
     {
         // Optional visualization

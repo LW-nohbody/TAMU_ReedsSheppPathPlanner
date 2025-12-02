@@ -72,6 +72,15 @@ namespace DigSim3D.App
             GD.Print("[RobotStatusPanel] ✅ Positioned at BOTTOM-RIGHT (Press I to toggle)");
         }
 
+        /// <summary>
+        /// Updates the status of the robot for display in UI status panel
+        /// </summary>
+        /// <param name="robotId"></param>
+        /// <param name="status"></param>
+        /// <param name="payload"></param>
+        /// <param name="digsCompleted"></param>
+        /// <param name="position"></param>
+        /// <param name="totalDug"></param>
         public void UpdateRobotStatus(int robotId, string status, float payload, int digsCompleted, Vector3 position, float totalDug)
         {
             if (robotId < 0 || robotId >= _robotLabels.Count) return;

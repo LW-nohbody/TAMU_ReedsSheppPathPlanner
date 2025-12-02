@@ -4,9 +4,20 @@ namespace DigSim3D.Services
     using System;
     using System.Collections.Generic;
 
+    /// <summary>
+    /// Converts high-level path descriptions generated for a Reeds-Shepp path into discrete 2D points
+    /// </summary>
     public static class RsSampler
     {
         // startWorld: (x,y,thetaRadians) in world units; path normalized (R=1); R scales to world units
+        /// <summary>
+        /// Produces a polyline by incrementally stepping along the path with a near-constant spacing ds
+        /// </summary>
+        /// <param name="startWorld"></param>
+        /// <param name="path"></param>
+        /// <param name="R"></param>
+        /// <param name="ds"></param>
+        /// <returns></returns>
         public static Vector2[] SamplePolyline(
             (double x, double y, double theta) startWorld,
             List<PathElement> path,
@@ -65,6 +76,15 @@ namespace DigSim3D.Services
             return pts.ToArray();
         }
 
+        /// <summary>
+        /// Extends SamplePolyline to account for gears
+        /// </summary>
+        /// <param name="startWorld"></param>
+        /// <param name="path"></param>
+        /// <param name="R"></param>
+        /// <param name="ds"></param>
+        /// <param name="outPts"></param>
+        /// <param name="outGears"></param>
         public static void SamplePolylineWithGears(
             (double x, double y, double theta) startWorld,
             List<PathElement> path,
@@ -125,6 +145,14 @@ namespace DigSim3D.Services
             }
         }
 
+        /// <summary>
+        /// Produces a densely sampled, mathematically consistent polyline without incremental integration drift
+        /// </summary>
+        /// <param name="startWorldMath"></param>
+        /// <param name="path"></param>
+        /// <param name="R"></param>
+        /// <param name="dsApprox"></param>
+        /// <returns></returns>
         public static Vector2[] SamplePolylineExact(
         (double x, double y, double theta) startWorldMath,
         List<PathElement> path,

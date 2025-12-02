@@ -50,9 +50,19 @@ using System.Security.Cryptography;
 // }
 namespace DigSim3D.Services
 {
+    /// <summary>
+    /// Generates the high-level Dubins paths
+    /// </summary>
     public static class DubinsPaths
     {
         // ---------- families 1..6 (all take phi in RADIANS) ----------
+        /// <summary>
+        /// Generates possible path
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path1(double x, double y, double phi)
         {
             phi = Utils.M(phi);
@@ -86,6 +96,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates possible path
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path2(double x, double y, double phi)
         {
             // y = -y;
@@ -121,6 +138,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates possible path
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path3(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -132,6 +156,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates possible path
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path4(double x, double y, double phi)
         {
             phi = Utils.M(phi);
@@ -149,6 +180,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates possible path
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path5(double x, double y, double phi)
         {
             y = -y;
@@ -162,6 +200,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates possible path
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path6(double x, double y, double phi)
         {
             y = -y;
@@ -183,6 +228,12 @@ namespace DigSim3D.Services
         }
 
         // ----- planner API: start/end in RADIANS, x/y normalized by R -----
+        /// <summary>
+        /// Generates all possible Dubins paths
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <returns></returns>
         public static List<List<PathElement>> GetAllPaths(
             (double x, double y, double theta) start,
             (double x, double y, double theta) end)
@@ -199,6 +250,12 @@ namespace DigSim3D.Services
             return candidates.Where(p => p.Count > 0).ToList();
         }
 
+        /// <summary>
+        /// Generates all Dubins paths and returns shortest
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <returns></returns>
         public static List<PathElement> GetOptimalPath(
             (double x, double y, double theta) start,
             (double x, double y, double theta) end)

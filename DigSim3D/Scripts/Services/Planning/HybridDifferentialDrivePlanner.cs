@@ -7,11 +7,10 @@ using DigSim3D.Domain;
 
 namespace DigSim3D.Services
 {
-    /// <summary>
-    /// Hybrid path planner that first tries a Reeds–Shepp path.
-    /// If blocked, it computes an A* grid path and then stitches
-    /// collision-free RS segments through key A* waypoints.
-    /// </summary>
+    /// <summary> 
+    /// Hybrid path planner that first tries a Differential Drive path.
+    /// If blocked, it computes an A* grid path and then stitches collision-free DD segments through key A* waypoints.
+    /// </summary> 
     public sealed class HybridDifferentialDrivePlanner : IPathPlanner
     {
         private readonly float _sampleStep;
@@ -34,10 +33,17 @@ namespace DigSim3D.Services
             _maxAttempts = maxAttempts;
         }
 
+        /// <summary>
+        /// Plans the Differential Drive path around obstacles
+        /// Starts by checking if it can reach the goal position, if not calls the replanning function
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="goal"></param>
+        /// <param name="spec"></param>
+        /// <param name="world"></param>
+        /// <returns></returns>
         public PlannedPath Plan(Pose start, Pose goal, VehicleSpec spec, WorldState world)
         {
-            //GD.Print($"[HybridReedsSheppPlanner] DEBUG: Running Plan() — obstacles={world?.Obstacles?.Count() ?? 0}");
-
             var startPos = new Vector3((float)start.X, 0, (float)start.Z);
             var goalPos = new Vector3((float)goal.X, 0, (float)goal.Z);
 
@@ -46,7 +52,7 @@ namespace DigSim3D.Services
             // Get arena radius for wall boundary checking
             float arenaRadius = world?.Terrain?.Radius ?? float.PositiveInfinity;
 
-            // 1️⃣ Direct Reeds–Shepp path
+            // 1️⃣ Direct Differential Drive path
             var (ddPoints, ddGears) = DDAdapter.ComputePath3D(
                 startPos, start.Yaw,
                 goalPos, goal.Yaw,
@@ -56,17 +62,8 @@ namespace DigSim3D.Services
             var ddPts = ddPoints.ToList();
             if (obstacles.Count == 0 || PathIsValid(ddPts, obstacles, arenaRadius))
             {
-                //GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
-                #if DEBUG
-                //GD.Print("[HybridReedsSheppPlanner] (Debug) Forcing grid visualization even for clear RS path.");
-                //DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, 
-                //                    new List<Vector3> { startPos, goalPos }, 
-                //                    _gridSize, _gridExtent);
-                #endif
                 return BuildPath(ddPts, ddGears.ToList());
             }
-
-            //GD.Print("[HybridReedsSheppPlanner] Direct RS path blocked. Using cached A* grid.");
 
             var gridPath = GridPlannerPersistent.Plan2DPath(startPos, goalPos);
 
@@ -90,16 +87,23 @@ namespace DigSim3D.Services
                 return BuildPath(merged.points, merged.gears);
             }
 
-            GD.PrintErr("❌ Could not find clear RS route via midpoints. Returning fallback RS path.");
+            GD.PrintErr("❌ Could not find clear DD route via midpoints. Returning fallback DD path.");
             //DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, rsPts, _gridSize, _gridExtent);
             return BuildPath(ddPts, ddGears.ToList());
 
         }
 
-        // ================================================================
-        // 🔧 Replanning logic — old midpoint-subdivision logic modernized
-        // ================================================================
-
+/// <summary>
+/// Plans the Differential Drive path around obstacles by stitching together valid paths to A* subgoals
+/// </summary>
+/// <param name="start"></param>
+/// <param name="goal"></param>
+/// <param name="gridPath"></param>
+/// <param name="obstacles"></param>
+/// <param name="startGear"></param>
+/// <param name="goalYaw"></param>
+/// <param name="arenaRadius"></param>
+/// <returns></returns>
 private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
     Vector3 start,
     Vector3 goal,
@@ -128,7 +132,7 @@ private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
     }
     simplifiedPath.Add(gridPath[^1]);
 
-    // --- 2️⃣ Build initial RS path along simplified path ---
+    // --- 2️⃣ Build initial DD path along simplified path ---
     var mergedPoints = new List<Vector3> { start };
     var mergedGears = new List<int> { startGear };
     double prevYaw = Math.Atan2((simplifiedPath[0] - start).Z, (simplifiedPath[0] - start).X);
@@ -158,6 +162,8 @@ private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
         var (rsSegment, rsGears) = DDAdapter.ComputePath3D(segStart, prevYaw, target, targetYaw, _sampleStep);
 
         int subdiv = 0;
+
+        // If can't reach any A* point, subdivide path
         while ((rsSegment.Length == 0 || !PathIsValid(rsSegment.ToList(), obstacles, arenaRadius)) && subdiv < 5)
         {
             subdiv++;
@@ -190,7 +196,7 @@ private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
         index = farthestReachable + 1;
     }
 
-    // --- 3️⃣ Post-process: simplify RS path by skipping intermediate points ---
+    // --- 3️⃣ Post-process: simplify DD path by skipping intermediate points ---
     var simplifiedRSPoints = new List<Vector3> { mergedPoints[0] };
     var simplifiedGears = new List<int> { mergedGears[0] };
     int cur = 0;
@@ -210,7 +216,7 @@ private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
             }
         }
 
-        // Add RS segment to simplified list
+        // Add DD segment to simplified list
         double yawToAdd = Math.Atan2((mergedPoints[farthest] - mergedPoints[cur]).Z,
                                      (mergedPoints[farthest] - mergedPoints[cur]).X);
         var (rsFinal, rsFinalGears) = DDAdapter.ComputePath3D(mergedPoints[cur], prevYaw,
@@ -228,14 +234,24 @@ private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
     if (simplifiedRSPoints.Count > 1)
         simplifiedGears[^1] = 1;
 
-    //GD.Print($"[HybridReedsSheppPlanner] RS replanning + simplification finished with {simplifiedRSPoints.Count} points.");
     return (simplifiedRSPoints, simplifiedGears);
 }
 
 
 
 
-// Recursive RS computation with midpoint subdivision
+/// <summary>
+/// [Deprecated] Recursive DD computation with midpoint subdivision
+/// </summary>
+/// <param name="start"></param>
+/// <param name="end"></param>
+/// <param name="startYaw"></param>
+/// <param name="endYaw"></param>
+/// <param name="obstacles"></param>
+/// <param name="depth"></param>
+/// <param name="maxDepth"></param>
+/// <param name="arenaRadius"></param>
+/// <returns></returns>
 private (List<Vector3>, List<int>) ComputeRSWithSubdivision(
     Vector3 start,
     Vector3 end,
@@ -275,26 +291,32 @@ private (List<Vector3>, List<int>) ComputeRSWithSubdivision(
 
 
 
-
-
-
-
-
-
-
-
         // ================================================================
         // ✅ Helpers
         // ================================================================
+        /// <summary>
+        /// Builds a path from a list of points and gears
+        /// </summary>
+        /// <param name="pts"></param>
+        /// <param name="gears"></param>
+        /// <returns></returns>
         private PlannedPath BuildPath(List<Vector3> pts, List<int> gears)
         {
             var path = new PlannedPath();
             path.Points.AddRange(pts);
             path.Gears.AddRange(gears);
             return path;
-        }        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, float arenaRadius)
+        }
+
+        /// <summary>
+        /// Checks if a path is valid, or if it hits an obstacle or the arena wall
+        /// </summary>
+        /// <param name="pathPoints"></param>
+        /// <param name="obstacles"></param>
+        /// <param name="arenaRadius"></param>
+        /// <returns></returns>
+        private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, float arenaRadius)
         {
-            //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
 
             const float WallBufferMeters = 0.1f; // 0.1m wall buffer
             float maxAllowedRadius = arenaRadius - WallBufferMeters;
@@ -321,32 +343,29 @@ private (List<Vector3>, List<int>) ComputeRSWithSubdivision(
                     var minDist = obs.Radius + _obstacleBuffer;
                     var minDistSq = minDist * minDist;
 
-                    // Optional: Print every ~10th point to not flood logs
-                    if ((hitCount % 10 == 0) && distSq < minDistSq * 4)
-                    {
-                        //GD.Print($"   sample ({p.X:F2},{p.Z:F2}) → obs ({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}), " +
-                        //         $"dist={Math.Sqrt(distSq):F2}, min={minDist:F2}");
-                    }
-
-                    if (distSq < minDistSq)
-                    {
-                        //GD.PrintErr($"❌ RS path collision: sample=({p.X:F2},{p.Z:F2}) obs=({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}) " +
-                        //            $"dist={Math.Sqrt(distSq):F2} < min={minDist:F2}");
-                        return false;
-                    }
+                    // // Optional: Print every ~10th point to not flood logs
+                    // if ((hitCount % 10 == 0) && distSq < minDistSq * 4)
+                    // {
+                    //     GD.Print($"   sample ({p.X:F2},{p.Z:F2}) → obs ({obs.GlobalPosition.X:F2},{obs.GlobalPosition.Z:F2}), " +
+                    //             $"dist={Math.Sqrt(distSq):F2}, min={minDist:F2}");
+                    // }
                 }
                 hitCount++;
             }
-
-            //GD.Print("[HybridReedsSheppPlanner] PathIsValid → CLEAR");
             return true;
         }
 
 
 
 
-
         #if DEBUG
+        /// <summary>
+        /// Draws the Grid and Path for debugging
+        /// </summary>
+        /// <param name="blockedCenters"></param>
+        /// <param name="path3"></param>
+        /// <param name="gridSize"></param>
+        /// <param name="gridExtent"></param>
         private void DrawDebugGridAndPath(IReadOnlyList<Vector2> blockedCenters, List<Vector3> path3, float gridSize, int gridExtent)
         {
             var tree = Engine.GetMainLoop() as SceneTree;

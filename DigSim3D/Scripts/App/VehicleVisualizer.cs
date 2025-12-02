@@ -5,6 +5,9 @@ using DigSim3D.Services;
 
 namespace DigSim3D.App
 {
+    /// <summary>
+    /// Visualizes vehicle within the terrain and ensure it matches ground terrain
+    /// </summary>
     public partial class VehicleVisualizer : CharacterBody3D
     {
         // === Movement / path-follow parameters ===
@@ -208,11 +211,13 @@ namespace DigSim3D.App
             GroundFollowAt(nextXZ, facingDir, dt);
         }
 
-        // =======================================================================
-        // Ground follow
-        // =======================================================================
-
-        // GroundFollowAt: sample terrain at center XZ and apply height / tilt
+        // --- Ground follow at a given XZ (blends pitch/roll, sets Y) ---------------
+        /// <summary>
+        /// Ensures vehicle follows ground given an XZ, blends pitch/roll
+        /// </summary>
+        /// <param name="centerXZ"></param>
+        /// <param name="facingDir"></param>
+        /// <param name="dt"></param>
         private void GroundFollowAt(Vector3 centerXZ, Vector3 facingDir, float dt)
         {
             if (_terrain == null)

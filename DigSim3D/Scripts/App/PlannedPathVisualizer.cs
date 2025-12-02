@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace DigSim3D.App
 {
     /// <summary>
-    /// Visualizes planned Reeds-Shepp paths for vehicles (the path they WILL take)
+    /// Visualizes planned paths for vehicles (the path they WILL take)
     /// </summary>
     public partial class PlannedPathVisualizer : Node3D
     {
@@ -114,6 +114,9 @@ namespace DigSim3D.App
             CallDeferred(nameof(RedrawPaths));
         }
 
+        /// <summary>
+        /// Clears mesh and draws each vehicle's path color-coding based on gear
+        /// </summary>
         private void RedrawPaths()
         {
             if (_mesh == null || !_visible) return;

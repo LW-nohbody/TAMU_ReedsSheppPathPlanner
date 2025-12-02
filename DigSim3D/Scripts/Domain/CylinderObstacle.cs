@@ -5,6 +5,9 @@ using DigSim3D.Services;
 
 namespace DigSim3D.Domain
 {
+    /// <summary>
+    /// Defines a cylindrical obstacle in simulation and can check for intersections
+    /// </summary>
     [Tool]
     public partial class CylinderObstacle : Obstacle3D
     {
@@ -74,6 +77,9 @@ namespace DigSim3D.Domain
             CreateOrUpdateMesh();
         }
 
+        /// <summary>
+        /// Creates the cynlinder obstacle mesh
+        /// </summary>
         private void CreateOrUpdateMesh()
         {
             // Try to find existing editor mesh child by name first
@@ -116,6 +122,11 @@ namespace DigSim3D.Domain
         }
 
         // --- Collision methods unchanged (kept for completeness) ---
+        /// <summary>
+        /// Checks if obstacle contains point
+        /// </summary>
+        /// <param name="point"></param>
+        /// <returns></returns>
         public override bool ContainsPoint(Vector3 point)
         {
             Vector3 flatPoint = new Vector3(point.X, GlobalPosition.Y, point.Z);
@@ -125,6 +136,12 @@ namespace DigSim3D.Domain
             return withinRadius && withinHeight;
         }
 
+        /// <summary>
+        /// Checks if segment intersects with obstacle
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <returns></returns>
         public override bool IntersectsSegment(Vector3 start, Vector3 end)
         {
             // quick AABB reject
@@ -169,6 +186,12 @@ namespace DigSim3D.Domain
             return hit;
         }
 
+        /// <summary>
+        /// Helper function to check for AABB intersection
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <returns></returns>
         private bool SegmentIntersectsAabb(Vector3 start, Vector3 end)
         {
             Aabb aabb = new Aabb(BottomCenter - new Vector3(Radius, 0, Radius),

@@ -8,6 +8,10 @@ using DigSim3D.UI;
 
 namespace DigSim3D.App
 {
+    /// <summary>
+    /// Main control for the simulation in Godot, this is the script tied to the root node in Godot
+    /// Handles camera movement, vehicle creation and initialization, etc
+    /// </summary>
     public partial class SimulationDirector : Node3D
     {
         // === Scene / Node References ===
@@ -104,7 +108,6 @@ namespace DigSim3D.App
 
         private DigService _digService = null!;
         private DigConfig _digConfig = DigConfig.Default;
-        private DigVisualizer _digVisualizer = null!;
         private SectorVisualizer _sectorVisualizer = null!;
         private BufferVisualizer _bufferVisualizer = null!;
         private List<VehicleBrain> _robotBrains = new();
@@ -283,9 +286,7 @@ namespace DigSim3D.App
 
             _digService = new DigService(_terrain, _digConfig);
 
-            _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
-            AddChild(_digVisualizer);
-
+            // Create sector visualizer to show robot sectors
             _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
             AddChild(_sectorVisualizer);
             _sectorVisualizer.Visible = ShowSectorGrid;
@@ -320,18 +321,7 @@ namespace DigSim3D.App
                 int robotIndex = _robotBrains.IndexOf(brain);
                 int totalRobots = _robotBrains.Count;
                 GD.Print($"🎮 [Director] Initializing brain {robotIndex} with DigConfig.DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
-
-                brain.InitializeDigBrain(
-                    _digService,
-                    _terrain,
-                    scheduler,
-                    _digConfig,
-                    hybridPlanner,
-                    worldState,
-                    _digVisualizer,
-                    DrawPathProjectedToTerrain,
-                    robotIndex,
-                    totalRobots);
+                brain.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, DrawPathProjectedToTerrain, robotIndex, totalRobots);
             }
 
             // --- Plan initial dig targets and paths ---
@@ -542,12 +532,44 @@ namespace DigSim3D.App
             }
         }
 
+        /// <summary>
+        /// Gets total volume of removable terrain in simulation
+        /// </summary>
+        /// <returns></returns>
+        private float CalculateTerrainVolume()
+        {
+            if (_terrain == null || _terrain.HeightGrid == null)
+                return 0f;
+
+            double totalVolume = 0.0;
+            float gridStep = _terrain.GridStep;
+            float cellArea = gridStep * gridStep;
+            float baseLevel = _terrain.FloorY;
+
+            for (int i = 0; i < _terrain.GridResolution; i++)
+            {
+                for (int j = 0; j < _terrain.GridResolution; j++)
+                {
+                    float height = _terrain.HeightGrid[i, j];
+                    if (!float.IsNaN(height))
+                    {
+                        float adjustedHeight = height - baseLevel;
+                        if (adjustedHeight > 0)
+                            totalVolume += adjustedHeight * cellArea;
+                    }
+                }
+            }
+
+            return (float)totalVolume;
+        }
+
+
         public override void _Process(double delta)
         {
             // --- Simulation step (dig + brains) ---
-
             if (!_simPaused)
             {
+                // OPTIMIZATION: Update DigService to batch terrain mesh updates
                 _digService?.Update((float)delta);
 
                 foreach (var brain in _robotBrains)
@@ -702,10 +724,10 @@ namespace DigSim3D.App
             }
         }
 
-        // =======================================================================
-        // Camera helpers
-        // =======================================================================
-
+        /// <summary>
+        /// Controls the chase camera, allows for camera to follow the vehicle
+        /// </summary>
+        /// <param name="delta"></param>
         private void FollowChaseCamera(double delta)
         {
             if (_vehicles.Count == 0)
@@ -727,6 +749,10 @@ namespace DigSim3D.App
             _camChase.LookAt(car.GlobalTransform.Origin, Vector3.Up);
         }
 
+        /// <summary>
+        /// Switches camera modes between top, chase, free, and orbit
+        /// </summary>
+        /// <param name="m"></param>
         private void SetCameraMode(CameraMode m)
         {
             _mode = m;
@@ -764,6 +790,10 @@ namespace DigSim3D.App
         }
 
         // Wrap index cleanly when cycling vehicles
+        /// <summary>
+        /// Changes the vehicle chase camera follows
+        /// </summary>
+        /// <param name="delta"></param>
         private void CycleFollowTarget(int delta)
         {
             if (_vehicles.Count == 0)
@@ -774,38 +804,14 @@ namespace DigSim3D.App
                 _followIndex += _vehicles.Count;
         }
 
-        // =======================================================================
-        // Terrain / placement helpers
-        // =======================================================================
+        // ------------------------------------------------
 
-        private float CalculateTerrainVolume()
-        {
-            if (_terrain == null || _terrain.HeightGrid == null)
-                return 0f;
-
-            double totalVolume = 0.0;
-            float gridStep = _terrain.GridStep;
-            float cellArea = gridStep * gridStep;
-            float baseLevel = _terrain.FloorY;
-
-            for (int i = 0; i < _terrain.GridResolution; i++)
-            {
-                for (int j = 0; j < _terrain.GridResolution; j++)
-                {
-                    float height = _terrain.HeightGrid[i, j];
-                    if (!float.IsNaN(height))
-                    {
-                        float adjustedHeight = height - baseLevel;
-                        if (adjustedHeight > 0)
-                            totalVolume += adjustedHeight * cellArea;
-                    }
-                }
-            }
-
-            return (float)totalVolume;
-        }
-
-        // Placement on terrain using FL/FR/rear-center samples to orient to slope
+        // === Placement on terrain using FL/FR/RC (unchanged) =======================
+        /// <summary>
+        /// Keeps vehicle on the dynamic terrain
+        /// </summary>
+        /// <param name="car"></param>
+        /// <param name="outward"></param>
         private void PlaceOnTerrain(VehicleVisualizer car, Vector3 outward)
         {
             var yawBasis = Basis.LookingAt(outward, Vector3.Up);
@@ -854,10 +860,12 @@ namespace DigSim3D.App
             car.GlobalTransform = new Transform3D(basis, pos);
         }
 
-        // =======================================================================
-        // Path / marker visualization
-        // =======================================================================
-
+        // -------- Path viz projected to terrain (old drawer adapted to terrain) ---
+        /// <summary>
+        /// Samples terrain's height
+        /// </summary>
+        /// <param name="xz"></param>
+        /// <returns></returns>
         private float SampleSurfaceY(Vector3 xz)
         {
             if (_terrain != null && _terrain.SampleHeightNormal(xz, out var hit, out var _))
@@ -875,6 +883,11 @@ namespace DigSim3D.App
             return 0f;
         }
 
+        /// <summary>
+        /// Draws path onto dynamic terrain
+        /// </summary>
+        /// <param name="points"></param>
+        /// <param name="col"></param>
         private void DrawPathProjectedToTerrain(int robotIndex, Vector3[] points, Color col)
         {
             if (points == null || points.Length < 2)
@@ -914,21 +927,11 @@ namespace DigSim3D.App
 
             if (mi.Mesh != null && mi.Mesh.GetSurfaceCount() > 0)
                 mi.SetSurfaceOverrideMaterial(0, mat);
-
-            _pathMeshes[robotIndex] = mi;
-
-            // --- NEW: update start/goal markers based on the path itself ---
-
-            var startPos = points[0];
-            var goalPos = points[points.Length - 1];
-
-            // Start marker (green)
-            DrawMarkerProjected(robotIndex, startPos, new Color(0, 1, 0), isGoal: false);
-
-            // Goal marker (blue)
-            DrawMarkerProjected(robotIndex, goalPos, new Color(0, 0, 1), isGoal: true);
         }
 
+        /// <summary>
+        /// Draws start/goal marker onto the dynamic terrain for a specific robot.
+        /// </summary>
         private void DrawMarkerProjected(int robotIndex, Vector3 pos, Color col, bool isGoal)
         {
             // Pick which dictionary to use
@@ -971,10 +974,10 @@ namespace DigSim3D.App
             dict[robotIndex] = m;
         }
 
-        // =======================================================================
-        // UI helper
-        // =======================================================================
-
+        /// <summary>
+        /// Captures mouse for UI
+        /// </summary>
+        /// <returns></returns>
         private bool IsMouseOverUI()
         {
             bool noDigSimUI = _digSimUI == null || !_digSimUI.Visible;

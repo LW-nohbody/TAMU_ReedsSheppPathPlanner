@@ -5,7 +5,9 @@ using DigSim3D.Debugging;
 
 namespace DigSim3D.Services
 {
-    // Thin wrapper around your existing RSAdapter.ComputePath3D
+    /// <summary>
+    /// Wrapper around the RSAdapter.ComputePath3D
+    /// </summary>
     public sealed class ReedsSheppPlanner : IPathPlanner
     {
         private readonly float _sampleStep;
@@ -15,6 +17,14 @@ namespace DigSim3D.Services
             _sampleStep = sampleStepMeters;
         }
 
+        /// <summary>
+        /// [Deprecated] Plans RS path to reach goa position. Does not accound for obstacles
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="goal"></param>
+        /// <param name="spec"></param>
+        /// <param name="_world"></param>
+        /// <returns></returns>
         public PlannedPath Plan(Pose start, Pose goal, VehicleSpec spec, WorldState _world)
         {
             var startPos = new Vector3((float)start.X, 0, (float)start.Z);

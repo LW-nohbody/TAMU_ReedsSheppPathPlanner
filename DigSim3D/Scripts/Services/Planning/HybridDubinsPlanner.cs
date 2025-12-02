@@ -5,13 +5,12 @@ using System.Linq;
 using DigSim3D.App;
 using DigSim3D.Domain;
 
-
 namespace DigSim3D.Services
 {
     /// <summary>
-    /// Hybrid path planner that first tries a Reeds–Shepp path.
+    /// Hybrid path planner that first tries a Dubins path.
     /// If blocked, it computes an A* grid path and then stitches
-    /// collision-free RS segments through key A* waypoints.
+    /// collision-free D segments through key A* waypoints.
     /// </summary>
     public sealed class HybridDubinsPlanner : IPathPlanner
     {
@@ -35,58 +34,48 @@ namespace DigSim3D.Services
             _maxAttempts = maxAttempts;
         }
 
+        /// <summary>
+        /// Plans the Dubins path, starts with seeing if Dubins can reach goal. If not calls replanning function.
+        /// </summary>
         public PlannedPath Plan(Pose start, Pose goal, VehicleSpec spec, WorldState world)
         {
-            //GD.Print($"[HybridReedsSheppPlanner] DEBUG: Running Plan() — obstacles={world?.Obstacles?.Count() ?? 0}");
-
             var startPos = new Vector3((float)start.X, 0, (float)start.Z);
             var goalPos = new Vector3((float)goal.X, 0, (float)goal.Z);
 
             var obstacles = world?.Obstacles?.OfType<CylinderObstacle>().ToList() ?? new List<CylinderObstacle>();
-            
+
             // Get arena radius for wall boundary checking
             float arenaRadius = world?.Terrain?.Radius ?? float.PositiveInfinity;
 
-            // 1️⃣ Direct Reeds–Shepp path
-            double r = Math.Sqrt(Math.Pow(goalPos.X, 2) + Math.Pow(goalPos.Z, 2));
-            double d = world.Terrain.Radius - r;
+            // 1️⃣ Direct Dubins path
+            double r = Math.Sqrt(goalPos.X * goalPos.X + goalPos.Z * goalPos.Z);
+            double d = arenaRadius - r;
             float angleToWall = MathF.Atan2(goalPos.Z, goalPos.X);
             float angleWallDiff = angleToWall - (float)goal.Yaw;
             float angleWallDist = MathF.Atan2(MathF.Sin(angleWallDiff), MathF.Cos(angleWallDiff));
 
-            if(Math.Abs(angleWallDist) < 0.48 && d < spec.TurnRadius+0.75)
+            if (Math.Abs(angleWallDist) < 0.48 && d < spec.TurnRadius + 0.75)
             {
-                GD.Print("[HybridDubinsPlanner] Reassigning goal orientation to avoid wall");
+                // GD.Print("[HybridDubinsPlanner] Reassigning goal orientation to avoid wall");
                 var yawSign = angleWallDiff / Math.Abs(angleWallDiff);
-                goal = new Pose(goal.X, goal.Z, angleToWall - yawSign * 0.48);
+                goal = new Pose(goal.X, goal.Z, angleToWall - yawSign * 0.48f);
             }
 
             var (dPoints, dGears) = DAdapter.ComputePath3D(
                 startPos, start.Yaw,
                 goalPos, goal.Yaw,
                 turnRadiusMeters: spec.TurnRadius,
-                fieldRadius: world.Terrain.Radius,
+                fieldRadius: arenaRadius,
                 sampleStepMeters: _sampleStep
             );
 
-            GD.Print($"[HybridDubinsPlanner] Goal Pos: ({goalPos.X}, {goalPos.Z}) and orientation: {goal.Yaw}");
-
-            var rsPts = dPoints.ToList();
-            if (obstacles.Count == 0 || PathIsValid(rsPts, obstacles, goal.Yaw, spec.TurnRadius, world.Terrain.Radius))
+            var dPts = dPoints.ToList();
+            if (obstacles.Count == 0 || PathIsValid(dPts, obstacles, goal.Yaw, spec.TurnRadius, arenaRadius))
             {
-                //GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
-#if DEBUG
-                //GD.Print("[HybridReedsSheppPlanner] (Debug) Forcing grid visualization even for clear RS path.");
-                //DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, 
-                //                    new List<Vector3> { startPos, goalPos }, 
-                //                    _gridSize, _gridExtent);
-#endif
-                GD.Print($"[HybridDubinsPlanner] Final Pos: ({rsPts.Last().X}, {rsPts.Last().Z})");
-                return BuildPath(rsPts, dGears.ToList());
+                return BuildPath(dPts, dGears.ToList());
             }
 
-            //GD.Print("[HybridReedsSheppPlanner] Direct RS path blocked. Using cached A* grid.");
-
+            // Dubins path is blocked — start replanning
             var gridPath = GridPlannerPersistent.Plan2DPath(startPos, goalPos);
 
             // Always show grid visualization for debugging
@@ -94,39 +83,46 @@ namespace DigSim3D.Services
 
             if (gridPath == null || gridPath.Count < 3)
             {
-                GD.PrintErr("[HybridDubinsPlanner] A* grid path failed — returning fallback RS.");
-                return BuildPath(rsPts, dGears.ToList());
+                GD.PrintErr("[HybridDubinsPlanner] A* grid path failed — returning fallback Dubins.");
+                return BuildPath(dPts, dGears.ToList());
             }
 
             // Attempt to replan
-            var merged = TryReplanWithMidpoints(startPos, goalPos, spec.TurnRadius, gridPath, obstacles, startGear: 1, world,
-            goal.Yaw, start.Yaw, arenaRadius);
+            var merged = TryReplanWithMidpoints(
+                startPos,
+                goalPos,
+                spec.TurnRadius,
+                gridPath,
+                obstacles,
+                startGear: 1,
+                world: world,
+                goalYaw: goal.Yaw,
+                startYaw: start.Yaw,
+                arenaRadius: arenaRadius
+            );
 
-            if (merged.points != null)
+            if (merged.points != null && merged.gears != null)
             {
-                //GD.Print($"✅ Hybrid replanning succeeded — {merged.points.Count} points total.");
-                //DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, merged, _gridSize, _gridExtent);
+                // GD.Print($"✅ Hybrid replanning succeeded — {merged.points.Count} points total.");
                 return BuildPath(merged.points, merged.gears);
             }
 
-            GD.PrintErr("❌ Could not find clear RS route via midpoints. Returning fallback RS path.");
-            //DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, rsPts, _gridSize, _gridExtent);
-            return BuildPath(rsPts, dGears.ToList());
-
+            GD.PrintErr("❌ Could not find clear D route via midpoints. Returning fallback D path.");
+            return BuildPath(dPts, dGears.ToList());
         }
 
-        // ================================================================
-        // 🔧 Replanning logic — old midpoint-subdivision logic modernized
-        // ================================================================
-
-        private (List<Vector3> points, List<int> gears) TryReplanWithMidpoints(
+        /// <summary>
+        /// Replans Dubins path around obstacles by stitching together valid Dubins paths to A* subgoals.
+        /// If subgoals can't be reached it subdivides the path until a new A* subgoal can be reached
+        /// </summary>
+        private (List<Vector3>? points, List<int>? gears) TryReplanWithMidpoints(
             Vector3 start,
             Vector3 goal,
             double turnRadius,
-            List<Vector3> gridPath,
+            List<Vector3>? gridPath,
             List<CylinderObstacle> obstacles,
             int startGear,
-            WorldState world,
+            WorldState? world,
             double goalYaw,
             double startYaw,
             float arenaRadius)
@@ -139,6 +135,7 @@ namespace DigSim3D.Services
             var temp = gridPath[0];
             simplifiedPath[0] = temp;
             const float angleThreshold = 5f * (float)(Math.PI / 180.0);
+
             for (int i = 1; i < gridPath.Count - 1; i++)
             {
                 Vector3 prev = simplifiedPath.Last();
@@ -152,47 +149,65 @@ namespace DigSim3D.Services
                     simplifiedPath.Add(curr);
                 }
             }
+
             temp = gridPath[^1];
             simplifiedPath.Add(temp);
 
-            // --- 2️⃣ Build initial RS path along simplified path ---
+            // --- 2️⃣ Build initial D path along simplified path ---
             var mergedPoints = new List<Vector3> { start };
             var mergedGears = new List<int> { startGear };
-            // double prevYaw = Math.Atan2((simplifiedPath[0] - start).Z, (simplifiedPath[0] - start).X);
             double prevYaw = startYaw;
 
             int index = 0;
-            
+
             while (index < simplifiedPath.Count)
             {
                 Vector3 segStart = mergedPoints.Last();
                 int farthestReachable = index;
                 bool AStarValid = false;
                 bool nonShortestPath = false;
-                Vector3[] nextBestPath = null;
+                Vector3[]? nextBestPath = null;
 
                 // Try skipping as many A* points as possible
-                GD.Print($"[HyrbridDubinsPlanner] Current pos: ({segStart.X}, {segStart.Z})");
                 for (int j = simplifiedPath.Count - 1; j >= index; j--)
                 {
                     Vector3 segEnd = simplifiedPath[j];
                     double segYaw = 0.0;
-                    if (j == simplifiedPath.Count - 1) { segYaw = goalYaw; }
+                    if (j == simplifiedPath.Count - 1)
+                    {
+                        segYaw = goalYaw;
+                    }
                     else
                     {
                         segYaw = Math.Atan2((segEnd - segStart).Z, (segEnd - segStart).X);
                     }
 
-                    var (dTest, dTestGears) = DAdapter.ComputePath3D(segStart, prevYaw, segEnd, segYaw, turnRadius, world.Terrain.Radius, _sampleStep);
+                    var (dTest, dTestGears) = DAdapter.ComputePath3D(
+                        segStart,
+                        prevYaw,
+                        segEnd,
+                        segYaw,
+                        turnRadius,
+                        arenaRadius,
+                        _sampleStep
+                    );
 
-                    if (dTest.Length == 0 || !PathIsValid(dTest.ToList(), obstacles, segYaw, turnRadius, world.Terrain.Radius))
+                    if (dTest.Length == 0 || !PathIsValid(dTest.ToList(), obstacles, segYaw, turnRadius, arenaRadius))
                     {
-                        //If shortest path cannot reach, check all other Dubins paths
-                        
-                        var (dTests, dTestsGears) = DAdapter.ComputeAllPath3D(segStart, prevYaw, segEnd, segYaw, turnRadius, world.Terrain.Radius, _sampleStep);
+                        // If shortest path cannot reach, check all other Dubins paths
+                        var (dTests, dTestsGears) = DAdapter.ComputeAllPath3D(
+                            segStart,
+                            prevYaw,
+                            segEnd,
+                            segYaw,
+                            turnRadius,
+                            arenaRadius,
+                            _sampleStep
+                        );
+
                         foreach (var test in dTests)
                         {
-                            if(test.Length > 0 && PathIsValid(test.ToList(), obstacles, segYaw, turnRadius, world.Terrain.Radius))
+                            if (test.Length > 0 && PathIsValid(test.ToList(), obstacles, segYaw, turnRadius, arenaRadius))
                             {
                                 farthestReachable = j;
                                 AStarValid = true;
@@ -202,7 +217,6 @@ namespace DigSim3D.Services
                             }
                         }
                     }
-                    
                     else
                     {
                         farthestReachable = j;
@@ -224,103 +238,92 @@ namespace DigSim3D.Services
                     Vector3 nextDirVec = target - segStart;
                     targetYaw = Math.Atan2(nextDirVec.Z, nextDirVec.X);
                 }
-                GD.Print($"[HybridDubinsPlanner] Target: {target.X}, {target.Z}, farthestReachable: {farthestReachable}");
 
                 // Get Dubins path to the nearest reachable A* point, angled to follow the rest of A*
-                // GD.Print("[HybridDubinsPlanner] Generating A* based Dubins path");
-                var (dSegment, dGears) = DAdapter.ComputePath3D(segStart, prevYaw, target, targetYaw, turnRadius, world.Terrain.Radius, _sampleStep);
+                var (dSegment, dGears) = DAdapter.ComputePath3D(
+                    segStart,
+                    prevYaw,
+                    target,
+                    targetYaw,
+                    turnRadius,
+                    arenaRadius,
+                    _sampleStep
+                );
+
                 if (nonShortestPath)
                 {
-                    dSegment = nextBestPath;
+                    dSegment = nextBestPath!; // we only set nonShortestPath when nextBestPath is non-null
                     nonShortestPath = false;
                 }
-                
 
-                //If path to next A* point isn't valid, split path into multiple Dubins paths up to 5 times
+                // If path to next A* point isn't valid, split path into multiple Dubins paths up to 3 times
                 int subdiv = 0;
-                while ((!AStarValid) && subdiv < 3)
+                while (!AStarValid && subdiv < 3)
                 {
                     bool pathFound = false;
-                    // farthestReachable--;
-                    
+
                     subdiv++;
                     Vector3 mid = segStart.Lerp(target, 0.5f);
-                    // Vector3 mid = target - segStart;
-                    // mid.X = mid.X / MathF.Pow(2,subdiv);
-                    // mid.Z = mid.Z / MathF.Pow(2, subdiv);
-                    // mid = mid + segStart;
-                    double midYaw = Math.Atan2((mid - segStart).Z, (mid - segStart).X); //TODO: Redo so the midYaw is angled to follow the rest of the path
-                    double distToMid = Math.Sqrt(Math.Pow(mid.X - segStart.X, 2) + Math.Pow(mid.Z - segStart.Z, 2));
-                    double maxYaw = distToMid / world.Terrain.Radius;
+
+                    double midYaw = Math.Atan2((mid - segStart).Z, (mid - segStart).X); // TODO: refine so midYaw follows rest of path
+                    double distToMid = Math.Sqrt(
+                        (mid.X - segStart.X) * (mid.X - segStart.X) +
+                        (mid.Z - segStart.Z) * (mid.Z - segStart.Z)
+                    );
+
+                    double maxYaw = distToMid / arenaRadius;
                     double yawDiff = Math.Max(-Math.PI, Math.Min(Math.PI, midYaw - prevYaw));
-                    if(Math.Abs(yawDiff) > maxYaw)
+                    if (Math.Abs(yawDiff) > maxYaw)
                     {
                         GD.PrintErr("[HybridDubinsPlanner] Exceeded max yaw");
                         midYaw = prevYaw + (yawDiff / Math.Abs(yawDiff) * Math.Min(Math.Abs(yawDiff), maxYaw));
                     }
 
-                    GD.Print($"[HybridDubinsPlanner] Running Lerp with new target: ({mid.X}, {mid.Z})");
+                    var (listD1, listD1Gears) = DAdapter.ComputeAllPath3D(
+                        segStart,
+                        prevYaw,
+                        mid,
+                        midYaw,
+                        turnRadius,
+                        arenaRadius,
+                        _sampleStep
+                    );
 
-                    var (listD1, listD1Gears) = DAdapter.ComputeAllPath3D(segStart, prevYaw, mid, midYaw, turnRadius, world.Terrain.Radius, _sampleStep);
-
-                    foreach (var d1 in listD1)
+                    for (int idx = 0; idx < listD1.Length; idx++)
                     {
-                        if (d1.Length > 0 && PathIsValid(d1.ToList(), obstacles, midYaw, turnRadius, world.Terrain.Radius))
+                        var d1 = listD1[idx];
+                        if (d1.Length > 0 && PathIsValid(d1.ToList(), obstacles, midYaw, turnRadius, arenaRadius))
                         {
-                            GD.Print("[HybridDubinsPlanner] Found viable lerp path");
                             mergedPoints.AddRange(d1.Skip(1));
-                            mergedGears.AddRange(listD1Gears[1].Skip(1));
+                            // NOTE: this assumes same indexing between listD1 and listD1Gears
+                            mergedGears.AddRange(listD1Gears[idx].Skip(1));
                             pathFound = true;
                             break;
                         }
                     }
-                    if (pathFound) { break; }
-                    else { GD.Print("[HybridDubinsPlanner] Lerp failed"); target = mid;}
-                    
 
-                    // var (d1, dGears1) = DAdapter.ComputePath3D(segStart, prevYaw, mid, midYaw, turnRadius, world.Terrain.Radius, _sampleStep);
-
-                    // if (d1.Length == 0 || !PathIsValid(d1.ToList(), obstacles, midYaw, world.Terrain.Radius))
-                    // {
-                    //     GD.Print("[HybridDubinsPlanner] Valid Lerp Path not found");
-                    //     continue;
-                    // }
-                    // mergedPoints.AddRange(d1.Skip(1));
-                    // mergedGears.AddRange(dGears1.Skip(1));
-                    // farthestReachable--;
-
-                    // var (d2, dGears2) = DAdapter.ComputePath3D(mid, midYaw, target, targetYaw, turnRadius, world.Terrain.Radius, _sampleStep);
-
-                    // if (d1.Length == 0 || d2.Length == 0 ||
-                    //     !PathIsValid(d1.ToList(), obstacles, midYaw, world.Terrain.Radius) || !PathIsValid(d2.ToList(), obstacles, targetYaw, world.Terrain.Radius))
-                    // {
-                    //     GD.Print("[HybridDubinsPlanner] Valid Lerp Path not found");
-                    //     break;
-                    // }
-
-                    // mergedPoints.AddRange(d1.Skip(1));
-                    // mergedPoints.AddRange(d2.Skip(1));
-                    // mergedGears.AddRange(dGears1.Skip(1));
-                    // mergedGears.AddRange(dGears2.Skip(1));
-
+                    if (pathFound)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        GD.Print("[HybridDubinsPlanner] Subdivision failed");
+                        target = mid;
+                    }
 
                     prevYaw = targetYaw;
-                    // dSegment = new Vector3[] { };
-                    // GD.Print($"[HyrbridDubinsPLanner] dSegment.Length: {dSegment.Length}");
-                    // break;
                 }
 
                 if (AStarValid)
                 {
-                    if (!PathIsValid(dSegment.ToList(), obstacles, targetYaw, turnRadius, world.Terrain.Radius))
+                    if (!PathIsValid(dSegment.ToList(), obstacles, targetYaw, turnRadius, arenaRadius))
                     {
                         GD.Print("[HybridDubinsPlanner] A*-based path is invalid");
                     }
-                    GD.Print($"[HybridDubinsPlanner] Adding path to closest A* point. Final Pos ({dSegment.Last().X}, {dSegment.Last().Z})");
 
                     mergedPoints.AddRange(dSegment.Skip(1));
                     mergedGears.AddRange(dGears.Skip(1));
-                    // prevYaw = targetYaw;
                     if (dSegment.Length > 1)
                     {
                         var last = dSegment[^1];
@@ -331,56 +334,9 @@ namespace DigSim3D.Services
 
                 index = farthestReachable + 1;
             }
+
             return (mergedPoints, mergedGears);
-
-            // --- 3️⃣ Post-process: simplify RS path by skipping intermediate points ---
-            // var simplifiedRSPoints = new List<Vector3> { mergedPoints[0] };
-            // var simplifiedGears = new List<int> { mergedGears[0] };
-            // int cur = 0;
-            // while (cur < mergedPoints.Count - 1)
-            // {
-            //     int farthest = cur + 1;
-            //     for (int j = mergedPoints.Count - 1; j > cur; j--)
-            //     {
-            //         double segYaw = Math.Atan2((mergedPoints[j] - mergedPoints[cur]).Z,
-            //                                 (mergedPoints[j] - mergedPoints[cur]).X);
-            //         var (dTest, dGearsTest) = DAdapter.ComputePath3D(mergedPoints[cur], prevYaw,
-            //                                                             mergedPoints[j], segYaw,
-            //                                                             turnRadius, world.Terrain.Radius, _sampleStep);
-            //         if (dTest.Length > 0 && PathIsValid(dTest.ToList(), obstacles))
-            //         {
-            //             farthest = j;
-            //             break;
-            //         }
-            //     }
-
-            //     // Add D segment to simplified list
-            //     double yawToAdd = Math.Atan2((mergedPoints[farthest] - mergedPoints[cur]).Z,
-            //                                 (mergedPoints[farthest] - mergedPoints[cur]).X);
-            //     var (dFinal, dFinalGears) = DAdapter.ComputePath3D(mergedPoints[cur], prevYaw,
-            //                                                         mergedPoints[farthest], yawToAdd,
-            //                                                         turnRadius, world.Terrain.Radius, _sampleStep);
-            //     if (dFinal.Length > 0)
-            //     {
-            //         simplifiedRSPoints.AddRange(dFinal.Skip(1));
-            //         simplifiedGears.AddRange(dFinalGears.Skip(1));
-            //         prevYaw = yawToAdd;
-            //     }
-
-            //     cur = farthest;
-            // }
-
-            // if (simplifiedRSPoints.Count > 1)
-            //     simplifiedGears[^1] = 1;
-
-            // //GD.Print($"[HybridReedsSheppPlanner] RS replanning + simplification finished with {simplifiedRSPoints.Count} points.");
-            // return (simplifiedRSPoints, simplifiedGears);
         }
-
-
-        // private Godot.Vector3 DubinsToGodot(Vector3 p){ return new Vector3(p.X, p.Y, -p.Z);  }
-
-
 
         // ================================================================
         // ✅ Helpers
@@ -393,14 +349,16 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Checks if Dubins path is valid against obstacles and arena wall, also ensures that Dubins can escape from a position
+        /// </summary>
         private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, double endYaw, double radius, float arenaRadius)
         {
-            //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
-            
-            int hitCount = 0;
+            const float WallBufferMeters = 0.1f; // 0.1m wall buffer
+            float maxAllowedRadius = arenaRadius - WallBufferMeters;
 
             foreach (var p in pathPoints)
-            {   
+            {
                 // Check obstacle collisions
                 foreach (var obs in obstacles)
                 {
@@ -418,29 +376,30 @@ namespace DigSim3D.Services
                     {
                         return false;
                     }
-
                 }
+
                 double r = Math.Sqrt(p.X * p.X + p.Z * p.Z);
                 double d = arenaRadius - r;
                 double angleToWall = Math.Atan2(p.Z, p.X);
                 double angleWallDist = Math.Abs(angleToWall - endYaw);
-                if(angleWallDist < 0.48 && d < radius)
+                if (angleWallDist < 0.48 && d < radius)
                 {
                     return false;
                 }
-                hitCount++;
             }
 
-            //GD.Print("[HybridReedsSheppPlanner] PathIsValid → CLEAR");
             return true;
         }
 
-
-
-
-
 #if DEBUG
-        private void DrawDebugGridAndPath(IReadOnlyList<Vector2> blockedCenters, List<Vector3> path3, float gridSize, int gridExtent)
+        /// <summary>
+        /// For debugging purposes, will print the grid and path.
+        /// </summary>
+        private void DrawDebugGridAndPath(
+            IReadOnlyList<Vector2>? blockedCenters,
+            List<Vector3>? path3,
+            float gridSize,
+            int gridExtent)
         {
             var tree = Engine.GetMainLoop() as SceneTree;
             var scene = tree?.CurrentScene;
@@ -453,7 +412,8 @@ namespace DigSim3D.Services
                 if (child is Node n)
                 {
                     var nm = n.Name.ToString();
-                    if (nm.StartsWith("DebugGrid", StringComparison.Ordinal) || nm.StartsWith("DebugPath", StringComparison.Ordinal))
+                    if (nm.StartsWith("DebugGrid", StringComparison.Ordinal) ||
+                        nm.StartsWith("DebugPath", StringComparison.Ordinal))
                         n.QueueFree();
                 }
             }
@@ -519,8 +479,15 @@ namespace DigSim3D.Services
                 scene.AddChild(pathMeshInst);
             }
         }
+#else
+        private void DrawDebugGridAndPath(
+            IReadOnlyList<Vector2>? blockedCenters,
+            List<Vector3>? path3,
+            float gridSize,
+            int gridExtent)
+        {
+            // no-op in release
+        }
 #endif
-
-
     }
 }

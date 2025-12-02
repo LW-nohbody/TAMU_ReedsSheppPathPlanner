@@ -78,6 +78,10 @@ namespace DigSim3D.UI
             margin.AddChild(_contentContainer);
         }
 
+        /// <summary>
+        /// Sets content for panel
+        /// </summary>
+        /// <param name="content"></param>
         public void SetContent(Node content)
         {
             if (_contentContainer != null)
