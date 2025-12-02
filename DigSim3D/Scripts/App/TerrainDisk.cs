@@ -21,6 +21,7 @@ namespace DigSim3D.App
         [Export] public float Gain = 0.4f;
         [Export] public int Seed = 1337;
         [Export(PropertyHint.Range, "0,1,0.01")] public float Smooth = 0.6f;
+        public float BaseDepth = 0.6f;
 
         [Export] public float FloorY = 0.0f;
         [Export] public NodePath FloorNodePath = null!;
@@ -121,15 +122,19 @@ namespace DigSim3D.App
                     float x = -Radius + i * step;
                     if (Inside(x, z))
                     {
-                        float n = Smoothed(x, z, blurR);
-                        float h = Amplitude * n;
+                        float n = Smoothed(x, z, blurR); // [-1,1]ish with mean ~0
 
+                        // Mean height ≈ FloorY + BaseDepth, with bumps of size Amplitude
+                        float h = FloorY + BaseDepth + Amplitude * n;
+
+                        // Never go below the concrete
                         if (h < FloorY)
-                            h = FloorY + (FloorY - h);
+                            h = FloorY;
 
-                        // Ensure minimum height > 0.01f
-                        if (h < 0.011f)
-                            h = 0.011f;
+                        // Small epsilon so we don't end up exactly on the floor (helps normals/collider)
+                        const float floorEps = 0.011f;
+                        if (h < FloorY + floorEps)
+                            h = FloorY + floorEps;
 
                         _heights[i, j] = h;
                     }

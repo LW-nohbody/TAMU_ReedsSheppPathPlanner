@@ -30,6 +30,8 @@ namespace DigSim3D.App
         [ExportGroup("Arena")]
         [Export(PropertyHint.Range, "5,30,0.5")]
         public float ArenaRadius = 15.0f;
+        [Export(PropertyHint.Range, "0.1,1,0.05")]
+        public float ArenaDepth = 0.6f;   // average soil thickness above concrete
         [Export] public NodePath TankOuterPath = null!;
         public float WallThickness = 0.3f; // Outer = ArenaRadius + WallThickness
 
@@ -47,8 +49,11 @@ namespace DigSim3D.App
         [ExportGroup("Dynamic Avoidance")]
         [Export] public bool DynamicAvoidanceEnabled = false;
 
-        [ExportGroup("Debug / Visualization")]
+        [ExportGroup("Debug")]
         [Export] public bool DebugPathOnTop = true;
+        [Export] public bool ShowSectorGrid = true;
+        [Export] public bool ShowBorderRings = true;
+
 
         [ExportGroup("Camera Controls")]
         [Export] public float MouseSensitivity = 0.005f;
@@ -112,6 +117,9 @@ namespace DigSim3D.App
         private DigSimUI? _digSimUI = null!;
         private UIToggleSwitch? _uiToggle = null!;
         private readonly Dictionary<int, MeshInstance3D> _pathMeshes = new();
+        private readonly Dictionary<int, MeshInstance3D> _startMarkers = new();
+        private readonly Dictionary<int, MeshInstance3D> _goalMarkers = new();
+
 
         // =======================================================================
         // Lifecycle
@@ -138,6 +146,7 @@ namespace DigSim3D.App
 
             // Apply global arena radius to terrain
             _terrain.Radius = ArenaRadius + 0.2f;
+            _terrain.BaseDepth = ArenaDepth;
             _terrain.Rebuild();
 
             // Apply global arena radius to tank walls, if present
@@ -279,13 +288,16 @@ namespace DigSim3D.App
 
             _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
             AddChild(_sectorVisualizer);
+            _sectorVisualizer.Visible = ShowSectorGrid;
+
+            _bufferVisualizer = new BufferVisualizer { Name = "BufferVisualizer" };
+            AddChild(_bufferVisualizer);
+            _bufferVisualizer.Visible = ShowBorderRings;
+
 
             float arenaRadius = ArenaRadius;
             _sectorVisualizer.Initialize(_vehicles.Count, arenaRadius);
             GD.Print($"[Director] SectorVisualizer created with {_vehicles.Count} sectors, radius {arenaRadius:F1}m");
-
-            _bufferVisualizer = new BufferVisualizer { Name = "BufferVisualizer" };
-            AddChild(_bufferVisualizer);
 
             const float obstacleBufferMeters = 0.5f; // 0.5m obstacle buffer (dig + path planning)
             const float wallBufferMeters = 0.1f;     // 0.1m wall buffer (dig target selection only)
@@ -356,8 +368,6 @@ namespace DigSim3D.App
                 PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, worldState);
 
                 DrawPathProjectedToTerrain(k, path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
-                DrawMarkerProjected(start, new Color(0, 1, 0));
-                DrawMarkerProjected(digPos, new Color(0, 0, 1));
 
                 car.SetPath(path.Points.ToArray(), path.Gears.ToArray());
 
@@ -906,10 +916,31 @@ namespace DigSim3D.App
                 mi.SetSurfaceOverrideMaterial(0, mat);
 
             _pathMeshes[robotIndex] = mi;
+
+            // --- NEW: update start/goal markers based on the path itself ---
+
+            var startPos = points[0];
+            var goalPos = points[points.Length - 1];
+
+            // Start marker (green)
+            DrawMarkerProjected(robotIndex, startPos, new Color(0, 1, 0), isGoal: false);
+
+            // Goal marker (blue)
+            DrawMarkerProjected(robotIndex, goalPos, new Color(0, 0, 1), isGoal: true);
         }
 
-        private void DrawMarkerProjected(Vector3 pos, Color col)
+        private void DrawMarkerProjected(int robotIndex, Vector3 pos, Color col, bool isGoal)
         {
+            // Pick which dictionary to use
+            var dict = isGoal ? _goalMarkers : _startMarkers;
+
+            // Remove previous marker of this type for this robot
+            if (dict.TryGetValue(robotIndex, out var old))
+            {
+                old.QueueFree();
+                dict.Remove(robotIndex);
+            }
+
             var m = new MeshInstance3D
             {
                 Mesh = new CylinderMesh
@@ -935,6 +966,9 @@ namespace DigSim3D.App
 
             m.SetSurfaceOverrideMaterial(0, mat);
             AddChild(m);
+
+            // Remember this marker as the current one
+            dict[robotIndex] = m;
         }
 
         // =======================================================================
