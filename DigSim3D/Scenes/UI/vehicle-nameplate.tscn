@@ -10,6 +10,6 @@ _label = NodePath("Label3D")
 pixel_size = 0.0005
 fixed_size = true
 outline_modulate = Color(0, 0, 0, 0.8)
-text = "HELLO"
+text = "vehicle-nameplate"
 font_size = 64
 outline_size = 4

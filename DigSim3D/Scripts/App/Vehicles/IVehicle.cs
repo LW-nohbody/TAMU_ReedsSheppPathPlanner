@@ -13,11 +13,13 @@ public interface IVehicle
    public float VehicleWidth { get; }
 
     void Activate();
+    void Activate(Transform3D transform);
     void Deactivate();
-    // void TeleportTo(Vector3 pos, Quaternion rot);
 
     public void SetPhysicsProcess(bool enable);
     public void SetPath(Vector3[] pts, int[] gears);
     public void SetPath(Vector3[] pts) => SetPath(pts, Array.Empty<int>());
     public void InitializeID(int ID);
+    public void FreezePhysics();
+    public void UnfreezePhysics();
 }

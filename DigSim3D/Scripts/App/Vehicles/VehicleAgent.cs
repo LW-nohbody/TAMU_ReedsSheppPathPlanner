@@ -152,18 +152,36 @@ public partial class VehicleAgent : Node3D
 
      public void SetCurrentVehicle(Node3D node)
     {
-        // Disable old
+        if (currentVehicle != null && currentVehicle == (node as IVehicle)) 
+            return; // No change
+
         if (currentVehicle != null)
+        {
+            // Store reference to old vehicle and its transform
+            var prevTransform = currentVehicle.GlobalTransform;
+
+            // Disable old vehicle
             currentVehicle.Deactivate();
+            
+            // Assign new vehicle
+            currentVehicle = node as IVehicle;
 
-        // Store new
-        currentVehicle = node as IVehicle;
+            if (currentVehicle == null)
+                throw new Exception($"{node.Name} does not implement IVehicle");
 
-        if (currentVehicle == null)
-            throw new Exception($"{node.Name} does not implement IVehicle");
+            // Enable new vehicle at old vehicle's position
+            currentVehicle.Activate(prevTransform); 
 
-        // Enable the one we want
-        currentVehicle.Activate();
+        } else
+        {
+            currentVehicle = node as IVehicle;
+
+            if (currentVehicle == null)
+                throw new Exception($"{node.Name} does not implement IVehicle");    
+
+            // Enable new vehicle (first time, no previous position)
+            currentVehicle.Activate();
+        }
 
         // Update Status Entry
         _digSimUI?.UpdateVehicleEntry(_robotIndex, currentVehicle.Spec.KinType);
@@ -177,7 +195,7 @@ public partial class VehicleAgent : Node3D
     }
 
     /// <summary>
-    /// Initialize dig brain with external services and sector assignment.
+    /// Initializes vehicle agent for digging with external services and sector assignment.
     /// </summary>
     public void InitializeVehicleAgent(
         DigService digService, TerrainDisk terrain,
@@ -536,8 +554,8 @@ public partial class VehicleAgent : Node3D
 
         _isPriorityFrozen = true;
 
-        // Stop physics updates
-        currentVehicle.SetPhysicsProcess(false);
+        // Freeze the physics body (maintains collision but stops movement)
+        currentVehicle.FreezePhysics();
 
         // Register frozen obstacle in the world
         RegisterFrozenCarObstacle();
@@ -566,8 +584,8 @@ public partial class VehicleAgent : Node3D
 
         _isPriorityFrozen = false;
 
-        // Resume physics
-        currentVehicle.SetPhysicsProcess(true);
+        // Unfreeze the physics body
+        currentVehicle.UnfreezePhysics();
 
         // Remove frozen obstacle
         RemoveFrozenCarObstacle();

@@ -79,6 +79,8 @@ namespace DigSim3D.App
 
         [Export] public bool DynamicAvoidanceEnabled = false;
 
+        [Export] public bool VehicleCollision = false;
+
         public override void _Ready()
         {
 
@@ -642,8 +644,8 @@ namespace DigSim3D.App
             Vector3 yawFwd = new Vector3(outward.X, 0, outward.Z).Normalized();
             Vector3 fProj = (yawFwd - n * yawFwd.Dot(n)); if (fProj.LengthSquared() < 1e-6f) fProj = yawFwd; fProj = fProj.Normalized();
 
-            Vector3 right = n.Cross(fProj).Normalized(); // build RH frame with -Z as forward
-            Vector3 zAxis = -fProj;
+            Vector3 right = n.Cross(-fProj).Normalized(); // Vehicle's -Z (forward) points toward outward
+            Vector3 zAxis = -fProj;  // Z-axis points inward, so -Z (forward) points outward
             var basis = new Basis(right, n, zAxis).Orthonormalized();
 
             // float ride = Mathf.Clamp(RideHeight, 0.02f, 0.12f);

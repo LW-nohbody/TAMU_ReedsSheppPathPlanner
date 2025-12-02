@@ -1,6 +1,6 @@
 using DigSim3D.Services;
 
-namespace DigSim3D.Domain;
+namespace DigSim3D.App.Vehicles;
 
 
 public readonly record struct VehicleSpec(

@@ -96,6 +96,12 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
         CenterOfMass = new Vector3(0, -0.3f, 0); // Lower the center of mass
     }
 
+    public void Activate(Transform3D transform)
+    {
+        GlobalTransform = transform;
+        Activate();
+    }
+
     public void Deactivate()
     {
         this.Visible = false;
@@ -227,5 +233,15 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
         } else {
             GD.PushError("[BicycleVehicle] Nameplate node is not assigned.");
         }
+    }
+
+    public void FreezePhysics()
+    {
+        Freeze = true;
+    }
+
+    public void UnfreezePhysics()
+    {
+        Freeze = false;
     }
 }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DigSim3D.App;
 using DigSim3D.Domain;
+using DigSim3D.App.Vehicles;
 
 namespace DigSim3D.Services
 {
