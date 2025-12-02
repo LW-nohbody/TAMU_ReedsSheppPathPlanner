@@ -127,36 +127,17 @@ namespace DigSim3D.App
                 // var car = VehicleScene.Instantiate<VehicleVisualizer>();
                 var car = VehicleScene.Instantiate<VehicleAgent>();
                 _vehiclesRoot.AddChild(car);
-                // car.SetTerrain(_terrain);
-                car.GlobalTransform = new Transform3D(Basis.Identity, spawnXZ);
-
-                PlaceOnTerrain(car, outward);
                 
-                // Ensure vehicle physics is active after placement
-                if (car.currentVehicle != null)
-                {
-                    car.currentVehicle.Activate();
-                }
+                // Keep parent VehicleAgent at origin
+                car.GlobalPosition = Vector3.Zero;
 
-                car._vehicleID = $"Bicycle-{(i + 1):00}";
+                PlaceOnTerrain(car, outward, spawnXZ);
+
+                car.AgentID = i+1;
 
                 _vehicles.Add(car);
 
                 _dynamicObstacleManager.RegisterDynamicObstacle(car);
-
-                // Add nameplate
-                var id = car._vehicleID;
-                var nameplate = new Nameplate3D
-                {
-                    Text = id,
-                    HeightOffset = 0.5f,
-                    FontColor = Colors.White,
-                    YBillboardOnly = false,
-                    FixedSize = true,
-                    FontSize = 64,
-                    PixelSize = 0.0005f,
-                };
-                car.AddChild(nameplate);
             }
 
             // === PLAN FIRST DIG TARGETS (after all cars exist) ===
@@ -186,23 +167,65 @@ namespace DigSim3D.App
             _bufferVisualizer.Initialize(obstacleList, obstacleBufferMeters, _terrain.Radius, wallBufferMeters);
             GD.Print($"[Director] BufferVisualizer created - obstacle buffer: {obstacleBufferMeters}m, wall buffer: {wallBufferMeters}m");
 
+            // === Initialize UI ===
+            // Add UI Control to a CanvasLayer to ensure it's drawn on top
+            var uiLayer = new CanvasLayer { Layer = 100 };
+            AddChild(uiLayer);
+            GD.Print($"[Director] Created CanvasLayer for UI");
+
+            _digSimUI = new DigSimUI();
+            uiLayer.AddChild(_digSimUI);
+            GD.Print($"[Director] Added DigSimUI to CanvasLayer");
+
+            // Add robots to UI
+            for (int i = 0; i < _vehicles.Count; i++)
+            {
+                var car = _vehicles[i];
+                if (car.AgentID < 10) {
+                    _digSimUI.AddRobot($"Bicycle-0{car.AgentID}", new Color((float)i / _vehicles.Count, 0.6f, 1.0f));
+                } else {
+                    _digSimUI.AddRobot($"Bicycle-{car.AgentID}", new Color((float)i / _vehicles.Count, 0.6f, 1.0f));
+                }
+            }
+
+            // Calculate and store initial terrain volume
+            _initialTerrainVolume = CalculateTerrainVolume();
+            GD.Print($"[Director] Initial terrain volume: {_initialTerrainVolume:F2} m³");
+
+            _digSimUI.SetDigConfig(_digConfig);
+            GD.Print($"🎮 [Director] Passed DigConfig to UI: DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
+            _digSimUI.SetInitialVolume(_initialTerrainVolume);
+            _digSimUI.SetVehicles(_vehicles);
+
+            // Initialize progress bars to 0% and 100%
+            _digSimUI.UpdateTerrainProgress(_initialTerrainVolume, _initialTerrainVolume);
+
+            GD.Print("[Director] DigSimUI initialized successfully");
+
+            // Toggle Switch for UI Visibility
+            var toggleLayer = new CanvasLayer { Layer = 200 };
+            AddChild(toggleLayer);
+
+            _uiToggle = new UIToggleSwitch();
+            toggleLayer.AddChild(_uiToggle);
+            _uiToggle.SetTargetUI(_digSimUI);
+            
+            // Initialize Vehicle Agents
             // Create world state for path planning
             var worldState = new WorldState
             {
                 Obstacles = obstacleList,
                 Terrain = _terrain
             };
-
             // Create path planner (will be reused for all robots)
             var hybridPlanner = new HybridReedsSheppPlanner();
-
             // Initialize brain dig system with path drawing callback
             foreach (var vehicle in _vehicles)
             {
                 int robotIndex = _vehicles.IndexOf(vehicle);
                 int totalRobots = _vehicles.Count;
-                GD.Print($"🎮 [Director] Initializing brain {robotIndex} with DigConfig.DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
-                vehicle.InitializeDigBrain(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, DrawPathProjectedToTerrain, robotIndex, totalRobots);
+                GD.Print($"🎮 [Director] Initializing vehicle agent {robotIndex} with DigConfig.DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
+                vehicle.InitializeVehicleAgent(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, _digSimUI, DrawPathProjectedToTerrain, robotIndex, totalRobots);
             }
 
             var digTargets = scheduler.PlanFirstDigTargets(
@@ -241,45 +264,6 @@ namespace DigSim3D.App
 
                 GD.Print($"[Director] {car.Name} path: {path.Points.Count} samples");
             }
-
-            // === Initialize UI ===
-            // Add UI Control to a CanvasLayer to ensure it's drawn on top
-            var uiLayer = new CanvasLayer { Layer = 100 };
-            AddChild(uiLayer);
-            GD.Print($"[Director] Created CanvasLayer for UI");
-
-            _digSimUI = new DigSimUI();
-            uiLayer.AddChild(_digSimUI);
-            GD.Print($"[Director] Added DigSimUI to CanvasLayer");
-
-            // Add robots to UI
-            for (int i = 0; i < _vehicles.Count; i++)
-            {
-                var car = _vehicles[i];
-                _digSimUI.AddRobot(i, car._vehicleID, new Color((float)i / _vehicles.Count, 0.6f, 1.0f));
-            }
-
-            // Calculate and store initial terrain volume
-            _initialTerrainVolume = CalculateTerrainVolume();
-            GD.Print($"[Director] Initial terrain volume: {_initialTerrainVolume:F2} m³");
-
-            _digSimUI.SetDigConfig(_digConfig);
-            GD.Print($"🎮 [Director] Passed DigConfig to UI: DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
-            _digSimUI.SetInitialVolume(_initialTerrainVolume);
-            _digSimUI.SetVehicles(_vehicles);
-
-            // Initialize progress bars to 0% and 100%
-            _digSimUI.UpdateTerrainProgress(_initialTerrainVolume, _initialTerrainVolume);
-
-            GD.Print("[Director] DigSimUI initialized successfully");
-
-            // Toggle Switch for UI Visibility
-            var toggleLayer = new CanvasLayer { Layer = 200 };
-            AddChild(toggleLayer);
-
-            _uiToggle = new UIToggleSwitch();
-            toggleLayer.AddChild(_uiToggle);
-            _uiToggle.SetTargetUI(_digSimUI);
 
             // Set Camera Mode before returning from Ready
             SetCameraMode(CameraMode.TopDown);
@@ -629,7 +613,7 @@ namespace DigSim3D.App
         // ------------------------------------------------
 
         // === Placement on terrain using FL/FR/RC (unchanged) =======================
-        private void PlaceOnTerrain(VehicleAgent car, Vector3 outward)
+        private void PlaceOnTerrain(VehicleAgent car, Vector3 outward, Vector3 spawnPosition)
         {
             var yawBasis = Basis.LookingAt(outward, Vector3.Up);
             float halfL = car.currentVehicle.VehicleLength * 0.5f;
@@ -638,7 +622,7 @@ namespace DigSim3D.App
             Vector3 f = -yawBasis.Z;      // Godot forward is -Z
             Vector3 r = yawBasis.X;
 
-            Vector3 centerXZ = car.GlobalTransform.Origin; centerXZ.Y = 0;
+            Vector3 centerXZ = spawnPosition; centerXZ.Y = 0;
 
             Vector3 pFL = centerXZ + f * halfL + r * halfW;
             Vector3 pFR = centerXZ + f * halfL - r * halfW;
@@ -665,7 +649,8 @@ namespace DigSim3D.App
             // float ride = Mathf.Clamp(RideHeight, 0.02f, 0.12f);
             Vector3 pos = hC + n * 0.2f;
 
-            car.GlobalTransform = new Transform3D(basis, pos);
+            // Set child vehicle's global transform (parent stays at origin)
+            car.currentVehicle.GlobalTransform = new Transform3D(basis, pos);
         }
         // ==========================================================================
 

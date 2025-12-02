@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3 uid="uid://cesesjuvmn64s"]
+
+[ext_resource type="Script" uid="uid://45cegcoag6af" path="res://Scripts/UI/VehicleNameplate.cs" id="1_sw80r"]
+
+[node name="vehicle-nameplate" type="Node3D" node_paths=PackedStringArray("_label")]
+script = ExtResource("1_sw80r")
+_label = NodePath("Label3D")
+
+[node name="Label3D" type="Label3D" parent="."]
+pixel_size = 0.0005
+fixed_size = true
+outline_modulate = Color(0, 0, 0, 0.8)
+text = "HELLO"
+font_size = 64
+outline_size = 4

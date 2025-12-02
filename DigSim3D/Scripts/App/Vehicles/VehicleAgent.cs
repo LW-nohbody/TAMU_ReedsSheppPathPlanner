@@ -2,13 +2,14 @@ using Godot;
 using DigSim3D.Domain;
 using DigSim3D.Services;
 using DigSim3D.App.Vehicles;
+using DigSim3D.UI;
 
 namespace DigSim3D.App.Vehicles;
 
 public partial class VehicleAgent : Node3D
 {
     [ExportGroup("Vehicle References")]
-    [Export] private Node3D bicycleVehicle;
+    [Export] private Node3D? bicycleVehicle = null;
     // [Export] private Node3D diffDriveVehicle;
     // [Export] private Node3D centerArticulatedVehicle;
     // [Export] private Node3D screwPropelledVehicle;
@@ -41,6 +42,9 @@ public partial class VehicleAgent : Node3D
 
     /// <summary> Dig configuration </summary>
     private DigConfig _digConfig = null!;
+
+    /// <summary> UI Reference </summary>
+    private DigSimUI _digSimUI = null!;
 
     /// <summary> Path drawing callback (set by SimulationDirector) </summary>
     private System.Action<int, Vector3[], Color> _drawPathCallback = null!;
@@ -101,6 +105,8 @@ public partial class VehicleAgent : Node3D
     private const float FreezeRadius = 2.0f;      // trigger freeze/replan
     private const float UnfreezeRadius = 3.0f;    // must exceed freeze radius
 
+    [Export] public float speed = 0.6f; //mps
+
     private bool _simPaused = false;
     public bool SimPaused
     {
@@ -108,10 +114,35 @@ public partial class VehicleAgent : Node3D
         set => _simPaused = value;
     }
 
-    public string _vehicleID { get; set; }
-    public string Name => _vehicleID; 
+    private int _agentID = -1;
+    public int AgentID
+    {
+        get => _agentID;
+        set
+        {
+            _agentID = value;
+            if (bicycleVehicle != null)
+            {
+                (bicycleVehicle as IVehicle).InitializeID(value);
+            }
 
-    [Export] public float speed = 0.6f; //mps
+            // if (diffDriveVehicle != null)
+            // {
+            //     (diffDriveVehicle as IVehicle).InitializeID(value);
+            // }
+
+            // if (centerArticulatedVehicle != null)
+            // {
+            //     (centerArticulatedVehicle as IVehicle).InitializeID(value);
+            // }
+
+            // if (screwPropelledVehicle != null)
+            // {
+            //     (screwPropelledVehicle as IVehicle).InitializeID(value);
+            // }
+
+        }
+    }
 
     public override void _Ready()
     {
@@ -133,6 +164,9 @@ public partial class VehicleAgent : Node3D
 
         // Enable the one we want
         currentVehicle.Activate();
+
+        // Update Status Entry
+        _digSimUI?.UpdateVehicleEntry(_robotIndex, currentVehicle.Spec.KinType);
     }
 
     private static bool IsInsideAvoidanceRadius(Vector3 a, Vector3 b, float radius)
@@ -145,10 +179,10 @@ public partial class VehicleAgent : Node3D
     /// <summary>
     /// Initialize dig brain with external services and sector assignment.
     /// </summary>
-    public void InitializeDigBrain(
+    public void InitializeVehicleAgent(
         DigService digService, TerrainDisk terrain,
         RadialScheduler scheduler, DigConfig digConfig, IPathPlanner pathPlanner,
-        WorldState worldState, System.Action<int, Vector3[], Color> drawPathCallback,
+        WorldState worldState, DigSimUI digSimUI, System.Action<int, Vector3[], Color> drawPathCallback,
         int sectorIndex, int totalSectors)
     {
         _digService = digService;
@@ -158,6 +192,7 @@ public partial class VehicleAgent : Node3D
         _pathPlanner = pathPlanner;
         _worldState = worldState;
         _drawPathCallback = drawPathCallback;
+        _digSimUI = digSimUI;
 
         // Assign permanent sector + robot index
         SectorIndex = sectorIndex;

@@ -1,5 +1,7 @@
 using Godot;
 using DigSim3D.Domain;
+using DigSim3D.UI;
+using DigSim3D.Services;
 
 namespace DigSim3D.App.Vehicles;
 
@@ -41,6 +43,7 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
     [Export] public float TiltCorrectionStrength = 5.0f; // How aggressively to correct tilt
     [Export] public float MaxTiltAngle = 25f; // Maximum tilt in degrees before correction
     [Export] public bool EnableTiltCorrection = true; // Toggle auto-stabilization
+    [Export] private VehicleNameplate _nameplate = null!;
 
     public bool isPaused { get; set; } = false;
     public VehicleSpec Spec => new VehicleSpec(
@@ -208,6 +211,21 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
         if (AngularVelocity.Length() > 3.0f)
         {
             AngularVelocity *= 0.9f; // Dampen by 10% each frame when spinning too fast
+        }
+    }
+
+    public void InitializeID(int ID)
+    {
+        if (_nameplate != null)
+        {
+            if (ID < 10) {
+                _nameplate.SetText($"Bicycle-0{ID}");
+            } else {
+                _nameplate.SetText($"Bicycle-{ID}"); 
+            }
+            
+        } else {
+            GD.PushError("[BicycleVehicle] Nameplate node is not assigned.");
         }
     }
 }

@@ -5,6 +5,7 @@ using System.Linq;
 using DigSim3D.Domain;
 using DigSim3D.App;
 using DigSim3D.App.Vehicles;
+using DigSim3D.Services;
 
 namespace DigSim3D.UI
 {
@@ -14,7 +15,7 @@ namespace DigSim3D.UI
     public partial class DigSimUI : Control
     {
         private VBoxContainer _leftPanelContainer = null!;
-        private List<PremiumRobotStatusEntry> _robotEntries = new();
+        private List<RobotStatusEntry> _robotEntries = new();
         private VBoxContainer _robotEntriesContainer = null!;
         // private Dictionary<int, PremiumRobotStatusEntry> _robotEntries = new();
         private AnimatedValueLabel _remainingDirtLabel = null!;
@@ -385,12 +386,33 @@ namespace DigSim3D.UI
             vbox.AddChild(_radiusSlider);
         }
 
-        public void AddRobot(int index, string robotId, Color color)
+        public void AddRobot(string robotName, Color color)
         {
-            var robotPanel = new PremiumRobotStatusEntry(robotId, color);
+            var robotPanel = new RobotStatusEntry(robotName, color);
             _robotEntriesContainer.AddChild(robotPanel);
             _robotEntries.Add(robotPanel);
-            GD.Print($"[DigSimUI] Added agent status panel {robotId}");
+            GD.Print($"[DigSimUI] Added agent status panel {robotName  }");
+        }
+
+        public void UpdateVehicleEntry(int AgentID, KinematicType kinType)
+        {
+            if (AgentID > 0 && AgentID <= _robotEntries.Count)
+            {
+                string newID = AgentID.ToString();
+                if (AgentID < 10)
+                    newID = "0" + newID;
+                var entry = _robotEntries[AgentID-1];
+                if (kinType == KinematicType.Bicycle)
+                    entry.UpdateRobotName($"Bicycle-{newID}");
+                else if (kinType == KinematicType.DiffDrive)
+                    entry.UpdateRobotName($"DiffDrive-{newID}");
+                else if (kinType == KinematicType.CenterArticulated)
+                    entry.UpdateRobotName($"CenterArticulated-{newID}");
+                else if (kinType == KinematicType.ScrewPropelled)
+                    entry.UpdateRobotName($"ScrewPropelled-{newID}");
+                else
+                    GD.PushError($"[DigSimUI] Unknown KinematicType for vehicle entry update: {kinType}");
+            }
         }
 
         public void UpdateRobotPayload(int index, float payloadPercent, Vector3 position, string status)

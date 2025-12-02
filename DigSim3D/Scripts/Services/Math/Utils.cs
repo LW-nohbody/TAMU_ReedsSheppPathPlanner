@@ -1,5 +1,6 @@
 namespace DigSim3D.Services;
 
+public enum KinematicType { Bicycle, DiffDrive, CenterArticulated, ScrewPropelled }
 public enum Steering { LEFT = -1, RIGHT = 1, STRAIGHT = 0 }
 public enum Gear { FORWARD = 1, BACKWARD = -1 }
 
