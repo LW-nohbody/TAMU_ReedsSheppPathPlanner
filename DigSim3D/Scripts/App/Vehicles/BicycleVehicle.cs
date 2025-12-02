@@ -27,15 +27,25 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
 
 
     // Vehicle Specs
-    [Export] public float VehicleLength { get; set; } = 2.0f;
-    [Export] public float VehicleWidth { get; set; } =  0.7f;
-    [Export] public float VehicleHeight { get; set; }    =  0.7f;
+    public float VehicleLength { get; } = 1.1f;
+    public float VehicleWidth { get; } = 0.5f;
+    public float VehicleHeight { get; } = 0.7f;
+    public float Wheelbase { get; } = 0.35f;
 
     // How hard it drives forward (reduced for stability)
     [Export] public float DriveForce = 150f;
 
-    // Steering angle in radians (reduced for stability: 0.2 ≈ 11 degrees)
-    [Export] public float SteerAngle = 0.2f;
+    // Turn Radius (meters) -> controls steering angle
+    [Export] public float initialTurnRadiusInMeters = 1.0f;
+    private float _turnRadiusInMeters = 1.0f;
+    public float TurnRadiusInMeters { 
+        get => _turnRadiusInMeters; 
+        set{
+            _turnRadiusInMeters = value;
+            SteeringAngle = Mathf.Atan(VehicleLength / value);
+        }
+    }
+    private float SteeringAngle { get; set; } = 0f;
     
     // Stability settings
     [Export] public float MaxSpeed = 1f; // Maximum speed in m/s
@@ -44,12 +54,10 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
     [Export] public float MaxTiltAngle = 25f; // Maximum tilt in degrees before correction
     [Export] public bool EnableTiltCorrection = true; // Toggle auto-stabilization
     [Export] private VehicleNameplate _nameplate = null!;
-
-    public bool isPaused { get; set; } = false;
     public VehicleSpec Spec => new VehicleSpec(
         KinematicType.Bicycle,
-        0.5f,
-        10f);
+        TurnRadiusInMeters,
+        MaxSpeed);
 
     private Vector3[] _path = Array.Empty<Vector3>();
     private int[] _gears = Array.Empty<int>();
@@ -112,11 +120,13 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
         Freeze = true;
     }
 
-    public override void _PhysicsProcess(double delta)
+    public override void _Ready()
     {
-        if (isPaused)
-            return;
-        
+        SteeringAngle = Mathf.Atan(VehicleLength / initialTurnRadiusInMeters);
+    }
+
+    public override void _PhysicsProcess(double delta)
+    {   
         // Ensure physics is active
         if (Sleeping)
         {
@@ -148,7 +158,7 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
         }
 
         // Constant steering angle → drives in a circle
-        Steering = SteerAngle;
+        Steering = SteeringAngle;
 
         // No user input needed.
         Brake = 0f;        // // Update speed based on acceleration/deceleration inputs
@@ -243,5 +253,17 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
     public void UnfreezePhysics()
     {
         Freeze = false;
+    }
+
+    public void addLayerToCollisionMask(int layer)
+    {
+        // Clamp layer to valid 1..32 range to avoid undefined shifts and keep within uint bits
+        if (layer < 1) layer = 1;
+        if (layer > 32) layer = 32;
+        // Use unsigned literal so the shift result is uint and matches CollisionMask type
+        uint layerBit = 1u << (layer - 1);
+        CollisionMask |= layerBit;
+
+        GD.Print($"[BicycleVehicle] Collision mask set to {layer} (layer {layerBit}) as {CollisionMask}.");
     }
 }

@@ -6,4 +6,7 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>DigSim3D</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PathPlanningLib\Algorithms\PathPlanningLib.Algorithms.csproj"/>
+  </ItemGroup>
 </Project>

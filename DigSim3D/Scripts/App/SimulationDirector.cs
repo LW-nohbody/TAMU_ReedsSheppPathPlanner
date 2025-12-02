@@ -77,9 +77,10 @@ namespace DigSim3D.App
         private DigSim3D.UI.UIToggleSwitch? _uiToggle = null!;
         private readonly Dictionary<int, MeshInstance3D> _pathMeshes = new();
 
-        [Export] public bool DynamicAvoidanceEnabled = false;
+        [Export] public bool DynamicAvoidance = false;
 
         [Export] public bool VehicleCollision = false;
+        [Export] public bool ObstacleCollision = false;
 
         public override void _Ready()
         {
@@ -126,16 +127,25 @@ namespace DigSim3D.App
                 var outward = new Vector3(Mathf.Cos(theta), 0, Mathf.Sin(theta)).Normalized();
                 var spawnXZ = outward * SpawnRadius;
 
-                // var car = VehicleScene.Instantiate<VehicleVisualizer>();
+                // Initialize VehicleAgent Instance
                 var car = VehicleScene.Instantiate<VehicleAgent>();
+                car.AgentID = i+1;
+
+                if (VehicleCollision)
+                {
+                    car.EnableVehicleCollision();
+                }
+
+                if (ObstacleCollision)
+                {
+                    car.EnableObstacleCollision();
+                }
+
                 _vehiclesRoot.AddChild(car);
                 
-                // Keep parent VehicleAgent at origin
+                // Add VehicleAgent Instance to Scene at Correct Position & Orientation
                 car.GlobalPosition = Vector3.Zero;
-
                 PlaceOnTerrain(car, outward, spawnXZ);
-
-                car.AgentID = i+1;
 
                 _vehicles.Add(car);
 
@@ -147,12 +157,6 @@ namespace DigSim3D.App
 
             // === Initialize Dig Service ===
             _digService = new DigService(_terrain, _digConfig);
-
-
-            // Create dig visualizer
-            // _digVisualizer = new DigVisualizer { Name = "DigVisualizer" };
-            // AddChild(_digVisualizer);
-
 
             // Create sector visualizer to show robot sectors
             _sectorVisualizer = new SectorVisualizer { Name = "SectorVisualizer" };
@@ -291,11 +295,15 @@ namespace DigSim3D.App
                     case Key.P:
                         _simPaused = !_simPaused;
                         GD.Print($"Sim paused: {_simPaused}");
+
                         // Tell all vehicles to respect sim pause
                         foreach (var v in _vehicles)
                             v.SimPaused = _simPaused;
-                        return;
+                        
+                        // Tell dig service to pause mesh updates
+                        _digService._simPaused = _simPaused;
 
+                        return;
                     case Key.Left:
                         if (_mode == CameraMode.VehicleFollow) { CycleFollowTarget(-1); return; }
                         break;
@@ -401,42 +409,38 @@ namespace DigSim3D.App
             // Only advance digging + brains when NOT paused
             if (!_simPaused)
             {
-                // Update terrain dig batching
-                _digService?.Update((float)delta);
-
                 foreach (var vehicle in _vehicles)
                 {
                     vehicle.UpdateDigBehavior((float)delta);
 
-                    if (DynamicAvoidanceEnabled)
+                    if (DynamicAvoidance && _dynamicObstacleManager != null)
                     {
-                        if (_dynamicObstacleManager != null)
+                        int myIndex = _vehicles.IndexOf(vehicle);
+                        bool shouldPause = false;
+
+                        foreach (var other in _vehicles)
                         {
-                            int myIndex = _vehicles.IndexOf(vehicle);
-                            bool shouldPause = false;
+                            if (other == vehicle) continue;
 
-                            foreach (var other in _vehicles)
+                            int otherIndex = _vehicles.IndexOf(other);
+                            float dist = vehicle.currentVehicle.GlobalTransform.Origin.DistanceTo(other.currentVehicle.GlobalTransform.Origin);
+
+                            if (dist < _dynamicObstacleManager.AvoidanceRadius)
                             {
-                                if (other == vehicle) continue;
-
-                                int otherIndex = _vehicles.IndexOf(other);
-                                float dist = vehicle.currentVehicle.GlobalTransform.Origin.DistanceTo(other.currentVehicle.GlobalTransform.Origin);
-
-                                if (dist < _dynamicObstacleManager.AvoidanceRadius)
+                                if (otherIndex > myIndex)
                                 {
-                                    if (otherIndex > myIndex)
-                                    {
-                                        shouldPause = true;
-                                        break;
-                                    }
+                                    shouldPause = true;
+                                    break;
                                 }
                             }
-
-                            if (shouldPause)
-                                vehicle.FreezeForPriority();     // ← replan happens once inside this
-                            else
-                                vehicle.UnfreezeFromPriority();  // ← resets the "allowed to replan" flag
                         }
+
+                        if (shouldPause)
+                            vehicle.FreezeForPriority();     // ← replan happens once inside this
+                        else
+                            vehicle.UnfreezeFromPriority();  // ← resets the "allowed to replan" flag
+                    } else if (DynamicAvoidance &&_dynamicObstacleManager == null) {
+                        GD.PushError("Dynamic avoidance is enabled, but DynamicObstacleManager is null. Set Dynamic Obstacle Manager Node");
                     }
                 }
             }

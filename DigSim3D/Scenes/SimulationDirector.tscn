@@ -1,12 +1,11 @@
-[gd_scene load_steps=22 format=3 uid="uid://cc5m8lpvnpnfv"]
+[gd_scene load_steps=11 format=3 uid="uid://cc5m8lpvnpnfv"]
 
-[ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrainDisk.tscn" id="1_rtcuc"]
+[ext_resource type="PackedScene" uid="uid://jvambkvdo1tv" path="res://Scenes/Terrain/terrain-disk.tscn" id="1_rtcuc"]
 [ext_resource type="Script" uid="uid://y3xj5surludi" path="res://Scripts/App/SimulationDirector.cs" id="1_tjpb3"]
 [ext_resource type="PackedScene" uid="uid://bovnyi5ylhbh3" path="res://Scenes/Vehicles/vehicle-agent.tscn" id="2_nl4sy"]
 [ext_resource type="Script" uid="uid://ytlhjpjwably" path="res://Scripts/App/ObstacleManager.cs" id="3_obmgr"]
-[ext_resource type="Material" uid="uid://d0aiqbs32qvub" path="res://Materials/concrete.tres" id="3_qfmbg"]
-[ext_resource type="Script" uid="uid://b13ashnn4eika" path="res://Scripts/Domain/CylinderObstacle.cs" id="4_cyl"]
-[ext_resource type="PackedScene" uid="uid://dq8n0206s7f87" path="res://Scenes/Vehicles/BicycleVehicle/bicycle-physics.tscn" id="7_nl4sy"]
+[ext_resource type="PackedScene" uid="uid://bucsvkw710y1q" path="res://Scenes/Terrain/outer-tank.tscn" id="4_xklxq"]
+[ext_resource type="PackedScene" uid="uid://cql6tbyhs0nf1" path="res://Scenes/Obstacles/cylinder-obstacle.tscn" id="6_xklxq"]
 [ext_resource type="Script" uid="uid://chaide3q2pxey" path="res://Scripts/App/DynamicObstacleManager.cs" id="7_xklxq"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_tjpb3"]
@@ -22,61 +21,6 @@ ambient_light_source = 3
 ambient_light_color = Color(1, 1, 1, 1)
 ambient_light_sky_contribution = 0.7
 tonemap_mode = 3
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_nl4sy"]
-transparency = 1
-cull_mode = 2
-shading_mode = 0
-albedo_color = Color(1, 0, 0, 0.3)
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_hk6n0"]
-top_radius = 1.0
-bottom_radius = 1.0
-radial_segments = 32
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_xcytq"]
-transparency = 1
-cull_mode = 2
-shading_mode = 0
-albedo_color = Color(1, 0, 0, 0.3)
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_paq1p"]
-top_radius = 1.0
-bottom_radius = 1.0
-radial_segments = 32
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5352s"]
-transparency = 1
-cull_mode = 2
-shading_mode = 0
-albedo_color = Color(1, 0, 0, 0.3)
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_4ksok"]
-top_radius = 1.0
-bottom_radius = 1.0
-radial_segments = 32
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ayuat"]
-transparency = 1
-cull_mode = 2
-shading_mode = 0
-albedo_color = Color(1, 0, 0, 0.3)
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_qfrvw"]
-top_radius = 1.0
-bottom_radius = 1.0
-radial_segments = 32
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sin3t"]
-transparency = 1
-cull_mode = 2
-shading_mode = 0
-albedo_color = Color(1, 0, 0, 0.3)
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_qocqs"]
-top_radius = 1.0
-bottom_radius = 1.0
-radial_segments = 32
 
 [node name="SimulationDirector" type="Node3D"]
 transform = Transform3D(0.984884, 0, 0, 0, 0.984884, 0, 0, 0, 0.984884, 0, 0, 0)
@@ -124,83 +68,21 @@ Octaves = 2
 Smooth = 0.9
 FloorY = -0.492442
 
-[node name="Tank_Outer" type="CSGCylinder3D" parent="."]
+[node name="outer-tank" parent="." instance=ExtResource("4_xklxq")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-radius = 15.3
-height = 3.0
-sides = 48
-material = ExtResource("3_qfmbg")
-
-[node name="Tank_Inner" type="CSGCylinder3D" parent="Tank_Outer"]
-operation = 2
-radius = 15.0
-height = 3.0
-sides = 48
-material = ExtResource("3_qfmbg")
-
-[node name="Tank_Floor" type="CSGCylinder3D" parent="Tank_Outer"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.65, 0)
-radius = 15.3
-height = 0.3
-sides = 48
-material = ExtResource("3_qfmbg")
+use_collision = true
+collision_layer = 2
 
 [node name="ObstacleManager" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
 script = ExtResource("3_obmgr")
 
-[node name="CylinderObs1" type="Node3D" parent="ObstacleManager"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.0171, 0, 2.12421)
-script = ExtResource("4_cyl")
-Radius = 0.5
+[node name="cylinder-obstacle1" parent="ObstacleManager" instance=ExtResource("6_xklxq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2449, 0, 3.00334)
+Radius = 2.0
 
-[node name="CylinderObs2" type="Node3D" parent="ObstacleManager"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.15864, 0, -2.61797)
-script = ExtResource("4_cyl")
-Radius = 0.5
-
-[node name="CylinderObs3" type="Node3D" parent="ObstacleManager"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.06811, 0, -0.146843)
-script = ExtResource("4_cyl")
-
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs3"]
-material_override = SubResource("StandardMaterial3D_nl4sy")
-mesh = SubResource("CylinderMesh_hk6n0")
-
-[node name="CylinderObs4" type="Node3D" parent="ObstacleManager"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.09339, 0, 4.45308)
-script = ExtResource("4_cyl")
-
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs4"]
-material_override = SubResource("StandardMaterial3D_xcytq")
-mesh = SubResource("CylinderMesh_paq1p")
-
-[node name="CylinderObs5" type="Node3D" parent="ObstacleManager"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.18546, 0, -3.4163)
-script = ExtResource("4_cyl")
-
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs5"]
-material_override = SubResource("StandardMaterial3D_5352s")
-mesh = SubResource("CylinderMesh_4ksok")
-
-[node name="CylinderObs6" type="Node3D" parent="ObstacleManager"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.22214, 0, 4.3908)
-script = ExtResource("4_cyl")
-
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs6"]
-material_override = SubResource("StandardMaterial3D_ayuat")
-mesh = SubResource("CylinderMesh_qfrvw")
-
-[node name="CylinderObs7" type="Node3D" parent="ObstacleManager"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.866754, 0, -4.57441)
-script = ExtResource("4_cyl")
-
-[node name="EditorMesh" type="MeshInstance3D" parent="ObstacleManager/CylinderObs7"]
-material_override = SubResource("StandardMaterial3D_sin3t")
-mesh = SubResource("CylinderMesh_qocqs")
+[node name="cylinder-obstacle2" parent="ObstacleManager" instance=ExtResource("6_xklxq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.22641, 0, -0.308772)
 
 [node name="DynamicObstacleManager" type="Node3D" parent="."]
 script = ExtResource("7_xklxq")
-
-[node name="bicycle-physics" parent="." instance=ExtResource("7_nl4sy")]
-transform = Transform3D(1.01535, 0, 0, 0, 1.01535, 0, 0, 0, 1.01535, -7.9838, 0.0829609, -3.87791)

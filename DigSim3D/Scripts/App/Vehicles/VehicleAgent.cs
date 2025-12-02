@@ -111,7 +111,15 @@ public partial class VehicleAgent : Node3D
     public bool SimPaused
     {
         get => _simPaused;
-        set => _simPaused = value;
+        set
+        { 
+            _simPaused = value;
+            if (currentVehicle != null)
+                if (_simPaused)
+                    currentVehicle.FreezePhysics();
+                else
+                    currentVehicle.UnfreezePhysics();
+        }
     }
 
     private int _agentID = -1;
@@ -150,7 +158,7 @@ public partial class VehicleAgent : Node3D
         SetCurrentVehicle(bicycleVehicle);
     }
 
-     public void SetCurrentVehicle(Node3D node)
+    public void SetCurrentVehicle(Node3D node)
     {
         if (currentVehicle != null && currentVehicle == (node as IVehicle)) 
             return; // No change
@@ -185,6 +193,22 @@ public partial class VehicleAgent : Node3D
 
         // Update Status Entry
         _digSimUI?.UpdateVehicleEntry(_robotIndex, currentVehicle.Spec.KinType);
+    }
+
+    const int VEHICLE_COLLISION_LAYER = 1;
+    public void EnableVehicleCollision() {
+        (bicycleVehicle as IVehicle).addLayerToCollisionMask(VEHICLE_COLLISION_LAYER);
+        // (diffDriveVehicle as IVehicle).addLayerToCollisionMask(VEHICLE_COLLISION_LAYER);
+        // (centerArticulatedVehicle as IVehicle).addLayerToCollisionMask(VEHICLE_COLLISION_LAYER);
+        // (screwPropelledVehicle as IVehicle).addLayerToCollisionMask(VEHICLE_COLLISION_LAYER);
+    }
+
+    const int OBSTACLE_COLLISION_LAYER = 3;
+    public void EnableObstacleCollision() {
+        (bicycleVehicle as IVehicle).addLayerToCollisionMask(OBSTACLE_COLLISION_LAYER);
+        // (diffDriveVehicle as IVehicle).addLayerToCollisionMask(OBSTACLE_COLLISION_LAYER);
+        // (centerArticulatedVehicle as IVehicle).addLayerToCollisionMask(OBSTACLE_COLLISION_LAYER);
+        // (screwPropelledVehicle as IVehicle).addLayerToCollisionMask(OBSTACLE_COLLISION_LAYER);
     }
 
     private static bool IsInsideAvoidanceRadius(Vector3 a, Vector3 b, float radius)

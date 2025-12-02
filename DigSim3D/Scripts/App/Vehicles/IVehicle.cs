@@ -5,12 +5,11 @@ namespace DigSim3D.App.Vehicles;
 
 public interface IVehicle
 {
-    public bool isPaused { get; set; }
     public Transform3D GlobalTransform { get; set; }
     public Vector3 GlobalPosition { get; set; }
     public VehicleSpec Spec { get; }
     public float VehicleLength { get; }
-   public float VehicleWidth { get; }
+    public float VehicleWidth { get; }
 
     void Activate();
     void Activate(Transform3D transform);
@@ -22,4 +21,5 @@ public interface IVehicle
     public void InitializeID(int ID);
     public void FreezePhysics();
     public void UnfreezePhysics();
+    public void addLayerToCollisionMask(int layer);
 }

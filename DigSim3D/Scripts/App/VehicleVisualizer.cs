@@ -2,6 +2,7 @@ using Godot;
 using System;
 using DigSim3D.Domain;
 using DigSim3D.Services;
+using DigSim3D.App.Vehicles;
 
 namespace DigSim3D.App
 {

@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://dbhgslsrb6tug" path="res://Scripts/App/Vehicles/VehicleAgent.cs" id="1_hwqth"]
 [ext_resource type="PackedScene" uid="uid://dq8n0206s7f87" path="res://Scenes/Vehicles/BicycleVehicle/bicycle-physics.tscn" id="2_n5b63"]
 
-[node name="VehicleAgent" type="Node3D" node_paths=PackedStringArray("bicycleVehicle")]
+[node name="vehicle-agent" type="Node3D" node_paths=PackedStringArray("bicycleVehicle")]
 script = ExtResource("1_hwqth")
 bicycleVehicle = NodePath("bicycle-physics")
 
