@@ -13,7 +13,6 @@ namespace DigSim3D.App
         private PanelContainer _panel = null!;
         private VBoxContainer _vbox = null!;
         private List<Label> _robotLabels = new();
-        private const int MAX_ROBOTS_TO_SHOW = 8;
 
         public override void _Ready()
         {

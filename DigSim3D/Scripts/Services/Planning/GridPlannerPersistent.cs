@@ -14,9 +14,6 @@ namespace DigSim3D.Services
         private static int _gridExtent;
         private static float _obstacleBuffer;
         private static bool _built = false;
-        public static bool IsBuilt => _built;
-
-
 
         private static readonly List<Vector2> _lastBlockedCenters = new();
         public static IReadOnlyList<Vector2> LastBlockedCenters => _lastBlockedCenters;

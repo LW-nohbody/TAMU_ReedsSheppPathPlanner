@@ -32,9 +32,6 @@ namespace DigSim3D.UI
         private PremiumUIPanel _settingsPanel = null!;
         private List<VehicleVisualizer> _vehicles = new();
 
-        // Draggable state
-        private bool _isDraggingLeftPanel = false;
-        private Vector2 _dragOffset = Vector2.Zero;
         private Control _leftPanel = null!;
         private Panel _mainPanel = null!; // Track the main panel for resizing
         
