@@ -35,7 +35,7 @@ namespace DigSim3D.App
         [Export(PropertyHint.Range, "5,30,0.5")]
         public float ArenaRadius = 15.0f;
         [Export(PropertyHint.Range, "0.1,1,0.05")]
-        public float ArenaDepth = 0.6f;   // average soil thickness above concrete
+        public float ArenaDepth = 0.1f;   // average soil thickness above concrete
         [Export] public NodePath TankOuterPath = null!;
         public float WallThickness = 0.3f; // Outer = ArenaRadius + WallThickness
 
@@ -587,8 +587,14 @@ namespace DigSim3D.App
                                 continue;
 
                             int otherIndex = _robotBrains.IndexOf(other);
-                            float dist = brain.Agent.GlobalTransform.Origin.DistanceTo(
-                                other.Agent.GlobalTransform.Origin);
+
+                            var myPos = brain.Agent.GlobalTransform.Origin;
+                            var otherPos = other.Agent.GlobalTransform.Origin;
+
+                            // XZ-only distance
+                            float dx = myPos.X - otherPos.X;
+                            float dz = myPos.Z - otherPos.Z;
+                            float dist = Mathf.Sqrt(dx * dx + dz * dz);
 
                             if (dist < _dynamicObstacleManager.AvoidanceRadius)
                             {
@@ -927,6 +933,19 @@ namespace DigSim3D.App
 
             if (mi.Mesh != null && mi.Mesh.GetSurfaceCount() > 0)
                 mi.SetSurfaceOverrideMaterial(0, mat);
+
+            _pathMeshes[robotIndex] = mi;
+
+            // 🔹 NEW: draw start & goal markers for this path
+            var startPos = points[0];
+            var goalPos = points[points.Length - 1];
+
+            // You can tweak colors; these are just readable defaults
+            var startColor = new Color(0.1f, 1.0f, 0.1f, 0.9f); // green-ish
+            var goalColor = new Color(1.0f, 0.2f, 0.2f, 0.9f); // red-ish
+
+            DrawMarkerProjected(robotIndex, startPos, startColor, isGoal: false);
+            DrawMarkerProjected(robotIndex, goalPos, goalColor, isGoal: true);
         }
 
         /// <summary>
