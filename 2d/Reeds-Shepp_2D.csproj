@@ -7,7 +7,4 @@
   <ItemGroup>
     <ProjectReference Include="..\PathPlanningLib\Algorithms\PathPlanningLib.Algorithms.csproj"/>
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\PathPlanningLib\Framework\PathPlanningLib.Framework.csproj"/>
-  </ItemGroup>
 </Project>
