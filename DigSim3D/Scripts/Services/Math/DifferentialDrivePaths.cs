@@ -50,9 +50,19 @@ using System.Security.Cryptography;
 // }
 namespace DigSim3D.Services
 {
+    /// <summary>
+    /// Generates the Differential Drive paths as a series of PathElements
+    /// </summary>
     public static class DifferentialDrivePaths
     {
         // ---------- families 1..12 (all take phi in RADIANS) ----------
+        /// <summary>
+        /// Generates the first main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path1(double x, double y, double phi)
         {
             var path = new List<PathElement>();
@@ -64,6 +74,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Generates second main path model
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="phi"></param>
+        /// <returns></returns>
         public static List<PathElement> Path2(double x, double y, double phi)
         {
             phi = Utils.M(phi);
@@ -82,16 +99,33 @@ namespace DigSim3D.Services
         }
 
         // ----- symmetries (time-flip reverses order + gear) -----
+        /// <summary>
+        /// Performs time flip on all PathElements, so they move in reverse (forward gears become reverse and vice versa)
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
         public static List<PathElement> Timeflip(List<PathElement> path)
         {
             return path.Select(e => e.ReverseGear()).ToList(); // matches reference
         }
 
 
+        /// <summary>
+        /// Reflects all PathElements, such that lefts are now rights and vice versa
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
         public static List<PathElement> Reflect(List<PathElement> path)
             => path.Select(e => new PathElement(e.Param, (Steering)(-(int)e.Steering), e.Gear)).ToList();
 
 
+
+        /// <summary>
+        /// Generates all Differential Drive paths from start to end
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <returns></returns>
         public static List<List<PathElement>> GetAllPaths(
             (double x, double y, double theta) start,
             (double x, double y, double theta) end)
@@ -118,6 +152,12 @@ namespace DigSim3D.Services
             return candidates.Where(p => p.Count > 0).ToList();
         }
 
+        /// <summary>
+        /// Sorts all paths and returns the shortest
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <returns></returns>
         public static List<PathElement> GetOptimalPath(
             (double x, double y, double theta) start,
             (double x, double y, double theta) end)

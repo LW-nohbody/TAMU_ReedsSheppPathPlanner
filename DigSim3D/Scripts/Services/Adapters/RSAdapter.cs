@@ -6,12 +6,31 @@ using DigSim3D.Debugging;
 
 namespace DigSim3D.Services
 {
+    /// <summary>
+    /// Changes coordinate system and calculates the shortest Reeds-Shepp path
+    /// </summary>
     public static class RSAdapter
     {
         // Map 3D (x,0,z, yaw) to math 2D (x,y,theta).
+        /// <summary>
+        /// Changes coordinate system from Godot's Vector3 to a 2D-based vector for path generation
+        /// </summary>
+        /// <param name="pos"></param>
+        /// <param name="yawRad"></param>
+        /// <returns></returns>
         private static (double x, double y, double th) ToMath3D(Vector3 pos, double yawRad)
             => (pos.X, pos.Z, yawRad);
 
+        /// <summary>
+        /// Computes the shortest Reeds-Shepp path from start position to goal position
+        /// </summary>
+        /// <param name="startPos"></param>
+        /// <param name="startYawRad"></param>
+        /// <param name="goalPos"></param>
+        /// <param name="goalYawRad"></param>
+        /// <param name="turnRadiusMeters"></param>
+        /// <param name="sampleStepMeters"></param>
+        /// <returns></returns>
         public static (Vector3[] points, int[] gears) ComputePath3D(
             Vector3 startPos, double startYawRad,
             Vector3 goalPos, double goalYawRad,

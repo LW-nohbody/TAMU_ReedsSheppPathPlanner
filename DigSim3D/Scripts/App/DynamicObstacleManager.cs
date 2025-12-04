@@ -71,10 +71,5 @@ namespace DigSim3D.App
             }
             return false;
         }
-
-
-        /// <summary>
-        /// Optional: Visual debug draw (for in-editor visualization).
-        /// </summary>
     }
 }

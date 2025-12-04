@@ -4,12 +4,32 @@ using System.Collections.Generic;
 using System.Linq;
 
 namespace DigSim3D.Services{
+	/// <summary>
+    /// Changes the cooridnate system for paths from Godot to a 2D system for Dubins path generation
+    /// </summary>
 	public static class DAdapter
 	{
 		// Map 3D (x,0,z, yaw) to math 2D (x,y,theta).
+		/// <summary>
+        /// Converts the Godot's Vector3 into a 2D for use in path generation
+        /// </summary>
+        /// <param name="pos"></param>
+        /// <param name="yawRad"></param>
+        /// <returns></returns>
 		private static (double x, double y, double th) ToMath3D(Vector3 pos, double yawRad)
 			=> (pos.X, pos.Z, yawRad);
 
+		/// <summary>
+        /// Given start, and goal positions from Godot, give a list of Vector3 points and gears forming the shortest Dubins path from the start to the goal
+        /// </summary>
+        /// <param name="startPos"></param>
+        /// <param name="startYawRad"></param>
+        /// <param name="goalPos"></param>
+        /// <param name="goalYawRad"></param>
+        /// <param name="turnRadiusMeters"></param>
+        /// <param name="fieldRadius"></param>
+        /// <param name="sampleStepMeters"></param>
+        /// <returns></returns>
 		public static (Vector3[] points, int[] gears) ComputePath3D(
 			Vector3 startPos, double startYawRad,
 			Vector3 goalPos, double goalYawRad,
@@ -73,6 +93,17 @@ namespace DigSim3D.Services{
 			return (list3.ToArray(), gears.ToArray());
 		}
 
+		/// <summary>
+        /// Compute all Dubins paths from shortest to longest from start to goal given as Vector3's in Godot
+        /// </summary>
+        /// <param name="startPos"></param>
+        /// <param name="startYawRad"></param>
+        /// <param name="goalPos"></param>
+        /// <param name="goalYawRad"></param>
+        /// <param name="turnRadiusMeters"></param>
+        /// <param name="fieldRadius"></param>
+        /// <param name="sampleStepMeters"></param>
+        /// <returns></returns>
 		public static (Vector3[][] points, int[][] gears) ComputeAllPath3D(
 			Vector3 startPos, double startYawRad,
 			Vector3 goalPos, double goalYawRad,
@@ -144,6 +175,16 @@ namespace DigSim3D.Services{
 			return (listOfPathPoints.ToArray(), listOfPathGears.ToArray());
 		}
 
+		/// <summary>
+        /// Checks that path does not leave the arena
+        /// </summary>
+        /// <param name="startPos"></param>
+        /// <param name="startYawRad"></param>
+        /// <param name="testPath"></param>
+        /// <param name="turnRadiusMeters"></param>
+        /// <param name="sampleStepMeters"></param>
+        /// <param name="maxRange"></param>
+        /// <returns></returns>
 		private static bool ValidatePath(
 			Vector3 startPos, double startYawRad,
 			List<PathElement> testPath,

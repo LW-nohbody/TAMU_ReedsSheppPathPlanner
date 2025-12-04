@@ -3,7 +3,7 @@ using Godot;
 namespace DigSim3D.Domain
 {
     /// <summary>
-    /// Dig scoring and parameters for the DigService.
+    /// Parameters for the DigService.
     /// </summary>
     public sealed class DigConfig
     {

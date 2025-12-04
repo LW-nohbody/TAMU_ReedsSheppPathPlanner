@@ -10,7 +10,7 @@ namespace DigSim3D.Services
     /// <summary>
     /// Hybrid path planner that first tries a Reeds–Shepp path.
     /// If blocked, it computes an A* grid path and then stitches
-    /// collision-free RS segments through key A* waypoints.
+    /// collision-free RS segments through key A* waypoints.  
     /// </summary>
     public sealed class HybridReedsSheppPlanner : IPathPlanner
     {
@@ -34,10 +34,16 @@ namespace DigSim3D.Services
             _maxAttempts = maxAttempts;
         }
 
+        /// <summary>
+        /// Plans the RS path, if can't reach goal starts to replan path to avoid obstacles
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="goal"></param>
+        /// <param name="spec"></param>
+        /// <param name="world"></param>
+        /// <returns></returns>
         public PlannedPath Plan(Pose start, Pose goal, VehicleSpec spec, WorldState world)
         {
-            //GD.Print($"[HybridReedsSheppPlanner] DEBUG: Running Plan() — obstacles={world?.Obstacles?.Count() ?? 0}");
-
             var startPos = new Vector3((float)start.X, 0, (float)start.Z);
             var goalPos = new Vector3((float)goal.X, 0, (float)goal.Z);
 
@@ -67,13 +73,6 @@ namespace DigSim3D.Services
             var rsPts = rsPoints.ToList();
             if (obstacles.Count == 0 || PathIsValid(rsPts, obstacles, arenaRadius))
             {
-                //GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
-#if DEBUG
-                //GD.Print("[HybridReedsSheppPlanner] (Debug) Forcing grid visualization even for clear RS path.");
-                // DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, 
-                //                    new List<Vector3> { startPos, goalPos }, 
-                //                    _gridSize, _gridExtent);
-#endif
                 return BuildPath(rsPts, rsGears.ToList());
             }
 
@@ -104,10 +103,18 @@ namespace DigSim3D.Services
 
         }
 
-        // ================================================================
-        // 🔧 Replanning logic — old midpoint-subdivision logic modernized
-        // ================================================================
-
+        /// <summary>
+        /// Replans RS path to avoid obstacles by stitching together valid RS paths to A* points
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="goal"></param>
+        /// <param name="turnRadius"></param>
+        /// <param name="gridPath"></param>
+        /// <param name="obstacles"></param>
+        /// <param name="startGear"></param>
+        /// <param name="goalYaw"></param>
+        /// <param name="arenaRadius"></param>
+        /// <returns></returns>
         private (List<Vector3>? points, List<int>? gears) TryReplanWithMidpoints(
             Vector3 start,
             Vector3 goal,
@@ -247,6 +254,19 @@ namespace DigSim3D.Services
 
 
         // Recursive RS computation with midpoint subdivision
+        /// <summary>
+        /// [Deprecated] Recursive RS replanning
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <param name="startYaw"></param>
+        /// <param name="endYaw"></param>
+        /// <param name="turnRadius"></param>
+        /// <param name="obstacles"></param>
+        /// <param name="depth"></param>
+        /// <param name="maxDepth"></param>
+        /// <param name="arenaRadius"></param>
+        /// <returns></returns>
         private (List<Vector3>?, List<int>?) ComputeRSWithSubdivision(
             Vector3 start,
             Vector3 end,
@@ -287,17 +307,15 @@ namespace DigSim3D.Services
 
 
 
-
-
-
-
-
-
-
-
         // ================================================================
         // ✅ Helpers
         // ================================================================
+        /// <summary>
+        /// Builds the RS path for use in Godot based on a list of points and gears
+        /// </summary>
+        /// <param name="pts"></param>
+        /// <param name="gears"></param>
+        /// <returns></returns>
         private PlannedPath BuildPath(List<Vector3> pts, List<int> gears)
         {
             var path = new PlannedPath();
@@ -306,6 +324,13 @@ namespace DigSim3D.Services
             return path;
         }
 
+        /// <summary>
+        /// Checks if RS path is valid by checking against obstacles and arena wall
+        /// </summary>
+        /// <param name="pathPoints"></param>
+        /// <param name="obstacles"></param>
+        /// <param name="arenaRadius"></param>
+        /// <returns></returns>
         private bool PathIsValid(List<Vector3> pathPoints, List<CylinderObstacle> obstacles, float arenaRadius)
         {
             //GD.Print($"[HybridReedsSheppPlanner] Checking {pathPoints.Count} points against {obstacles.Count} obstacles");
@@ -363,6 +388,13 @@ namespace DigSim3D.Services
 
 
 #if DEBUG
+        /// <summary>
+        /// Print function for the grid and path for debugging
+        /// </summary>
+        /// <param name="blockedCenters"></param>
+        /// <param name="path3"></param>
+        /// <param name="gridSize"></param>
+        /// <param name="gridExtent"></param>
         private void DrawDebugGridAndPath(IReadOnlyList<Vector2> blockedCenters, List<Vector3> path3, float gridSize, int gridExtent)
         {
             var tree = Engine.GetMainLoop() as SceneTree;

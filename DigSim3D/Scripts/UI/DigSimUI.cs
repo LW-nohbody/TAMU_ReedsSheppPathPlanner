@@ -59,6 +59,9 @@ namespace DigSim3D.UI
             GD.Print("[DigSimUI] ✅ UI system initialized");
         }
 
+        /// <summary>
+        /// Creates panel for tank and robot status
+        /// </summary>
         private void CreateLeftPanel()
         {
             // Get viewport size for responsive sizing
@@ -283,6 +286,9 @@ namespace DigSim3D.UI
             GD.Print($"[DigSimUI] Left panel created: {panelWidth}x{panelHeight}px with professional dark theme and scrollable agent list");
         }
 
+        /// <summary>
+        /// Creates panel for robot specs: speed, dig depth, dis radius
+        /// </summary>
         private void CreateSettingsPanel()
         {
             // Get viewport size for responsive sizing
@@ -381,6 +387,12 @@ namespace DigSim3D.UI
             vbox.AddChild(_radiusSlider);
         }
 
+        /// <summary>
+        /// Adds new robot to UI
+        /// </summary>
+        /// <param name="index"></param>
+        /// <param name="robotId"></param>
+        /// <param name="color"></param>
         public void AddRobot(int index, string robotId, Color color)
         {
             var robotPanel = new PremiumRobotStatusEntry(robotId, color);
@@ -389,6 +401,13 @@ namespace DigSim3D.UI
             GD.Print($"[DigSimUI] Added agent status panel {robotId}");
         }
 
+        /// <summary>
+        /// Updates UI display of robots fill amount
+        /// </summary>
+        /// <param name="index"></param>
+        /// <param name="payloadPercent"></param>
+        /// <param name="position"></param>
+        /// <param name="status"></param>
         public void UpdateRobotPayload(int index, float payloadPercent, Vector3 position, string status)
         {
             if (index >= 0 && index < _robotEntries.Count)
@@ -398,6 +417,11 @@ namespace DigSim3D.UI
             }
         }
 
+        /// <summary>
+        /// Updates the progress bars tracking world status
+        /// </summary>
+        /// <param name="remainingVolume"></param>
+        /// <param name="initialVolume"></param>
         public void UpdateTerrainProgress(float remainingVolume, float initialVolume)
         {
             _remainingDirtLabel.SetText($"Material Remaining: {remainingVolume:F2} m³");
@@ -411,6 +435,10 @@ namespace DigSim3D.UI
             _dirtRemainingBar.Value = dirtRemaining;
         }
 
+        /// <summary>
+        /// Sets the configuration information for robot's digging
+        /// </summary>
+        /// <param name="config"></param>
         public void SetDigConfig(DigConfig config)
         {
             _digConfig = config;

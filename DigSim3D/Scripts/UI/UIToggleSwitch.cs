@@ -1,6 +1,9 @@
 using Godot;
 namespace DigSim3D.UI;
 
+/// <summary>
+/// Creates switch to toggle UI visibility
+/// </summary>
 public partial class UIToggleSwitch : Control
 {
     // UI Toggle Switch Objects
@@ -124,6 +127,9 @@ public partial class UIToggleSwitch : Control
         );
     }
 
+    /// <summary>
+    /// Toggles the UI visibility
+    /// </summary>
     private void Toggle()
     {
         _pressed = !_pressed;
