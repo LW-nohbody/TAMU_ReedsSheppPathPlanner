@@ -10,7 +10,7 @@ using System.Linq;
 /// Represents a generic path consisting of sequential path elements.
 /// This serves as a base class for planner-specific paths (e.g., Reeds-Shepp, Dubins).
 /// Telement is the type of path element that composes this path.
-public abstract class Path<TElement> : IEnumerable<TElement>
+public abstract class Path<TElement> : IEnumerable<TElement>, IPath
     where TElement : PathElement
 {
     // Internal list storing all elements
@@ -78,4 +78,9 @@ public abstract class Path<TElement> : IEnumerable<TElement>
 
     // Sample path as a PosePath
     public abstract PosePath Sample(double stepSize);
+
+    public void AddRange(IEnumerable<TElement> elems)
+    {
+        _elements.AddRange(elems);
+    }
 }
