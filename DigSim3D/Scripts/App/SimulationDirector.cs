@@ -7,11 +7,14 @@ using DigSim3D.UI;
 using DigSim3D.Domain;
 using DigSim3D.Services;
 using DigSim3D.App.Vehicles;
+using PathPlanningLib.Algorithms.Geometry.PathElements;
+using PathPlanningLib.Algorithms.Geometry.Paths;
 
 namespace DigSim3D.App
 {
     public partial class SimulationDirector : Node3D
     {
+        const double SAMPLE_STEP_METERS = 1;
         [Export] public PackedScene VehicleScene = null!;
         [Export] public NodePath VehiclesRootPath = null!;
         [Export] public NodePath CameraTopPath = null!;
@@ -223,15 +226,15 @@ namespace DigSim3D.App
                 Obstacles = obstacleList,
                 Terrain = _terrain
             };
-            // Create path planner (will be reused for all robots)
-            var hybridPlanner = new HybridReedsSheppPlanner();
+
             // Initialize brain dig system with path drawing callback
             foreach (var vehicle in _vehicles)
             {
                 int robotIndex = _vehicles.IndexOf(vehicle);
                 int totalRobots = _vehicles.Count;
                 GD.Print($"🎮 [Director] Initializing vehicle agent {robotIndex} with DigConfig.DigDepth={_digConfig.DigDepth:F2}m (config hash: {_digConfig.GetHashCode()})");
-                vehicle.InitializeVehicleAgent(_digService, _terrain, scheduler, _digConfig, hybridPlanner, worldState, _digSimUI, DrawPathProjectedToTerrain, robotIndex, totalRobots);
+                vehicle.InitializeVehicleAgent(_digService, _terrain, scheduler, _digConfig, worldState, _digSimUI, DrawPathProjectedToTerrain, robotIndex, totalRobots, SAMPLE_STEP_METERS);
+                //DrawPathProjectedToTerrain
             }
 
             var digTargets = scheduler.PlanFirstDigTargets(
@@ -254,21 +257,43 @@ namespace DigSim3D.App
                 var start = car.currentVehicle.GlobalTransform.Origin;
 
                 // Planner poses use X/Z + yaw
-                var startPose = new Pose(start.X, start.Z, startYaw);
-                var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
+                Pose startPose = Pose.Create(start.X, start.Z, startYaw);
+                Pose goalPose = Pose.Create(digPos.X, digPos.Z, approachYaw);
 
                 // Vehicle spec
-                VehicleSpec spec = car.currentVehicle.Spec;
+                VehicleSpec spec = new VehicleSpec(car.currentVehicle.KinType, car.currentVehicle.TurnRadiusInMeters, car.currentVehicle.MaxSpeedMetersPerSecond);
 
-                PlannedPath path = hybridPlanner.Plan(startPose, goalPose, spec, worldState);
+                IPath path = car.currentVehicle.PathPlanner.Plan(startPose, goalPose, spec, worldState);
+                PosePath poses = new PosePath();
+                double stepSize = SampleStepMeters;
 
-                DrawPathProjectedToTerrain(k, path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f));
+
+                // Pattern-match based on the vehicle's generic type:
+                switch (path)
+                {
+                    case ReedsSheppPath rs:
+                    {
+                        poses.AddRange(rs.Sample(stepSize, car.currentVehicle.TurnRadiusInMeters, startPose));
+                        break;
+                    }
+
+                    // case IVehicle<DubinsPath> dubVeh:
+                    // {
+                    //     DubinsPath dubPath = dubVeh.PathPlanner.Plan(startPose, goalPose, spec, worldState);
+                    //     PosePath poses = dubPath.Sample(stepSize, turningRadius); 
+                    //     break;
+                    // }
+
+                    // etc...
+                }
+
+                DrawPathProjectedToTerrain(k, poses, new Color(0.15f, 0.9f, 1.0f));
                 DrawMarkerProjected(start, new Color(0, 1, 0));
                 DrawMarkerProjected(digPos, new Color(0, 0, 1));
 
-                car.currentVehicle.SetPath(path.Points.ToArray(), path.Gears.ToArray());
+                car.currentVehicle.SetPath(path);
 
-                GD.Print($"[Director] {car.Name} path: {path.Points.Count} samples");
+                // GD.Print($"[Director] {car.AgentID} path: {path.Count} samples");
             }
 
             // Set Camera Mode before returning from Ready
@@ -675,9 +700,9 @@ namespace DigSim3D.App
             return 0f;
         }
 
-        private void DrawPathProjectedToTerrain(int robotIndex, Vector3[] points, Color col)
+        public void DrawPathProjectedToTerrain(int robotIndex, PosePath poses, Color col)
         {
-            if (points == null || points.Length < 2) return;
+            if (poses == null || poses.Count < 2) return;
 
             // Remove previous path for this robot, if any
             if (_pathMeshes.TryGetValue(robotIndex, out var oldPath))
@@ -695,9 +720,10 @@ namespace DigSim3D.App
             AddChild(mi);
 
             im.SurfaceBegin(Mesh.PrimitiveType.LineStrip);
-            for (int i = 0; i < points.Length; i++)
+            for (int i = 0; i < poses.Count; i++)
             {
-                var p = points[i];
+                var tempPose = poses.ElementAt(i);
+                var p = new Vector3((float) tempPose.X, 0, (float) tempPose.Y);
                 var y = SampleSurfaceY(p) + lift;
                 im.SurfaceAddVertex(new Vector3(p.X, y + 0.02f, p.Z));
             }

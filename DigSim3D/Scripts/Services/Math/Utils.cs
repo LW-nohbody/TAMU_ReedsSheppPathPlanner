@@ -1,22 +1,21 @@
 namespace DigSim3D.Services;
 
-public enum KinematicType { Bicycle, DiffDrive, CenterArticulated, ScrewPropelled }
-public enum Steering { LEFT = -1, RIGHT = 1, STRAIGHT = 0 }
-public enum Gear { FORWARD = 1, BACKWARD = -1 }
+// public enum Steering { LEFT = -1, RIGHT = 1, STRAIGHT = 0 }
+// public enum Gear { FORWARD = 1, BACKWARD = -1 }
 
-public record PathElement(double Param, Steering Steering, Gear Gear)
-{
-    public static PathElement Create(double param, Steering steering, Gear gear)
-        => (param >= 0)
-            ? new PathElement(param, steering, gear)
-            : new PathElement(-param, steering, gear).ReverseGear();
+// public record PathElement(double Param, Steering Steering, Gear Gear)
+// {
+//     public static PathElement Create(double param, Steering steering, Gear gear)
+//         => (param >= 0)
+//             ? new PathElement(param, steering, gear)
+//             : new PathElement(-param, steering, gear).ReverseGear();
 
-    public PathElement ReverseSteering() => this with { Steering = (Steering)(-(int)Steering) };
-    public PathElement ReverseGear() => this with { Gear = (Gear)(-(int)Gear) };
+//     public PathElement ReverseSteering() => this with { Steering = (Steering)(-(int)Steering) };
+//     public PathElement ReverseGear() => this with { Gear = (Gear)(-(int)Gear) };
 
-    public override string ToString()
-        => $"{{ Steering: {Steering}\tGear: {Gear}\tdistance: {Math.Round(Param, 3)} }}";
-}
+//     public override string ToString()
+//         => $"{{ Steering: {Steering}\tGear: {Gear}\tdistance: {Math.Round(Param, 3)} }}";
+// }
 
 public static class Utils
 {

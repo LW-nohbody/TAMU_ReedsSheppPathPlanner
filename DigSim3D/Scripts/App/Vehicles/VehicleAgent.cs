@@ -3,6 +3,8 @@ using DigSim3D.Domain;
 using DigSim3D.Services;
 using DigSim3D.App.Vehicles;
 using DigSim3D.UI;
+using PathPlanningLib.Algorithms.Geometry.PathElements;
+using PathPlanningLib.Algorithms.Geometry.Paths;
 
 namespace DigSim3D.App.Vehicles;
 
@@ -14,6 +16,7 @@ public partial class VehicleAgent : Node3D
     // [Export] private Node3D centerArticulatedVehicle;
     // [Export] private Node3D screwPropelledVehicle;
     public IVehicle currentVehicle { get; private set; } = null!;
+    double _sampleStepMeters = 0.25;
     public DigState DigState { get; private set; } = new();
 
     /// <summary> Robot's assigned sector index (permanent) </summary>
@@ -34,9 +37,6 @@ public partial class VehicleAgent : Node3D
     /// <summary> Cached reference to scheduler (set by SimulationDirector) </summary>
     private RadialScheduler _scheduler = null!;
 
-    /// <summary> Cached reference to path planner (set by SimulationDirector) </summary>
-    private IPathPlanner _pathPlanner = null!;
-
     /// <summary> Cached reference to world state (set by SimulationDirector) </summary>
     private WorldState _worldState = null!;
 
@@ -46,8 +46,8 @@ public partial class VehicleAgent : Node3D
     /// <summary> UI Reference </summary>
     private DigSimUI _digSimUI = null!;
 
-    /// <summary> Path drawing callback (set by SimulationDirector) </summary>
-    private System.Action<int, Vector3[], Color> _drawPathCallback = null!;
+    /// <summary> Path drawing callback (set by SimulationDirector in InitializeVehicleAgent) </summary>
+    private System.Action<int, PosePath, Color> _drawPathCallback = null!;
 
     /// <summary> Accumulated dig time at current site (seconds) </summary>
     private float _digTimeAccumulated = 0f;
@@ -192,7 +192,7 @@ public partial class VehicleAgent : Node3D
         }
 
         // Update Status Entry
-        _digSimUI?.UpdateVehicleEntry(_robotIndex, currentVehicle.Spec.KinType);
+        _digSimUI?.UpdateVehicleEntry(_robotIndex, currentVehicle.KinType);
     }
 
     const int VEHICLE_COLLISION_LAYER = 1;
@@ -223,18 +223,18 @@ public partial class VehicleAgent : Node3D
     /// </summary>
     public void InitializeVehicleAgent(
         DigService digService, TerrainDisk terrain,
-        RadialScheduler scheduler, DigConfig digConfig, IPathPlanner pathPlanner,
-        WorldState worldState, DigSimUI digSimUI, System.Action<int, Vector3[], Color> drawPathCallback,
-        int sectorIndex, int totalSectors)
+        RadialScheduler scheduler, DigConfig digConfig,
+        WorldState worldState, DigSimUI digSimUI, System.Action<int, PosePath, Color> drawPathCallback,
+        int sectorIndex, int totalSectors, double sampleStepMeters)
     {
         _digService = digService;
         _terrain = terrain;
         _scheduler = scheduler;
         _digConfig = digConfig;
-        _pathPlanner = pathPlanner;
         _worldState = worldState;
         _drawPathCallback = drawPathCallback;
         _digSimUI = digSimUI;
+        _sampleStepMeters = sampleStepMeters;
 
         // Assign permanent sector + robot index
         SectorIndex = sectorIndex;
@@ -897,7 +897,7 @@ public partial class VehicleAgent : Node3D
     /// </summary>
     private void PlanPathToDigSite(Vector3 digPos, float approachYaw)
     {
-        if (_pathPlanner == null || currentVehicle == null)
+        if (currentVehicle == null)
             return;
 
         var robotPos = currentVehicle.GlobalTransform.Origin;
@@ -905,22 +905,35 @@ public partial class VehicleAgent : Node3D
         float startYaw = Mathf.Atan2(fwd.Z, fwd.X);
 
         // Create start pose
-        var startPose = new Pose(robotPos.X, robotPos.Z, startYaw);
+        var startPose = Pose.Create(robotPos.X, robotPos.Z, startYaw);
 
         // Create goal pose at dig site
-        var goalPose = new Pose(digPos.X, digPos.Z, approachYaw);
+        var goalPose = Pose.Create(digPos.X, digPos.Z, approachYaw);
+        
+        VehicleSpec spec = new VehicleSpec(currentVehicle.KinType, currentVehicle.TurnRadiusInMeters, currentVehicle.MaxSpeedMetersPerSecond);
+        IPath path = currentVehicle.PathPlanner.Plan(startPose, goalPose, spec, _worldState);
+        PosePath poses = new PosePath();
+        double stepSize = _sampleStepMeters;
 
-        // Plan path using same planner
-        PlannedPath path = _pathPlanner.Plan(startPose, goalPose, currentVehicle.Spec, _worldState);
+
+        // Pattern-match based on the vehicle's generic type:
+        switch (path)
+        {
+            case ReedsSheppPath rs:
+            {
+                poses.AddRange(rs.Sample(stepSize, currentVehicle.TurnRadiusInMeters, startPose));
+                break;
+            }
+        }
 
         // Draw the dig path (cyan/blue)
         if (_drawPathCallback != null)
         {
-            _drawPathCallback(_robotIndex, path.Points.ToArray(), new Color(0.15f, 0.9f, 1.0f, 0.8f));
+            _drawPathCallback(_robotIndex, poses, new Color(0.15f, 0.9f, 1.0f, 0.8f));
         }
 
         // Set the path on the vehicle
-        currentVehicle.SetPath(path.Points.ToArray(), path.Gears.ToArray());
+        currentVehicle.SetPath(path);
     }
 
     /// <summary>
@@ -975,7 +988,7 @@ public partial class VehicleAgent : Node3D
     /// </summary>
     private void PlanPathToDump()
     {
-        if (_pathPlanner == null || currentVehicle == null)
+        if (currentVehicle == null)
             return;
 
         var robotPos = currentVehicle.GlobalTransform.Origin;
@@ -983,22 +996,36 @@ public partial class VehicleAgent : Node3D
         float startYaw = Mathf.Atan2(fwd.Z, fwd.X);
 
         // Create start pose
-        var startPose = new Pose(robotPos.X, robotPos.Z, startYaw);
+        Pose startPose = Pose.Create(robotPos.X, robotPos.Z, startYaw);
 
         // Dump at origin with approach from current direction
-        var goalPose = new Pose(0f, 0f, startYaw);
+        Pose goalPose = Pose.Create(0f, 0f, startYaw);
 
-        // Plan path using same planner
-        PlannedPath path = _pathPlanner.Plan(startPose, goalPose, currentVehicle.Spec, _worldState);
+        VehicleSpec spec = new VehicleSpec(currentVehicle.KinType, currentVehicle.TurnRadiusInMeters, currentVehicle.MaxSpeedMetersPerSecond);
+        IPath path = currentVehicle.PathPlanner.Plan(startPose, goalPose, spec, _worldState);
+        PosePath poses = new PosePath();
+        double stepSize = _sampleStepMeters;
+
+
+        // Pattern-match based on the vehicle's generic type:
+        switch (path)
+        {
+            case ReedsSheppPath rs:
+            {
+                poses.AddRange(rs.Sample(stepSize, currentVehicle.TurnRadiusInMeters, startPose));
+                break;
+            }
+        }
+
 
         // Draw the dump path (yellow/orange)
         if (_drawPathCallback != null)
         {
-            _drawPathCallback(_robotIndex, path.Points.ToArray(), new Color(1.0f, 0.8f, 0f, 0.8f));
+            _drawPathCallback(_robotIndex, poses, new Color(1.0f, 0.8f, 0f, 0.8f));
         }
 
         // Set the path on the vehicle
-        currentVehicle.SetPath(path.Points.ToArray(), path.Gears.ToArray());
+        currentVehicle.SetPath(path);
     }
 
     /// <summary>

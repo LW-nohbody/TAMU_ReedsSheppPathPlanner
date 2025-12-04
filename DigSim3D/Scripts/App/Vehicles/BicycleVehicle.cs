@@ -2,6 +2,8 @@ using Godot;
 using DigSim3D.Domain;
 using DigSim3D.UI;
 using DigSim3D.Services;
+using PathPlanningLib.Algorithms.Geometry.Paths;
+using PathPlanningLib.Algorithms.Geometry.PathElements;
 
 namespace DigSim3D.App.Vehicles;
 
@@ -11,32 +13,18 @@ namespace DigSim3D.App.Vehicles;
 /// </summary>
 public partial class BicycleVehicle : VehicleBody3D, IVehicle
 {
-    // private float _steeringAngle = 0f; // Radians
-    // private float _speed = 0f; // Meters per second
-
-    // private bool IsAccelerating = false;
-    // private bool IsBraking = false;
-    // private bool IsSteeringLeft = false;
-    // private bool IsSteeringRight = false;
-
-    // [Export] public float MaxSteeringAngle = MathF.PI / 4; // 45 degrees
-    // [Export] public float MaxSpeed = 10f; // m/s
-    // [Export] public float Acceleration = 2f; // m/s²
-    // [Export] public float Deceleration = 4f; // m/s²
-    // [Export] public float WheelBase = 1.0f; // Distance between front and rear axles in meters
-
-
     // Vehicle Specs
     public float VehicleLength { get; } = 1.1f;
     public float VehicleWidth { get; } = 0.5f;
     public float VehicleHeight { get; } = 0.7f;
     public float Wheelbase { get; } = 0.35f;
+    public IHybridPlanner PathPlanner { get; } = new HybridReedsSheppPlanner();
 
     // How hard it drives forward (reduced for stability)
     [Export] public float DriveForce = 150f;
 
     // Turn Radius (meters) -> controls steering angle
-    [Export] public float initialTurnRadiusInMeters = 1.0f;
+    [Export] public float InitialTurnRadiusInMeters = 1.0f;
     private float _turnRadiusInMeters = 1.0f;
     public float TurnRadiusInMeters { 
         get => _turnRadiusInMeters; 
@@ -45,39 +33,35 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
             SteeringAngle = Mathf.Atan(VehicleLength / value);
         }
     }
+    
+    [Export] public float InitialMaxSpeed = 1f; // Maximum speed in m/s
+    private float _maxSpeedMetersPerSecond = 1f;
+    public float MaxSpeedMetersPerSecond { 
+        get => _maxSpeedMetersPerSecond; 
+        set{
+            _maxSpeedMetersPerSecond = value;
+        }
+    }
+    public KinematicType KinType { get; } = KinematicType.Bicycle;
+
     private float SteeringAngle { get; set; } = 0f;
     
     // Stability settings
-    [Export] public float MaxSpeed = 1f; // Maximum speed in m/s
     [Export] public float AngularDamping = 2.0f; // Resist rotation (prevents tipping)
     [Export] public float TiltCorrectionStrength = 5.0f; // How aggressively to correct tilt
     [Export] public float MaxTiltAngle = 25f; // Maximum tilt in degrees before correction
     [Export] public bool EnableTiltCorrection = true; // Toggle auto-stabilization
     [Export] private VehicleNameplate _nameplate = null!;
-    public VehicleSpec Spec => new VehicleSpec(
-        KinematicType.Bicycle,
-        TurnRadiusInMeters,
-        MaxSpeed);
-
-    private Vector3[] _path = Array.Empty<Vector3>();
-    private int[] _gears = Array.Empty<int>();
+    private ReedsSheppPath _path = null!;
     private int _i = 0;
     private bool _done = true;
-    private Vector3 _finalPosXZ = Vector3.Zero;  // last waypoint XZ
-    private Vector3 _finalAimXZ = Vector3.Zero;  // unit XZ forward to settle to
 
-    public void SetPath(Vector3[] pts, int[] gears)
+    public void SetPath(IPath path)
     {
-        _path = pts ?? Array.Empty<Vector3>();
-        _gears = gears ?? Array.Empty<int>();
+        _path = path as ReedsSheppPath;
         _i = 0;
-        _done = _path.Length == 0;
-
-        // Smooth landing setup
-        _finalPosXZ = (_path.Length > 0) ? _path[^1].WithY(0) : Vector3.Zero;
-        _finalAimXZ = Vector3.Zero;
+        _done = false;
     }
-    public void SetPath(Vector3[] pts) => SetPath(pts, Array.Empty<int>());
 
     public void Activate()
     {
@@ -99,9 +83,9 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
         AngularDamp = AngularDamping; // Resist unwanted rotation
         LinearDamp = 0.2f; // Slight linear damping for smoother movement
         
-        // Lower center of mass for better stability
+        // Lower center of mass for better stability (Change back to auto for more realism)
         CenterOfMassMode = CenterOfMassModeEnum.Custom;
-        CenterOfMass = new Vector3(0, -0.3f, 0); // Lower the center of mass
+        CenterOfMass = new Vector3(0, -0.3f, 0);
     }
 
     public void Activate(Transform3D transform)
@@ -122,7 +106,7 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
 
     public override void _Ready()
     {
-        SteeringAngle = Mathf.Atan(VehicleLength / initialTurnRadiusInMeters);
+        SteeringAngle = Mathf.Atan(VehicleLength / InitialTurnRadiusInMeters);
     }
 
     public override void _PhysicsProcess(double delta)
@@ -141,14 +125,14 @@ public partial class BicycleVehicle : VehicleBody3D, IVehicle
         
         // Limit maximum speed for stability
         float currentSpeed = LinearVelocity.Length();
-        if (currentSpeed > MaxSpeed)
+        if (currentSpeed > MaxSpeedMetersPerSecond)
         {
-            LinearVelocity = LinearVelocity.Normalized() * MaxSpeed;
+            LinearVelocity = LinearVelocity.Normalized() * MaxSpeedMetersPerSecond;
         }
             
         // Steering
         // Constant forward engine force (with speed limiting)
-        if (currentSpeed < MaxSpeed)
+        if (currentSpeed < MaxSpeedMetersPerSecond)
         {
             EngineForce = DriveForce;
         }

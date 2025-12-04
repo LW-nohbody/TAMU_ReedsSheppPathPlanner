@@ -2,7 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using PathPlanningLib.Algorithms.Geometry.PathElements;
 using DigSim3D.Domain;
 
 namespace DigSim3D.Services
@@ -142,7 +142,7 @@ namespace DigSim3D.Services
 
 
         // --- Replace Plan2DPath with this version (adds pre/post prints and simple consistency checks) ---
-        public static List<Vector3> Plan2DPath(Vector3 start, Vector3 goal)
+        public static List<Vector3> Plan2DPath(Pose start, Pose goal)
         {
             if (!_built)
             {
@@ -150,12 +150,11 @@ namespace DigSim3D.Services
                 return new List<Vector3>();
             }
 
-            GD.Print($"[GridPlannerPersistent] Plan2DPath: start=({start.X:F2},{start.Z:F2}) goal=({goal.X:F2},{goal.Z:F2})");
+            GD.Print($"[GridPlannerPersistent] Plan2DPath: start=({start.X:F2},{start.Y:F2}) goal=({goal.X:F2},{goal.Y:F2})");
             GD.Print($"[GridPlannerPersistent] Plan2DPath: gridSize={_gridSize} gridExtent={_gridExtent} blockedCells={_lastBlockedCenters.Count}");
 
-            long startId = _astar.GetClosestPoint(new Vector2(start.X, start.Z));
-            long goalId = _astar.GetClosestPoint(new Vector2(goal.X, goal.Z));
-
+            long startId = _astar.GetClosestPoint(new Vector2((float) start.X,  (float) start.Y));
+            long goalId = _astar.GetClosestPoint(new Vector2((float) goal.X, (float) goal.Y));
             GD.Print($"[GridPlannerPersistent] Plan2DPath: startId={startId} goalId={goalId}");
 
             if (startId == -1 || goalId == -1)
