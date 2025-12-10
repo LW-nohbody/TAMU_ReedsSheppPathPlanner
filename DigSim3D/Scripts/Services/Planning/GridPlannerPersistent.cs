@@ -198,7 +198,7 @@ namespace DigSim3D.Services
                     }
                 }
             }
-
+            
             return path3;
         }
 

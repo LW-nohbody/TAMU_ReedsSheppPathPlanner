@@ -84,5 +84,9 @@ Radius = 2.0
 [node name="cylinder-obstacle2" parent="ObstacleManager" instance=ExtResource("6_xklxq")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.22641, 0, -0.308772)
 
+[node name="cylinder-obstacle3" parent="ObstacleManager" instance=ExtResource("6_xklxq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.10744, 0, 3.04604)
+Radius = 1.7
+
 [node name="DynamicObstacleManager" type="Node3D" parent="."]
 script = ExtResource("7_xklxq")

@@ -24,6 +24,9 @@ namespace DigSim3D.Services
         private readonly float _obstacleBuffer;
         private readonly int _maxAttempts;
         private readonly ReedsShepp PathPlanner = new ReedsShepp();
+        
+        // 2*NUM_SUBDIVISIONS = max number of segments to try subdividing into
+        private const int NUM_SUBDIVISIONS = 5;
 
         public HybridReedsSheppPlanner(
             float sampleStepMeters = 0.25f,
@@ -68,7 +71,7 @@ namespace DigSim3D.Services
             PosePath rsPoses = rsPath.Sample(_sampleStep, turnRadius, start);
             if (obstacles.Count == 0 || PathIsValid(rsPoses, obstacles, arenaRadius))
             {
-                //GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
+                GD.Print("[HybridReedsSheppPlanner] Using direct Reeds–Shepp path (clear).");
 #if DEBUG
                 //GD.Print("[HybridReedsSheppPlanner] (Debug) Forcing grid visualization even for clear RS path.");
                 // DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, 
@@ -92,14 +95,15 @@ namespace DigSim3D.Services
             }
 
             // Attempt to replan
-            ReedsSheppPath? merged = TryReplanWithMidpoints(start, goal, turnRadius, gridPath, obstacles, startGear: 1, arenaRadius);
+            ReedsSheppPath? merged = TryReplanWithMidpoints(start, goal, turnRadius, gridPath, obstacles, arenaRadius);
 
             if (merged != null)
             {
+                GD.Print("[HybridReedsSheppPlanner] ✅ Successfully found clear RS route via midpoints.");
                 return merged;
             }
 
-            GD.PrintErr("❌ Could not find clear RS route via midpoints. Returning fallback RS path.");
+            GD.Print("❌ Could not find clear RS route via midpoints. Returning fallback RS path.");
             //DrawDebugGridAndPath(GridPlannerPersistent.LastBlockedCenters, rsPts, _gridSize, _gridExtent);
             return rsPath;
 
@@ -115,7 +119,6 @@ namespace DigSim3D.Services
             double turnRadius,
             List<Vector3> gridPath,
             List<CylinderObstacle> obstacles,
-            int startGear,
             float arenaRadius)
         {
             if (gridPath == null || gridPath.Count < 2)
@@ -137,17 +140,129 @@ namespace DigSim3D.Services
             }
             simplifiedPath.Add(gridPath[^1]);
 
-            // --- 2️⃣ Build initial RS path along simplified path ---
-            // var mergedPoints = new List<Vector3> { new Vector3((float) start.X, 0f, (float) start.Y) };
-            // var mergedGears = new List<int> { startGear };
+            // --- 2️⃣ Build initial RS path along simplified path --- };
             ReedsSheppPath mergedPath = new ReedsSheppPath();
-            Vector3 lastPoint = new Vector3((float) start.X, 0f, (float) start.Y);
-            double prevYaw = Math.Atan2((simplifiedPath[0] - lastPoint).Z, (simplifiedPath[0] - lastPoint).X);
+            Vector3 prevPoint = new Vector3((float) start.X, 0f, (float) start.Y);
+            double prevYaw = start.Theta;
 
             int index = 0;
             while (index < simplifiedPath.Count)
             {
-                Vector3 segStart = lastPoint;
+                Vector3 segStart = prevPoint;
+                int farthestReachable = index;
+
+                // Try skipping as many A* points as possible
+                for (int j = simplifiedPath.Count-1; j > index; j--)
+                {
+                    Vector3 segEnd = simplifiedPath[j];
+                    double segYaw = Math.Atan2((segEnd - segStart).Z, (segEnd - segStart).X);
+
+                    ReedsSheppPath rsTestPath = PathPlanner.GetOptimalPath(Pose.Create(segStart.X / turnRadius, segStart.Z / turnRadius, prevYaw), Pose.Create(segEnd.X / turnRadius, segEnd.Z / turnRadius, segYaw));
+
+                    if (rsTestPath.Count > 0 && PathIsValid(rsTestPath.Sample(_sampleStep, turnRadius, Pose.Create(segStart.X, segStart.Z, prevYaw)), obstacles, arenaRadius))
+                    {
+                        
+                        mergedPath.AddRange(rsTestPath);
+                        farthestReachable = j;
+                        prevPoint = simplifiedPath[j];
+                        prevYaw = segYaw;
+                        break;
+                    }
+                }
+                
+                if (farthestReachable == index && index == 0) // try replaning entire path with subdivision
+                {
+                    // Stuck try replan with subdivision
+                    mergedPath = TryReplanWithSubdivision(start, goal, turnRadius, obstacles, arenaRadius, simplifiedPath);
+
+                    if (mergedPath == null)
+                    {
+                        GD.Print("[HybridReedsSheppPlanner] Replanning with subdivision also failed [2].");
+                        return null;
+                    } else
+                    {
+                        break;
+                    }
+                } else if (farthestReachable == index) //replan this portion of path to end with subdivision
+                {
+                    // Stuck try replan with subdivision
+                    ReedsSheppPath pathAddition = TryReplanWithSubdivision(Pose.Create(segStart.X, segStart.Z, prevYaw), goal, turnRadius, obstacles, arenaRadius, simplifiedPath.Skip(index-1).ToList());
+
+                    if (pathAddition == null)
+                    {
+                        GD.Print("[HybridReedsSheppPlanner] Replanning with subdivision also failed [1].");
+                        return null;
+                    } else
+                    {
+                        mergedPath.AddRange(pathAddition);
+                        break;
+                    }
+                }
+
+                index = farthestReachable;
+            }                
+
+            // --- 3️⃣ Post-process: Try to simplify found RS Path in case something was missed may not be necessary ---
+            PosePath mergedPathPoses = mergedPath.Sample(_sampleStep, turnRadius, start);
+            ReedsSheppPath simplifiedRS = new ReedsSheppPath();
+            Pose startPose = start;
+            int cur = 0;
+            while (cur < mergedPathPoses.Count - 1)
+            {
+                bool foundValidSegment = false;
+                for (int j = mergedPathPoses.Count-1; j > cur; j--)
+                {
+                    Pose endPose = mergedPathPoses.ElementAt(j);
+                    
+                    ReedsSheppPath rsTest = PathPlanner.GetOptimalPath(
+                        Pose.Create(startPose.X / turnRadius, startPose.Y / turnRadius, startPose.Theta),
+                        Pose.Create(endPose.X / turnRadius, endPose.Y / turnRadius, endPose.Theta));
+
+                    PosePath rsTestSampled = rsTest.Sample(_sampleStep, turnRadius, startPose);
+
+                    if (rsTest.Count > 0 &&
+                        PathIsValid(rsTestSampled, obstacles, arenaRadius))
+                    {                        
+                        simplifiedRS.AddRange(rsTest);
+                        cur = j;
+                        startPose = mergedPathPoses.ElementAt(j);
+                        foundValidSegment = true;
+                        break;
+                    }
+                }
+                
+                // could not find a valid simplified segment from index cur to any further point. Add the current point and move on.
+                if (!foundValidSegment)
+                {
+                    return mergedPath;
+                }
+            }
+
+            //GD.Print($"[HybridReedsSheppPlanner] RS replanning + simplification finished with {simplifiedRSPoints.Count} points.");
+            // return (simplifiedRSPoints, simplifiedGears);
+            return simplifiedRS;
+        }
+
+        // ================================================================
+        // Helpers
+        // ================================================================
+
+        private ReedsSheppPath TryReplanWithSubdivision(Pose start,
+                        Pose goal,
+                        double turnRadius,
+                        List<CylinderObstacle> obstacles,
+                        float arenaRadius,
+                        List<Vector3> simplifiedPath)
+        {
+            GD.Print("[HybridReedsSheppPlanner] Attempting replanning with subdivision...");
+
+            ReedsSheppPath mergedPath = new ReedsSheppPath();
+            Vector3 prevPoint = new Vector3((float) start.X, 0f, (float) start.Y);
+            double prevYaw = start.Theta;
+            int index = 0;
+            while (index < simplifiedPath.Count)
+            {
+                Vector3 segStart = prevPoint;
                 int farthestReachable = index;
 
                 // Try skipping as many A* points as possible
@@ -157,8 +272,9 @@ namespace DigSim3D.Services
                     double segYaw = Math.Atan2((segEnd - segStart).Z, (segEnd - segStart).X);
 
                     // var (rsTest, rsGearsTest) = RSAdapter.ComputePath3D(segStart, prevYaw, segEnd, segYaw, turnRadius, _sampleStep);
-                    ReedsSheppPath rsTestPath = PathPlanner.GetOptimalPath(Pose.Create(start.X / turnRadius, start.Y / turnRadius, start.Theta), Pose.Create(segEnd.X / turnRadius, segEnd.Z / turnRadius, segYaw));
-                    if (rsTestPath.Count == 0 || !PathIsValid(rsTestPath.Sample(_sampleStep, turnRadius, start), obstacles, arenaRadius))
+                    ReedsSheppPath rsTestPath = PathPlanner.GetOptimalPath(Pose.Create(segStart.X / turnRadius, segStart.Z / turnRadius, prevYaw), Pose.Create(segEnd.X / turnRadius, segEnd.Z / turnRadius, segYaw));
+
+                    if (rsTestPath.Count == 0 || !PathIsValid(rsTestPath.Sample(_sampleStep, turnRadius, Pose.Create(segStart.X, segStart.Z, prevYaw)), obstacles, arenaRadius))
                         break;
 
                     farthestReachable = j;
@@ -166,186 +282,89 @@ namespace DigSim3D.Services
 
                 Vector3 target = simplifiedPath[farthestReachable];
                 double targetYaw = Math.Atan2((target - segStart).Z, (target - segStart).X);
+                if (farthestReachable == 0)
+                {
+                    target = simplifiedPath[index].Lerp(simplifiedPath[index+1], 0.5f);
 
-                // var (rsSegment, rsGears) = RSAdapter.ComputePath3D(segStart, prevYaw, target, targetYaw, turnRadius, _sampleStep);
+                    // NEED TO HANDLE THIS CONDITION
+                } 
+
                 ReedsSheppPath rsSegment = PathPlanner.GetOptimalPath(
                     Pose.Create(segStart.X / turnRadius, segStart.Z / turnRadius, prevYaw),
                     Pose.Create(target.X / turnRadius, target.Z / turnRadius, targetYaw));
 
-                int subdiv = 0;
-                while ((rsSegment.Count == 0 || !PathIsValid(rsSegment.Sample(_sampleStep, turnRadius, start), obstacles, arenaRadius)) && subdiv < 5)
+                if (rsSegment.Count == 0 || !PathIsValid(rsSegment.Sample(_sampleStep, turnRadius, Pose.Create(segStart.X, segStart.Z, prevYaw)), obstacles, arenaRadius))
                 {
-                    subdiv++;
-                    Vector3 mid = segStart.Lerp(target, 0.5f);
-                    double midYaw = Math.Atan2((mid - segStart).Z, (mid - segStart).X);
+                    // subdivide paths
+                    int subdiv = 1;
 
-                    // var (rs1, rsGears1) = RSAdapter.ComputePath3D(segStart, prevYaw, mid, midYaw, turnRadius, _sampleStep);
-                    // var (rs2, rsGears2) = RSAdapter.ComputePath3D(mid, midYaw, target, targetYaw, turnRadius, _sampleStep);
+                    // Create start and end poses for CURRENT subdivision (end goal is to have path of subdivisions from segStart to target)
+                    Vector3 subdivStartPoint = new Vector3(segStart.X, segStart.Y, segStart.Z);
+                    double subdivStartYaw = prevYaw;
+                    Pose subdivStartPose = Pose.Create(subdivStartPoint.X, subdivStartPoint.Z, subdivStartYaw);
 
-                    ReedsSheppPath rs1 = PathPlanner.GetOptimalPath(
-                        Pose.Create(segStart.X / turnRadius, segStart.Z / turnRadius, prevYaw),
-                        Pose.Create(mid.X / turnRadius, mid.Z / turnRadius, midYaw));
-                    ReedsSheppPath rs2 = PathPlanner.GetOptimalPath(
-                        Pose.Create(mid.X / turnRadius, mid.Z / turnRadius, midYaw),
-                        Pose.Create(target.X / turnRadius, target.Z / turnRadius, targetYaw));  
+                    Vector3 subdivEndPoint = subdivStartPoint.Lerp(target, 1 / NUM_SUBDIVISIONS);
+                    double subdivEndYaw = Math.Atan2((subdivEndPoint - segStart).Z, (subdivEndPoint - segStart).X);
+                    while (subdiv < NUM_SUBDIVISIONS)
+                    {
+                        // Initialize new rsSegment
+                        ReedsSheppPath subdividedRS = new ReedsSheppPath();
+                        for (int i = 0; i < subdiv; i++)
+                        {
+                            ReedsSheppPath rsTemp = PathPlanner.GetOptimalPath(
+                            Pose.Create(subdivStartPoint.X / turnRadius, subdivStartPoint.Z / turnRadius, subdivStartYaw),
+                            Pose.Create(subdivEndPoint.X / turnRadius, subdivEndPoint.Z / turnRadius, subdivEndYaw));
+                            PosePath rsTempSampled = rsTemp.Sample(_sampleStep, turnRadius, subdivStartPose);
 
-                    if (rs1.Count == 0 || rs2.Count == 0 ||
-                        !PathIsValid(rs1.Sample(_sampleStep, turnRadius, Pose.Create(segStart.X, segStart.Z, prevYaw)), obstacles, arenaRadius) || !PathIsValid(rs2.Sample(_sampleStep, turnRadius, Pose.Create(mid.X, mid.Z, midYaw)), obstacles, arenaRadius))
-                        break;
+                            if (rsTemp.Count > 0 && PathIsValid(rsTempSampled, obstacles, arenaRadius))
+                            {
+                                subdividedRS.AddRange(rsTemp); 
 
-                    // Skip 1?
-                    mergedPath.AddRange(rs1); 
-                    mergedPath.AddRange(rs2);
-                    // mergedGears.AddRange(rsGears1.Skip(1));
-                    // mergedGears.AddRange(rsGears2.Skip(1));
+                                if (i == subdiv - 1)
+                                    break;
 
-                    prevYaw = targetYaw;
-                    rsSegment = new ReedsSheppPath(); // Mark as successful
-                }
+                                subdivStartPoint = subdivEndPoint;
+                                subdivStartYaw = subdivEndYaw;
+                                subdivStartPose = Pose.Create(subdivStartPoint.X, subdivStartPoint.Z, subdivStartYaw);
 
-                if (rsSegment.Count > 0)
-                {
-                    mergedPath.AddRange(rsSegment.Skip(1));
-                    // mergedGears.AddRange(rsGears.Skip(1));
-                    prevYaw = targetYaw;
-                }
+                                float t = (i + 2f) / NUM_SUBDIVISIONS;
+                                subdivEndPoint = segStart.Lerp(target, t); 
+                                subdivEndYaw = Math.Atan2((subdivEndPoint - segStart).Z, (subdivEndPoint - segStart).X);
+                            } else
+                            {
+                                break;
+                            }
+                        }
 
-                index = farthestReachable + 1;
-            }
-
-            // --- 3️⃣ Post-process: simplify RS path by skipping intermediate points ---
-            // ReedsSheppPath simplifiedRS = new ReedsSheppPath();
-            // var simplifiedRSPoints = new List<Vector3> { mergedPoints[0] };
-            // var simplifiedGears = new List<int> { mergedGears[0] };
-            // int cur = 0;
-            // while (cur < mergedPoints.Count - 1)
-            // {
-            //     int farthest = cur + 1;
-            //     for (int j = mergedPoints.Count - 1; j > cur; j--)
-            //     {
-            //         double segYaw = Math.Atan2((mergedPoints[j] - mergedPoints[cur]).Z,
-            //                                    (mergedPoints[j] - mergedPoints[cur]).X);
-            //         var (rsTest, rsGearsTest) = RSAdapter.ComputePath3D(mergedPoints[cur], prevYaw,
-            //                                                             mergedPoints[j], segYaw,
-            //                                                             turnRadius, _sampleStep);
-            //         if (rsTest.Length > 0 && PathIsValid(rsTest.ToList(), obstacles, arenaRadius))
-            //         {
-            //             farthest = j;
-            //             break;
-            //         }
-            //     }
-
-            //     // Add RS segment to simplified list
-            //     double yawToAdd = Math.Atan2((mergedPoints[farthest] - mergedPoints[cur]).Z,
-            //                                  (mergedPoints[farthest] - mergedPoints[cur]).X);
-            //     var (rsFinal, rsFinalGears) = RSAdapter.ComputePath3D(mergedPoints[cur], prevYaw,
-            //                                                           mergedPoints[farthest], yawToAdd,
-            //                                                           turnRadius, _sampleStep);
-            //     if (rsFinal.Length > 0)
-            //     {
-            //         simplifiedRSPoints.AddRange(rsFinal.Skip(1));
-            //         simplifiedGears.AddRange(rsFinalGears.Skip(1));
-            //         prevYaw = yawToAdd;
-            //     }
-
-            //     cur = farthest;
-            // }
-
-            // if (simplifiedRSPoints.Count > 1)
-            //     simplifiedGears[^1] = 1;
-
-            ReedsSheppPath simplifiedRS = new ReedsSheppPath();
-            Pose startPose = start;
-            int cur = 0;
-            while (cur < mergedPath.Count - 1)
-            {
-                for (int j = mergedPath.Count - 1; j > cur; j--)
-                {
-                    // Sample RS subpath as real poses
-                    PosePath poses = SampleSegment(mergedPath, cur, j, _sampleStep, turnRadius, startPose);
-
-                    Pose endPose   = poses.Last();
-
-                    double yawStart = startPose.Theta;
-                    double yawEnd   = endPose.Theta;
-
-                    ReedsSheppPath rsTest = PathPlanner.GetOptimalPath(
-                        Pose.Create(startPose.X / turnRadius, startPose.Y / turnRadius, yawStart),
-                        Pose.Create(endPose.X / turnRadius, endPose.Y / turnRadius, yawEnd));
-
-                    PosePath rsTestSampled = rsTest.Sample(_sampleStep, turnRadius, startPose);
-
-                    if (rsTest.Count > 0 &&
-                        PathIsValid(rsTestSampled, obstacles, arenaRadius))
-                    {                        
-                        simplifiedRS.AddRange(rsTest);
-                        startPose = rsTestSampled.Last();
-                        cur = j;
-                        break;
+                        subdiv++;
                     }
+                    if (subdiv > 5)
+                    {
+                        GD.PrintErr("[HybridReedsSheppPlanner] Subdivision replanning failed: too many subdivisions.");
+                        return null;
+                    }
+
+                } else
+                {
+                    mergedPath.AddRange(rsSegment);
+                    prevYaw = targetYaw;
+                    prevPoint = target;
+
                 }
+
+                index = farthestReachable;
+
             }
-
-            //GD.Print($"[HybridReedsSheppPlanner] RS replanning + simplification finished with {simplifiedRSPoints.Count} points.");
-            // return (simplifiedRSPoints, simplifiedGears);
-            return simplifiedRS;
+            
+            if (mergedPath.Count == 0)
+                return null;
+            return mergedPath;
         }
-
-
-
-
-        // Recursive RS computation with midpoint subdivision
-        // private (List<Vector3>?, List<int>?) ComputeRSWithSubdivision(
-        //     Vector3 start,
-        //     Vector3 end,
-        //     double startYaw,
-        //     double endYaw,
-        //     double turnRadius,
-        //     List<CylinderObstacle> obstacles,
-        //     int depth,
-        //     int maxDepth,
-        //     float arenaRadius)
-        // {
-        //     if (depth > maxDepth)
-        //         return (null, null);
-
-        //     var (rsSegment, rsGears) = RSAdapter.ComputePath3D(start, startYaw, end, endYaw, turnRadius, _sampleStep);
-        //     if (rsSegment.Length > 0 && PathIsValid(rsSegment.ToList(), obstacles, arenaRadius))
-        //         return (rsSegment.ToList(), rsGears.ToList());
-
-        //     // Subdivide at midpoint
-        //     Vector3 mid = start.Lerp(end, 0.5f);
-        //     double midYaw = Math.Atan2((mid - start).Z, (mid - start).X);
-
-        //     var (firstHalf, gears1) = ComputeRSWithSubdivision(start, mid, startYaw, midYaw, turnRadius, obstacles, depth + 1, maxDepth, arenaRadius);
-        //     var (secondHalf, gears2) = ComputeRSWithSubdivision(mid, end, midYaw, endYaw, turnRadius, obstacles, depth + 1, maxDepth, arenaRadius);
-
-        //     if (firstHalf == null || secondHalf == null || gears1 == null || gears2 == null)
-        //         return (null, null);
-
-        //     // Merge, skip duplicate midpoint
-        //     var merged = new List<Vector3>(firstHalf);
-        //     merged.AddRange(secondHalf.Skip(1));
-        //     var mergedGears = new List<int>(gears1);
-        //     mergedGears.AddRange(gears2.Skip(1));
-        //     return (merged, mergedGears);
-        // }
-
-        // ================================================================
-        // Helpers
-        // ================================================================
-        // private PlannedPath BuildPath(List<Vector3> pts, List<int> gears)
-        // {
-        //     var path = new PlannedPath();
-        //     path.Points.AddRange(pts);
-        //     path.Gears.AddRange(gears);
-        //     return path;
-        // }
 
         PosePath SampleSegment(ReedsSheppPath path, int startIdx, int endIdx,
                          double step, double turnRadius, Pose startPose)
         {
-            var subpath = new ReedsSheppPath(path.Elements.Skip(startIdx).Take(endIdx - startIdx + 1));
+            var subpath = new ReedsSheppPath(path.Elements.Skip(startIdx).Take(endIdx - startIdx));
             return subpath.Sample(step, turnRadius, startPose);
         }
 
